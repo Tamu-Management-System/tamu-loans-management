@@ -40,14 +40,14 @@ const LINK_PROBLEMS: Record<string, { title: string; text: string }> = {
   invalid: { title: "This link isn't valid", text: "Check that you opened the whole link, or ask your loan officer to send it again." },
   used: { title: "Already submitted", text: "This application has been sent to Tamu, so the link no longer works. Your loan officer will contact you." },
   replaced: { title: "There's a newer link", text: "Your loan officer sent you a newer link for this application. Please use that one." },
-  expired: { title: "This link has expired", text: "Links work for 72 hours. Ask your loan officer to send you a new one." },
+  expired: { title: "This link has expired", text: "Links only work for a limited time. Ask your loan officer to send you a new one." },
 };
 
 /**
  * The online loan application (Tamu's digital alternative to the paper forms). The loan officer
  * sends this link to the borrower, e.g. on WhatsApp. The borrower fills in their own details and
  * both guarantors' details, adds photos of their National ID, and all three sign on the phone.
- * The link works once: it stops working as soon as the form is submitted, or after 72 hours.
+ * The link works once: it stops working as soon as the form is submitted, or when it expires.
  */
 export function OnlineApplicationPage() {
   const { token = "" } = useParams();

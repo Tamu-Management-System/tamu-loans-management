@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "react-router";
 import { ApiError } from "../../api/client";
 import { useBorrowerLoans, useDownloadAgreement } from "../../api/borrowers";
+import { useSystemSettings } from "../../api/settings";
 import { useAuth } from "../../auth/AuthContext";
 import type { BorrowerLoanRecord } from "../../api/types";
 import { Icon } from "../../components/ui/Icon";
@@ -9,14 +10,13 @@ import { formatDate, formatUGX, dayCount } from "../../lib/format";
 import chipStyles from "./BorrowerStatusChip.module.css";
 import styles from "./BorrowerLoansTab.module.css";
 
-/** Past this many days late the chip turns red, in line with PAR30. */
-const LATE_DAYS_DANGER = 30;
-
 /** How the loan is being, or was, repaid. */
 function RepaymentChip({ loan }: { loan: BorrowerLoanRecord }) {
+  // Red from the "seriously late" day in Loan rules
+  const seriouslyLate = useSystemSettings().data?.loanRules.seriouslyLateDays ?? 30;
   if (loan.status === "active") return <span className={`${chipStyles.chip} ${chipStyles.chipActive}`}>Active · on time</span>;
   if (loan.status === "in-arrears") {
-    return <span className={`${chipStyles.chip} ${loan.daysPastDue > LATE_DAYS_DANGER ? chipStyles.chipDanger : chipStyles.chipWarning}`}>Active · {dayCount(loan.daysPastDue)} late</span>;
+    return <span className={`${chipStyles.chip} ${loan.daysPastDue >= seriouslyLate ? chipStyles.chipDanger : chipStyles.chipWarning}`}>Active · {dayCount(loan.daysPastDue)} late</span>;
   }
   return loan.mostDaysLate === 0 ? (
     <span className={`${chipStyles.chip} ${chipStyles.chipNeutral}`}>Cleared · on time</span>

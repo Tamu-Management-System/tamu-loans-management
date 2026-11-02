@@ -2,6 +2,9 @@
 export const SETTING_LIMITS = {
   recoveryAfterDaysLate: [7, 365],
   seriouslyLateDays: [1, 180],
+  par30TargetPercent: [1, 30],
+  earlyWarningDays: [1, 60],
+  onlineLinkValidHours: [1, 168],
   backdateDays: [0, 30],
   idleTimeoutMinutes: [5, 60],
   nationalIdVisibleSeconds: [10, 120],

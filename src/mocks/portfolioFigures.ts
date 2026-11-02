@@ -9,6 +9,7 @@ import { loans, officers } from "./fixtures";
 import { pastLoans } from "./loanHistory";
 import { loanPayments } from "./loanPayments";
 import { dayCount } from "../lib/format";
+import { systemSettings } from "./systemSettings";
 
 /** Whose loans: an officer's own, or everyone's */
 export type OfficerFilter = (officerId: string) => boolean;
@@ -168,8 +169,8 @@ export function dueBetween(filter: OfficerFilter, from: string, to: string) {
 export function earlyWarnings(filter: OfficerFilter) {
   const warnings: { loanId: string; signal: string; daysPastDue: number }[] = [];
   for (const loan of openLoans(filter)) {
-    // A day or two late isn't a warning sign yet
-    if (loan.daysPastDue < 7 || loan.recovery) continue;
+    // A day or two late isn't a warning sign yet (Loan rules → Early warning)
+    if (loan.daysPastDue < systemSettings.loanRules.earlyWarningDays || loan.recovery) continue;
     const payments = loanPayments(loan.id);
     const lastPaid = payments[0] ? localDay(payments[0].paidAt) : null;
     const quiet = lastPaid ? daysBetween(lastPaid, today()) : null;

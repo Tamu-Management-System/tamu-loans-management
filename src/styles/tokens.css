@@ -24,6 +24,18 @@
   --color-danger: #b42323;
   --color-danger-soft: #fde9e9;
 
+  /* Charts: categories in this fixed order (checked for colour blindness, worst neighbouring pair ΔE 9.1),
+     and an orange ramp for ordered "how late" bands (light to dark). Values and labels stay in text colours. */
+  --chart-1: #2185f6;
+  --chart-2: #eb6834;
+  --chart-3: #1baf7a;
+  --chart-4: #eda100;
+  --chart-5: #e87ba4;
+  --chart-late-1: #f0a35e;
+  --chart-late-2: #e5703a;
+  --chart-late-3: #c9472b;
+  --chart-late-4: #8f2a1c;
+
   /* Effects */
   --shadow-card: 0 6px 20px rgba(16, 24, 40, 0.06);
 

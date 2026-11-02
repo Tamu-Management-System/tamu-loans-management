@@ -26,6 +26,9 @@ export const systemSettings: SystemSettings = {
     recoveryAfterDaysLate: 60,
     recoveryMode: "suggest",
     seriouslyLateDays: 30,
+    par30TargetPercent: 5,
+    earlyWarningDays: 7,
+    onlineLinkValidHours: 72,
   },
   payments: {
     repaymentMethods: ["Cash", "MTN MoMo", "Airtel Money"],

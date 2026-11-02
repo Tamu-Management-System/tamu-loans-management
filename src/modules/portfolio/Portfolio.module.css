@@ -105,6 +105,13 @@
   color: var(--color-text-muted);
 }
 
+/* Recent activity: one line each, cut off with "…" (the full text is in the tooltip and the audit log) */
+.singleLine {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .warningLine {
   display: flex;
   align-items: flex-start;

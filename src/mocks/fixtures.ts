@@ -128,7 +128,6 @@ export interface MockApplication {
 export const applications: MockApplication[] = [];
 
 /** The PAR30 level the business aims to stay under */
-export const PAR30_TARGET_PERCENT = 5;
 
 // TEMPORARY demo session: which user the mock API treats as signed in, kept in this
 // browser's storage. Sign-in and the demo controls set it; sign-out clears it. The real

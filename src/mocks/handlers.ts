@@ -96,7 +96,6 @@ import {
   DEMO_PASSWORD,
   loans,
   officers,
-  PAR30_TARGET_PERCENT,
   roles,
   setDemoSession,
   signedInDemoUser,
@@ -116,7 +115,7 @@ import { nextBorrowerId } from "./borrowerDirectory";
 import { loanPayments, recordLoanPayment } from "./loanPayments";
 import { describeLength, describePenalty, feeAmount, INTEREST_LIMITS, FIRST_PAYMENT_WITHIN_DAYS, latePenalty, paymentDate, summariseTerms } from "../lib/repaymentSchedule";
 import { borrowerActivityPage, recordBorrowerEvent } from "./borrowerActivity";
-import { addFollowUpTask, clockTime, describePayment, findTask, nextPaymentId, openTaskForLoan, rememberForUndo, tasksFor, ugx, undo } from "./worklistStore";
+import { addFollowUpTask, clockTime, describePayment, findTask, nextPaymentId, openTaskForLoan, rememberForUndo, tasksFor, tasksForUser, ugx, undo } from "./worklistStore";
 
 const API_BASE = "/api";
 const MIN_SEARCH_LENGTH = 2;
@@ -584,7 +583,12 @@ function settingsProblem(section: SettingsSection, body: unknown): string | null
       const problem = limit("recoveryAfterDaysLate", "Days late before recovery", r.recoveryAfterDaysLate);
       if (problem) return problem;
     }
-    return limit("seriouslyLateDays", "Days late shown in red", r.seriouslyLateDays);
+    return (
+      limit("seriouslyLateDays", "Days late shown in red", r.seriouslyLateDays) ??
+      limit("par30TargetPercent", "PAR30 target", r.par30TargetPercent) ??
+      limit("earlyWarningDays", "Early warning", r.earlyWarningDays) ??
+      limit("onlineLinkValidHours", "Online link lifetime", r.onlineLinkValidHours)
+    );
   }
   if (section === "payments") {
     const p = body as SystemSettings["payments"];
@@ -832,7 +836,24 @@ function buildReport(user: MockUser, name: string, params: URLSearchParams): { r
           { label: "Late loans", value: open.filter(({ loan }) => loan.daysPastDue > 0).length, format: "count", note: "At least one payment late" },
           { label: "PAR30", value: par30(open), format: "percent", note: "Outstanding on loans over 30 days late" },
         ],
-        chart: { title: "Outstanding by loan product", kind: "bars", format: "ugx", series: "Outstanding", targetSeries: null, points: products.map((p) => ({ label: p.product, value: p.outstanding, target: null })) },
+        charts: [
+          { title: "Outstanding by loan product", kind: "donut", format: "ugx", series: "Outstanding", targetSeries: null, points: products.map((p) => ({ label: p.product, value: p.outstanding, target: null })) },
+          {
+            title: "Outstanding by how late",
+            kind: "donut",
+            format: "ugx",
+            series: "Outstanding",
+            targetSeries: null,
+            ordered: true,
+            points: [
+              { label: "Up to date", low: 0, high: 0 },
+              { label: "1–30 days late", low: 1, high: 30 },
+              { label: "31–60 days late", low: 31, high: 60 },
+              { label: "61–90 days late", low: 61, high: 90 },
+              { label: "Over 90 days late", low: 91, high: Infinity },
+            ].map((band) => ({ label: band.label, value: open.filter(({ loan }) => loan.daysPastDue >= band.low && loan.daysPastDue <= band.high).reduce((t, { loan }) => t + loan.outstandingBalance, 0), target: null })),
+          },
+        ],
         table: {
           title: "By loan product",
           columns: [
@@ -865,9 +886,10 @@ function buildReport(user: MockUser, name: string, params: URLSearchParams): { r
           { label: "Collection rate", value: rate(collected, expected), format: "percent", note: "Collected ÷ expected" },
           { label: "Payments", value: payments.length, format: "count", note: null },
         ],
-        chart: {
+        charts: [
+          {
           title: `Collected and expected, by ${buckets.unit}`,
-          kind: "columns",
+          kind: "trend",
           format: "ugx",
           series: "Collected",
           targetSeries: "Expected",
@@ -876,7 +898,16 @@ function buildReport(user: MockUser, name: string, params: URLSearchParams): { r
             value: sum(payments.filter((p) => buckets.keyOf(localDay(p.paidAt)) === key)),
             target: sum(due.filter((d) => buckets.keyOf(d.day) === key)),
           })),
-        },
+          },
+          {
+            title: "Collected by payment method",
+            kind: "donut",
+            format: "ugx",
+            series: "Collected",
+            targetSeries: null,
+            points: (["MTN MoMo", "Airtel Money", "Cash"] as const).map((method) => ({ label: method, value: sum(payments.filter((p) => p.method === method)), target: null })),
+          },
+        ],
         table: branch
           ? {
               title: "By loan officer",
@@ -922,7 +953,17 @@ function buildReport(user: MockUser, name: string, params: URLSearchParams): { r
           { label: "Average loan", value: all.length ? Math.round(amount / all.length) : 0, format: "ugx", note: null },
           { label: "Fees", value: all.reduce((t, d) => t + d.fee, 0), format: "ugx", note: "From loan products" },
         ],
-        chart: { title: `Amount lent, by ${buckets.unit}`, kind: "columns", format: "ugx", series: "Amount lent", targetSeries: null, points: buckets.keys.map((key) => ({ label: buckets.labelOf(key), value: sum(all.filter((d) => buckets.keyOf(d.day) === key)), target: null })) },
+        charts: [
+          { title: `Amount lent, by ${buckets.unit}`, kind: "trend", format: "ugx", series: "Amount lent", targetSeries: null, points: buckets.keys.map((key) => ({ label: buckets.labelOf(key), value: sum(all.filter((d) => buckets.keyOf(d.day) === key)), target: null })) },
+          {
+            title: "Amount lent by loan product",
+            kind: "donut",
+            format: "ugx",
+            series: "Amount lent",
+            targetSeries: null,
+            points: [...new Set(all.map((d) => d.product))].map((product) => ({ label: product, value: sum(all.filter((d) => d.product === product)), target: null })).sort((a, b) => b.value - a.value),
+          },
+        ],
         table: {
           title: "Loans paid out",
           columns: [
@@ -970,7 +1011,10 @@ function buildReport(user: MockUser, name: string, params: URLSearchParams): { r
         { label: "Team PAR30", value: par30(open), format: "percent", note: null },
         { label: "Late loans", value: open.filter(({ loan }) => loan.daysPastDue > 0).length, format: "count", note: null },
       ],
-      chart: { title: "Collection rate by officer", kind: "bars", format: "percent", series: "Collection rate", targetSeries: null, points: rows.map((row) => ({ label: row.officer, value: row.rate, target: null })) },
+      charts: [
+        { title: "Collection rate by officer", kind: "bars", format: "percent", series: "Collection rate", targetSeries: null, points: rows.map((row) => ({ label: row.officer, value: row.rate, target: null })) },
+        { title: "Outstanding by officer", kind: "donut", format: "ugx", series: "Outstanding", targetSeries: null, points: [...rows].sort((a, b) => b.outstanding - a.outstanding).map((row) => ({ label: row.officer, value: row.outstanding, target: null })) },
+      ],
       table: {
         title: "By loan officer",
         columns: [
@@ -1863,48 +1907,56 @@ export const handlers = [
     const applicationsCount =
       hasPermission(user, "applications.approve") || seesBranch(user)
         ? applications.filter((app) => app.status === "submitted").length
-        : tasksFor(user.id).filter((task) => task.type === "application-incomplete" && task.status === "open").length;
+        : tasksForUser(user.id, (p) => hasPermission(user, p)).filter((task) => task.type === "application-incomplete" && task.status === "open").length;
     return HttpResponse.json<NavigationBadges>({ applications: applicationsCount });
   }),
 
   http.get(`${API_BASE}/dashboard/today`, async () => {
     await delay(150);
     const user = currentDemoUser();
-    const tasks = tasksFor(user.id);
+    const tasks = tasksForUser(user.id, (p) => hasPermission(user, p));
     const openOf = <T extends WorklistTask["type"]>(type: T) =>
       tasks.filter((task): task is Extract<WorklistTask, { type: T }> => task.type === type && task.status === "open");
     const today: DashboardToday = {};
-    const isOfficer = hasPermission(user, "loans.view") && !seesBranch(user);
-    if (hasPermission(user, "loans.view")) {
+    // Each box needs a permission, not a particular role, so custom roles get the boxes their permissions allow
+    const can = (permission: Permission) => hasPermission(user, permission);
+    const ownBook = can("loans.view") && !seesBranch(user);
+    if (can("loans.view")) {
       const open = loans.filter((loan) => loan.outstandingBalance > 0 && canSeeRecord(user, loan.officerId));
       today.activeLoans = { count: open.length, outstanding: open.reduce((sum, loan) => sum + loan.outstandingBalance, 0), lateCount: open.filter((loan) => loan.daysPastDue > 0).length };
     }
-
-    if (isOfficer) {
-      const dueToday = tasks.filter((task) => task.type === "instalment-due" || task.type === "promise-due");
-      const loanTasks = tasks.filter((task) => "amountPaid" in task);
+    // Due to collect: your own borrowers, or (for people who record payments market-wide) everyone's
+    const collectionTasks = ownBook ? tasks : can("payments.record") ? officers.flatMap((officer) => (canSeeRecord(user, officer.id) ? tasksFor(officer.id) : [])) : null;
+    if (collectionTasks) {
+      const dueToday = collectionTasks.filter((task) => task.type === "instalment-due" || task.type === "promise-due");
+      const loanTasks = collectionTasks.filter((task) => "amountPaid" in task);
       today.collections = {
         dueCount: dueToday.filter((task) => task.status === "open").length,
         collectedAmount: loanTasks.reduce((sum, task) => sum + ("amountPaid" in task ? task.amountPaid : 0), 0),
         expectedAmount: dueToday.reduce((sum, task) => sum + ("amountDue" in task ? task.amountDue : 0), 0),
       };
+    }
+    if (ownBook) {
       const overdue = openOf("overdue");
       today.followUps = { overdueCount: overdue.length, over30DaysCount: overdue.filter((task) => task.daysPastDue > 30).length };
-      today.applicationsToComplete = { count: openOf("application-incomplete").length };
     }
-    if (hasPermission(user, "users.manage")) {
+    if (can("applications.create")) today.applicationsToComplete = { count: openOf("application-incomplete").length };
+    if (can("applications.approve") || can("users.manage")) {
       const waiting = openOf("awaiting-approval");
       today.awaitingApproval = { count: waiting.length, over48HoursCount: waiting.filter((task) => task.hoursWaiting > 48).length };
+    }
+    if (can("loans.disburse") || can("users.manage")) {
       const disbursements = openOf("awaiting-disbursement");
       today.approvedNotDisbursed = { count: disbursements.length, amount: disbursements.reduce((sum, task) => sum + task.amount, 0) };
-      today.accessRequests = { count: openOf("access-request").length };
     }
+    if (can("users.manage")) today.accessRequests = { count: openOf("access-request").length };
     return HttpResponse.json(today);
   }),
 
   http.get(`${API_BASE}/worklist`, async () => {
     await delay(150);
-    return HttpResponse.json<WorklistTask[]>(tasksFor(currentDemoUser().id));
+    const user = currentDemoUser();
+    return HttpResponse.json<WorklistTask[]>(tasksForUser(user.id, (p) => hasPermission(user, p)));
   }),
 
   http.get(`${API_BASE}/loans`, async () => {
@@ -2024,7 +2076,7 @@ export const handlers = [
     const user = currentDemoUser();
     const filter = visibleTo(user);
     const { monthly, weekly } = par30History(filter);
-    const body: PortfolioRisk = { scope: scopeOf(user), asOf: balancesAsOf(), ...riskNow(filter), targetPercent: PAR30_TARGET_PERCENT, monthly, weekly };
+    const body: PortfolioRisk = { scope: scopeOf(user), asOf: balancesAsOf(), ...riskNow(filter), targetPercent: systemSettings.loanRules.par30TargetPercent, monthly, weekly };
     return HttpResponse.json(body);
   }),
 
@@ -2059,14 +2111,14 @@ export const handlers = [
   http.get(`${API_BASE}/portfolio/summary`, async () => {
     await delay(120);
     const user = currentDemoUser();
-    if (!officers.some((officer) => officer.id === user.id)) return HttpResponse.json({ message: "No portfolio for this user." }, { status: 404 });
+    if (!hasPermission(user, "loans.view") || seesBranch(user)) return HttpResponse.json({ message: "No portfolio for this user." }, { status: 404 });
     return HttpResponse.json<PortfolioSummary>(officerSummary(user.id));
   }),
 
   http.get(`${API_BASE}/activity`, async ({ request }) => {
     await delay(150);
     if (!hasPermission(currentDemoUser(), "audit.view")) return HttpResponse.json({ message: "You can't view the audit log." }, { status: 403 });
-    return HttpResponse.json<ActivityList>({ total: activityLog.length, items: activityLog.slice(0, limitParam(request, 5)) });
+    return HttpResponse.json<ActivityList>({ total: activityLog.length, items: activityLog.slice(0, Math.min(limitParam(request, 5), 5)) });
   }),
 
   http.get(`${API_BASE}/audit`, async ({ request }) => {
@@ -2954,6 +3006,6 @@ export const handlers = [
     const user = currentDemoUser();
     const scope = seesBranch(user) ? "branch" : "own";
     const risk = riskNow(visibleTo(user));
-    return HttpResponse.json<RiskSummary>({ scope, par30Percent: risk.par30Percent, loansOver30Days: risk.loansOver30Days, targetPercent: PAR30_TARGET_PERCENT });
+    return HttpResponse.json<RiskSummary>({ scope, par30Percent: risk.par30Percent, loansOver30Days: risk.loansOver30Days, targetPercent: systemSettings.loanRules.par30TargetPercent });
   }),
 ];

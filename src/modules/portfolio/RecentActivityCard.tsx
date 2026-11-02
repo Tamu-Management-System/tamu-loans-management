@@ -18,8 +18,12 @@ export function RecentActivityCard({ activity }: { activity: ActivityList }) {
           <div key={entry.id} className={styles.listRow}>
             <Avatar name={entry.actor.name} src={entry.actor.photoUrl} size={30} />
             <div className={styles.listRowText}>
-              <b>{entry.actor.name}</b> <span className={styles.mutedText}>{entry.actor.role}</span>
-              <div className={styles.secondaryLine}>{entry.description}</div>
+              <div className={styles.singleLine}>
+                <b>{entry.actor.name}</b>
+              </div>
+              <div className={`${styles.secondaryLine} ${styles.singleLine}`} title={entry.description}>
+                {entry.description}
+              </div>
             </div>
             <time className={`${styles.mutedText} ${styles.noWrap}`} dateTime={entry.at}>
               {formatActivityTime(entry.at)}

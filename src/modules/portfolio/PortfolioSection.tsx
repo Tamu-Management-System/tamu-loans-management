@@ -31,19 +31,19 @@ interface PortfolioSectionProps {
 }
 
 /**
- * "My portfolio" for loan officers, "Market portfolio" for admins. Risk cards (PAR30, arrears,
+ * "My portfolio" for people who look after their own borrowers, "Market portfolio" for people who see the
+ * whole market. Shown to anyone who can view loans, whatever their role (built-in or custom). Risk cards (PAR30, arrears,
  * early warnings) belong to the arrears engine (Module 3) and stay under "Coming soon" for the MVP.
  */
 export function PortfolioSection({ announce }: PortfolioSectionProps) {
   const { can, seesBranch } = useAuth();
   const isOfficer = can("loans.view") && !seesBranch;
-  const isAdmin = can("users.view");
 
   // Hooks run for both layouts; the backend rejects what the user can't see, and those cards don't render
   const risk = usePortfolioRisk();
   const arrears = useArrearsBreakdown();
 
-  if (!isOfficer && !isAdmin) return null;
+  if (!can("loans.view")) return null;
 
   const asOf = risk.data ? `Balances as of ${formatTime(risk.data.asOf)} today · ` : "";
   const scopeNote = risk.data ? (isOfficer ? `your ${risk.data.loanCount} loans` : `all ${risk.data.loanCount} loans in the market`) : "";
@@ -85,11 +85,12 @@ function OfficerCards({ announce }: PortfolioSectionProps) {
 }
 
 function AdminCards({ targetPercent }: { targetPercent: number | undefined }) {
-  const activity = useRecentActivity();
+  const { can } = useAuth();
+  const activity = useRecentActivity(can("audit.view"));
   const team = useTeamPerformance();
   return (
     <>
-      <CardSlot data={activity.data}>{(data) => <RecentActivityCard activity={data} />}</CardSlot>
+      {can("audit.view") && <CardSlot data={activity.data}>{(data) => <RecentActivityCard activity={data} />}</CardSlot>}
       <CardSlot data={team.data && targetPercent !== undefined ? team.data : undefined}>
         {(data) => <TeamPerformanceCard officers={data} targetPercent={targetPercent!} />}
       </CardSlot>

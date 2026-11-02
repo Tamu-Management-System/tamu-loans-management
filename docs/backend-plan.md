@@ -40,7 +40,7 @@ Ugandan shillings (integers). Dates are calendar dates in Kampala time (EAT, UTC
 | `phone_change_requests` | borrower_id, new_phone, requested_by, requested_at, decided_by, decision | Four-eyes on the payout number. |
 | `applications` | id (`APP-301`), borrower_id (null until an online form is submitted), officer_id, route (`paper` / `online`), status (`draft` / `awaiting-borrower` / `submitted` / `approved` / `rejected`), product_id, amount, repayment_schedule, first_payment_on, number_of_payments, **pricing snapshot** (product name, rate, basis, fee), missing, returned_reason/note/by/at, created/submitted/decided at/by, loan_id | Pricing is copied from the product when saved, so product edits never change it. |
 | `guarantors` | application_id, position (1/2), full_name, nin (encrypted), phone, relationship | Two per application. Relationship only from the online form (paper: it is on the signed consent). |
-| `online_forms` | token_hash, application_id, borrower_id, expires_at (72 h), status (`open` / `submitted` / `replaced`), submission (JSON) | Public; the token is the only access. |
+| `online_forms` | token_hash, application_id, borrower_id, expires_at (`loanRules.onlineLinkValidHours`, default 72 h), status (`open` / `submitted` / `replaced`), submission (JSON) | Public; the token is the only access. |
 | `documents` + `document_versions` | borrower_id, slot (e.g. `national-id-front`, `APP-301:application`), file (private storage), content_type (sniffed), size, uploaded_by/at, method (`scanned` / `online`), version | Never deleted; replacing adds a version. |
 | `loans` | id (`TL-0001`), borrower_id, application_id, officer_id, product_id, pricing snapshot, principal, interest, fee, total_repayable, repayment_schedule, disbursed_on, payout method/reference (unique)/by, status (`active` / `cleared`), cleared_on | One open loan per borrower when that rule is on. |
 | `instalments` | loan_id, number, due_on, amount | Generated at payout (section 3). |
@@ -84,7 +84,7 @@ what's owed.
   made before that date.
 - Arrears bands: up to date, 1–30, 31–60, 61–90 and 90+ days late (amount and count).
 - Collection rate: payments received in the last 30 days ÷ instalments that fell due in those 30 days (max 100%).
-- Early warnings (loans 7+ days late, not in recovery): "moves past 30 days late in N days" (25–30 days late),
+- Early warnings (loans `loanRules.earlyWarningDays`+ days late, default 7, not in recovery): "moves past 30 days late in N days" (25–30 days late),
   "no payment since payout", "no payment for N days" (14+), otherwise "N days behind; last paid …".
 - Officer summary: outstanding, active loans, paid out and cleared this month, still due in the next 7 days.
 - Team performance: per officer, outstanding, loans, PAR30, due today, collected today.
@@ -111,8 +111,12 @@ loan; a new mobile money number needs someone else's approval. **One loan at a t
 
 **Worklist** (per user, per day): officers get instalments due today, late loans to follow up (promise-due when a
 promise falls due), and their incomplete drafts; admins get applications waiting for approval, approved loans
-waiting for payout and pending invites. Priorities: promises due and loans 30+ days late `do-first`; other late
+waiting for payout and pending invites. Priorities: promises due and loans `seriouslyLateDays`+ late `do-first`; other late
 loans and drafts `do-today`; the rest `routine`.
+
+**No hard-coded business numbers.** Targets, thresholds, lifetimes and limits come from `settings` (editable in
+Settings, audit-logged), never from code: PAR30 target, early warning days, seriously late days, recovery days,
+online link and invite lifetimes, back-dating, security limits, products, markets and payout accounts.
 
 ## 4. Build order
 

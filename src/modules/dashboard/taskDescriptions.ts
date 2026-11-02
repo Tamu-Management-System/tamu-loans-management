@@ -54,7 +54,7 @@ export function describeStatus(task: WorklistTask): { tone: ChipTone; label: str
     case "reversal-request":
       return { tone: task.priority === "do-first" ? "danger" : "warning", label: "Reversal request", detail: `Requested ${formatRelativeDay(task.requestedAt)}` };
     case "awaiting-approval":
-      return { tone: task.hoursWaiting > 48 ? "danger" : "info", label: `Waiting ${task.hoursWaiting} hours`, detail: "Finance hasn't decided yet" };
+      return { tone: task.hoursWaiting > 48 ? "danger" : "info", label: `Waiting ${task.hoursWaiting} hours`, detail: "Not decided yet" };
     case "awaiting-disbursement": {
       const days = daysSince(task.approvedOn);
       return { tone: days >= 3 ? "danger" : "warning", label: `Approved ${plural(days, "day")} ago`, detail: "Not yet disbursed" };

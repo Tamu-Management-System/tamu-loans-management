@@ -202,6 +202,7 @@
 /* ---------- Chart ---------- */
 .chartFigure {
   margin: 0;
+  container-type: inline-size;
 }
 
 .chartTitle {
@@ -242,58 +243,228 @@
   background: var(--color-text);
 }
 
+.legendLine {
+  width: 16px;
+  border-top: 2.5px solid var(--color-primary);
+}
+
+.legendDashed {
+  width: 16px;
+  border-top: 2px dashed var(--color-text-muted);
+}
+
+/* Charts side by side: the trend or comparison wider, the donut beside it */
+.charts {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: var(--layout-gap, 20px);
+}
+
+/* Cards in a row share one height; the chart sits in the middle of the space under its title */
+.charts > section {
+  display: flex;
+  flex-direction: column;
+}
+
+.charts .chartFigure {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.charts .chartFigure > :last-child {
+  margin-block: auto;
+}
+
+.charts > :only-child {
+  grid-column: 1 / -1;
+}
+
+/* Two donuts share the row equally */
+.chartsEven {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* ---------- Trend ---------- */
+.trendLine {
+  fill: none;
+  stroke: var(--color-primary);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.trendTarget {
+  fill: none;
+  stroke: var(--color-text-muted);
+  stroke-width: 1.75;
+  stroke-dasharray: 6 5;
+  pointer-events: none;
+}
+
+.crosshair {
+  stroke: var(--color-border-strong);
+  stroke-width: 1;
+}
+
+.trendDot {
+  fill: var(--color-primary);
+  stroke: var(--color-surface);
+  stroke-width: 2;
+}
+
+.trendTargetDot {
+  fill: var(--color-surface);
+  stroke: var(--color-text-muted);
+  stroke-width: 2;
+}
+
+/* ---------- Donut ---------- */
+.donut {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 22px 28px;
+}
+
+.donutRing {
+  position: relative;
+  flex: none;
+  width: 180px;
+  height: 180px;
+}
+
+.donutRing svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.donutTrack {
+  fill: none;
+  stroke: var(--color-neutral-soft);
+}
+
+.donutSlice {
+  transition:
+    stroke-width 0.15s,
+    opacity 0.15s;
+  cursor: default;
+}
+
+.donutDim {
+  opacity: 0.35;
+}
+
+.donutCentre {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 36px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  text-align: center;
+  pointer-events: none;
+}
+
+.donutCentre span {
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.donutCentre b {
+  margin: 2px 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.donutLegend {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.donutLegend li {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto 46px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 13.5px;
+  transition: opacity 0.15s;
+}
+
+.donutLegend li:last-child {
+  border-bottom: 0;
+}
+
+.donutLegend i {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.donutLabel {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.donutValue {
+  font-variant-numeric: tabular-nums;
+}
+
+.donutShare {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* In a narrow card the legend goes under the ring, so labels have room */
+@container (max-width: 560px) {
+  .donut {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .donutRing {
+    align-self: center;
+  }
+
+  .donutLegend {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 1100px) {
+  .charts,
+  .chartsEven {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .chartEmpty {
   margin: 0;
   padding: 40px 0;
   font-size: 14px;
   color: var(--color-text-muted);
   text-align: center;
-}
-
-.bars {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.bars li {
-  display: grid;
-  grid-template-columns: 170px minmax(0, 1fr) 130px;
-  align-items: center;
-  gap: 14px;
-  font-size: 13.5px;
-}
-
-.barLabel {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 600;
-}
-
-.barTrack {
-  height: 14px;
-}
-
-.bar {
-  display: block;
-  height: 100%;
-  border-radius: 0 4px 4px 0;
-  background: var(--color-primary);
-  transition: width 0.3s;
-}
-
-.bars li:hover .bar {
-  background: var(--color-primary-strong);
-}
-
-.barValue {
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
 }
 
 .columnsWrap {
@@ -326,6 +497,19 @@
   fill: var(--color-primary);
 }
 
+.valueLabel {
+  font-size: 12.5px;
+  font-weight: 700;
+  fill: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.categoryLabel {
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--color-text);
+}
+
 .columnHover {
   fill: var(--color-primary-strong);
 }
@@ -356,6 +540,7 @@
   box-shadow: 0 8px 24px rgba(16, 24, 40, 0.2);
   color: #fff;
   font-size: 12.5px;
+  white-space: nowrap;
   pointer-events: none;
   transform: translateX(-50%);
 }
@@ -433,11 +618,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.tableNote {
-  margin: 12px 0 0;
-  font-size: 12.5px;
-  color: var(--color-text-muted);
-}
 
 /* ---------- States ---------- */
 .message {
@@ -481,10 +661,6 @@
   .loading {
     animation: none;
   }
-
-  .bar {
-    transition: none;
-  }
 }
 
 @media (max-width: 1100px) {
@@ -526,20 +702,5 @@
 
   .figure dd {
     font-size: 19px;
-  }
-
-  .bars li {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 6px 10px;
-  }
-
-  .barTrack {
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
-
-  .barValue {
-    grid-row: 1;
-    grid-column: 2;
   }
 }

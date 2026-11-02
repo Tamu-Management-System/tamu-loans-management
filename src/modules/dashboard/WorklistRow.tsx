@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
+import { useNavigate } from "react-router";
 import type { WorklistAction, WorklistTask } from "../../api/types";
 import { useFeatureFlags } from "../../app/featureFlags";
+import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { formatUGX } from "../../lib/format";
@@ -19,6 +21,8 @@ export interface WorklistRowHandlers {
 
 function RowActions({ task, handlers }: { task: WorklistTask; handlers: WorklistRowHandlers }) {
   const { showUpcomingModules } = useFeatureFlags();
+  const { can } = useAuth();
+  const navigate = useNavigate();
   const borrowerName = describeSubject(task).name;
 
   const smsButton = (
@@ -74,9 +78,20 @@ function RowActions({ task, handlers }: { task: WorklistTask; handlers: Worklist
         </>
       );
       break;
+    // Whoever can decide or pay out does it; anyone else (e.g. an admin) can only nudge Finance
     case "awaiting-approval":
+      actions = can("applications.approve") ? (
+        <Button size="small" onClick={() => navigate(`/applications/${task.applicationId}`)}>Review</Button>
+      ) : (
+        <Button size="small" onClick={() => handlers.onAction(task, "remind-finance")}>Remind Finance</Button>
+      );
+      break;
     case "awaiting-disbursement":
-      actions = <Button size="small" onClick={() => handlers.onAction(task, "remind-finance")}>Remind Finance</Button>;
+      actions = can("loans.disburse") ? (
+        <Button size="small" onClick={() => navigate("/loans/to-disburse")}>Pay out</Button>
+      ) : (
+        <Button size="small" onClick={() => handlers.onAction(task, "remind-finance")}>Remind Finance</Button>
+      );
       break;
     case "access-request":
       actions =

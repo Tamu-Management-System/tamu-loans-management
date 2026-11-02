@@ -61,7 +61,6 @@ const LAST_NAMES = ["Kato", "Okello", "Nakato", "Mugisha", "Auma", "Ssali", "Nam
 const PHONE_PREFIXES = ["0772", "0701", "0756", "0782", "0774", "0703"];
 const RELATIONSHIPS = ["Sister", "Brother", "Friend", "Workmate", "Neighbour", "Cousin", "Landlord", "Spouse"];
 const DAY_MS = 86_400_000;
-export const ONLINE_LINK_HOURS = 72;
 
 /** Same small generator as the other sample data, seeded per borrower */
 function seededRandom(seed: number) {
@@ -263,7 +262,7 @@ function newOnlineApplication(borrowerId: string, officerId: string, slotKey: st
     slotKey,
     createdBy,
     createdAt: new Date(createdAt).toISOString(),
-    expiresAt: new Date(createdAt + ONLINE_LINK_HOURS * 3_600_000).toISOString(),
+    expiresAt: new Date(createdAt + systemSettings.loanRules.onlineLinkValidHours * 3_600_000).toISOString(),
     status: "open",
     form: {
       reference: forms.reference,
@@ -290,7 +289,7 @@ function newOnlineApplication(borrowerId: string, officerId: string, slotKey: st
 
 /**
  * A new one-time link for completing the loan application online. Any earlier link for the same
- * document stops working; this one stops working once it's submitted, or after 72 hours.
+ * document stops working; this one stops working once it's submitted, or when it expires (Loan rules → online link lifetime).
  */
 export function createOnlineLink(borrower: MockBorrower, slotKey: string, createdBy: string) {
   const slot = findSlot(borrower, slotKey)!;

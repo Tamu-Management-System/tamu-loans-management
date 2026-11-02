@@ -1,5 +1,6 @@
 import { useDashboardToday } from "../../api/dashboard";
 import type { DashboardToday } from "../../api/types";
+import { useAuth } from "../../auth/AuthContext";
 import { formatUGX } from "../../lib/format";
 import { SummaryTile, type SummaryTileProps } from "./SummaryTile";
 import { useWorklistFilter, type WorklistFilter } from "./worklistFilter";
@@ -10,7 +11,7 @@ type TileDefinition = Omit<SummaryTileProps, "selected" | "onSelect"> & { filter
 const plural = (count: number, singular: string, pluralForm: string) => (count === 1 ? singular : pluralForm);
 
 /** Turns the API's sections into boxes, in the order of the approved design. */
-function buildTiles(today: DashboardToday): TileDefinition[] {
+function buildTiles(today: DashboardToday, { marketWide, canApprove }: { marketWide: boolean; canApprove: boolean }): TileDefinition[] {
   const tiles: TileDefinition[] = [];
   const { activeLoans, collections, followUps, applicationsToComplete, paymentReversals, awaitingApproval, approvedNotDisbursed, accessRequests } = today;
 
@@ -26,11 +27,12 @@ function buildTiles(today: DashboardToday): TileDefinition[] {
     });
   if (collections)
     tiles.push({
-      filter: "collect",
+      // Market-wide it's everyone's borrowers, so the box opens Payments rather than filtering your worklist
+      ...(marketWide ? { filter: null, href: "/payments" } : { filter: "collect" as const }),
       label: "Due to collect",
       icon: "coins",
       value: collections.dueCount,
-      detail: `${formatUGX(collections.collectedAmount)} collected of ${formatUGX(collections.expectedAmount)} expected`,
+      detail: `${formatUGX(collections.collectedAmount)} collected of ${formatUGX(collections.expectedAmount)} expected${marketWide ? " · whole market" : ""}`,
       progress: collections.expectedAmount ? collections.collectedAmount / collections.expectedAmount : 0,
     });
   if (followUps)
@@ -60,7 +62,7 @@ function buildTiles(today: DashboardToday): TileDefinition[] {
   if (awaitingApproval)
     tiles.push({
       filter: "approvals",
-      label: "Waiting on Finance",
+      label: canApprove ? "Waiting for approval" : "Waiting on Finance",
       icon: "document",
       value: awaitingApproval.count,
       detail: `${awaitingApproval.over48HoursCount} waiting over 48 hours`,
@@ -88,7 +90,8 @@ function buildTiles(today: DashboardToday): TileDefinition[] {
 export function TodaySummary() {
   const { data: today, isPending, isError, refetch } = useDashboardToday();
   const { selected, toggle } = useWorklistFilter();
-  const tiles = today ? buildTiles(today) : [];
+  const { can, seesBranch } = useAuth();
+  const tiles = today ? buildTiles(today, { marketWide: seesBranch, canApprove: can("applications.approve") }) : [];
 
   if (today && tiles.length === 0) return null;
 

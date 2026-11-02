@@ -18,8 +18,8 @@ export const useEarlyWarnings = () =>
 
 export const usePortfolioSummary = () => useQuery({ queryKey: ["portfolio", "summary"], queryFn: () => api.get<PortfolioSummary>("/portfolio/summary") });
 
-export const useRecentActivity = () =>
-  useQuery({ queryKey: ["activity"], queryFn: () => api.get<ActivityList>(`/activity?limit=${ACTIVITY_LIMIT}`) });
+export const useRecentActivity = (enabled = true) =>
+  useQuery({ queryKey: ["activity"], queryFn: () => api.get<ActivityList>(`/activity?limit=${ACTIVITY_LIMIT}`), enabled });
 
 export const useTeamPerformance = () => useQuery({ queryKey: ["team", "performance"], queryFn: () => api.get<OfficerPerformance[]>("/team/performance") });
 

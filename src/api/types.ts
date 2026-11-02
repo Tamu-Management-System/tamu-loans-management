@@ -1060,6 +1060,12 @@ export interface LoanRulesSettings {
   recoveryMode: "suggest" | "auto";
   /** Loans this many days late are shown in red */
   seriouslyLateDays: number;
+  /** The PAR30 the business aims to stay under, e.g. 5 (%); dashboards compare against it */
+  par30TargetPercent: number;
+  /** Late loans show as early warnings from this many days late */
+  earlyWarningDays: number;
+  /** How long an online application link works before it expires */
+  onlineLinkValidHours: number;
 }
 
 export interface PaymentSettings {
@@ -1168,6 +1174,19 @@ export interface SupportContacts {
 export type ReportName = "portfolio" | "collections" | "disbursements" | "officers";
 export type ReportValueFormat = "ugx" | "count" | "percent" | "text" | "date";
 
+export interface ReportChart {
+  title: string;
+  /** "trend": area line over days, weeks or months; "donut": how a total splits; "bars": one bar per category */
+  kind: "trend" | "donut" | "bars";
+  format: ReportValueFormat;
+  /** Name of the main series, and of the optional second one drawn as a dashed line (e.g. expected) */
+  series: string;
+  targetSeries: string | null;
+  /** Donut slices that run in order (e.g. how late), shaded light to dark after the first */
+  ordered?: boolean;
+  points: { label: string; value: number; target: number | null }[];
+}
+
 /** GET /reports/{name}?from=&to=: one report, the same shape for all four */
 export interface Report {
   name: ReportName;
@@ -1178,16 +1197,8 @@ export interface Report {
   to: string;
   /** 3–4 headline numbers */
   figures: { label: string; value: number; format: ReportValueFormat; note: string | null }[];
-  chart: {
-    title: string;
-    /** "bars": one horizontal bar per category; "columns": one column per day, week or month */
-    kind: "bars" | "columns";
-    format: ReportValueFormat;
-    /** Name of the main series, and of the optional second one drawn as a marker (e.g. expected) */
-    series: string;
-    targetSeries: string | null;
-    points: { label: string; value: number; target: number | null }[];
-  };
+  /** 1–2 charts: usually a trend over time or a comparison, then a donut of how the total splits */
+  charts: ReportChart[];
   table: {
     title: string;
     columns: { key: string; label: string; format: ReportValueFormat }[];

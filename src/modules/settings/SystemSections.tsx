@@ -17,7 +17,13 @@ const rangeText = ([min, max]: readonly [number, number], unit: string) => `${mi
 export function LoanRulesSection() {
   const { can } = useAuth();
   const draft = useSettingsDraft("loanRules");
-  const ids = { recovery: useId(), late: useId() };
+  const ids = { recovery: useId(), late: useId(), target: useId(), warning: useId(), link: useId() };
+  const numbers = [
+    ["seriouslyLateDays", "Days late shown in red", "days"],
+    ["par30TargetPercent", "PAR30 target", "%"],
+    ["earlyWarningDays", "Early warning", "days"],
+    ["onlineLinkValidHours", "Online link lifetime", "hours"],
+  ] as const;
   const rules = draft.values;
   return (
     <SettingsForm
@@ -28,9 +34,10 @@ export function LoanRulesSection() {
       validate={() =>
         rules!.recoveryAfterDaysLate !== null && outside(rules!.recoveryAfterDaysLate, SETTING_LIMITS.recoveryAfterDaysLate)
           ? `Days late before recovery: ${rangeText(SETTING_LIMITS.recoveryAfterDaysLate, "days")}.`
-          : outside(rules!.seriouslyLateDays, SETTING_LIMITS.seriouslyLateDays)
-            ? `Days late shown in red: ${rangeText(SETTING_LIMITS.seriouslyLateDays, "days")}.`
-            : null
+          : (() => {
+              const bad = numbers.find(([key]) => outside(rules![key], SETTING_LIMITS[key]));
+              return bad ? `${bad[1]}: ${rangeText(SETTING_LIMITS[bad[0]], bad[2])}.` : null;
+            })()
       }
     >
       {rules && (
@@ -50,6 +57,18 @@ export function LoanRulesSection() {
           <SettingsGroup title="Applications">
             <SettingRow label="One loan at a time" description="A borrower can't start a new loan until the current one is repaid.">
               <Switch label="One loan at a time" checked={rules.oneOpenLoanPerBorrower} onChange={(value) => draft.set("oneOpenLoanPerBorrower", value)} />
+            </SettingRow>
+            <SettingRow label="Online application links work for" htmlFor={ids.link} description="The link sent to a borrower stops working after this, or as soon as they submit.">
+              <NumberField id={ids.link} value={rules.onlineLinkValidHours} onChange={(value) => draft.set("onlineLinkValidHours", value)} min={SETTING_LIMITS.onlineLinkValidHours[0]} max={SETTING_LIMITS.onlineLinkValidHours[1]} unit="hours" />
+            </SettingRow>
+          </SettingsGroup>
+
+          <SettingsGroup title="Portfolio health" description="What the dashboards compare against.">
+            <SettingRow label="PAR30 target" htmlFor={ids.target} description="The share of money owed that may be more than 30 days late. Above this, the dashboard shows it in red.">
+              <NumberField id={ids.target} value={rules.par30TargetPercent} onChange={(value) => draft.set("par30TargetPercent", value)} min={SETTING_LIMITS.par30TargetPercent[0]} max={SETTING_LIMITS.par30TargetPercent[1]} unit="%" />
+            </SettingRow>
+            <SettingRow label="Early warning from" htmlFor={ids.warning} description="Late loans show as warning signs on the dashboard from this day.">
+              <NumberField id={ids.warning} value={rules.earlyWarningDays} onChange={(value) => draft.set("earlyWarningDays", value)} min={SETTING_LIMITS.earlyWarningDays[0]} max={SETTING_LIMITS.earlyWarningDays[1]} unit="days late" />
             </SettingRow>
           </SettingsGroup>
 

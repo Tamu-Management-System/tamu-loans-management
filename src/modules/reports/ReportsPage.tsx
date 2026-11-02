@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, useState } from "react";
 import { useSearchParams } from "react-router";
 import { ApiError } from "../../api/client";
 import { useExportReport, useReport } from "../../api/reports";
@@ -6,11 +6,14 @@ import type { ReportName } from "../../api/types";
 import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
+import { Pagination } from "../../components/ui/Pagination";
 import { useToast } from "../../components/ui/Toast";
 import { formatDate, toDateInputValue } from "../../lib/format";
 import { ReportChart } from "./ReportChart";
 import { formatValue } from "./reportFormat";
 import styles from "./Reports.module.css";
+
+const TABLE_PAGE_SIZE = 25;
 
 const REPORTS: { name: ReportName; label: string; description: string; branchOnly?: boolean }[] = [
   { name: "portfolio", label: "Portfolio", description: "What's lent out today, and how much of it is late" },
@@ -59,6 +62,11 @@ export function ReportsPage() {
   const { data: report, isPending, isError, isFetching, refetch } = useReport(active.name, dates.from, dates.to);
   const exportReport = useExportReport();
   const snapshot = active.name === "portfolio";
+  // The table's page goes back to 1 when the report or dates change
+  const tableKey = `${active.name}|${dates.from}|${dates.to}`;
+  const [tablePage, setTablePage] = useState({ key: tableKey, page: 1 });
+  if (tablePage.key !== tableKey) setTablePage({ key: tableKey, page: 1 });
+  const page = tablePage.key === tableKey ? tablePage.page : 1;
 
   const update = (changes: Record<string, string | null>) =>
     setSearchParams((current) => {
@@ -155,9 +163,13 @@ export function ReportsPage() {
             ))}
           </dl>
 
-          <section className={styles.card}>
-            <ReportChart chart={report.chart} />
-          </section>
+          <div className={`${styles.charts} ${report.charts.every((chart) => chart.kind === "donut") ? styles.chartsEven : ""}`}>
+            {report.charts.map((chart) => (
+              <section key={chart.title} className={styles.card}>
+                <ReportChart chart={chart} />
+              </section>
+            ))}
+          </div>
 
           <section className={styles.card} aria-labelledby="report-table-heading">
             <h2 id="report-table-heading" className={styles.tableTitle}>
@@ -179,7 +191,7 @@ export function ReportsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {report.table.rows.slice(0, 200).map((row, index) => (
+                    {report.table.rows.slice((page - 1) * TABLE_PAGE_SIZE, page * TABLE_PAGE_SIZE).map((row, index) => (
                       <tr key={index}>
                         {report.table.columns.map((column) => (
                           <td key={column.key} data-label={column.label} className={column.format === "text" || column.format === "date" ? undefined : styles.numeric}>
@@ -201,8 +213,10 @@ export function ReportsPage() {
                     </tfoot>
                   )}
                 </table>
-                {report.table.rows.length > 200 && <p className={styles.tableNote}>Showing the first 200 rows. Download the PDF or CSV for all {report.table.rows.length.toLocaleString("en-US")}.</p>}
               </div>
+            )}
+            {report.table.rows.length > TABLE_PAGE_SIZE && (
+              <Pagination page={page} pageSize={TABLE_PAGE_SIZE} total={report.table.rows.length} noun="rows" onPageChange={(next) => setTablePage({ key: tableKey, page: next })} />
             )}
           </section>
         </div>

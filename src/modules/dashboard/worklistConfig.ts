@@ -43,7 +43,7 @@ export const WORKLIST_GROUPS: WorklistGroup[] = [
   { id: "follow-up", title: "Follow up overdue loans", description: "Borrowers behind on payments", tabLabel: "Follow up", amountSuffix: "in arrears" },
   { id: "complete", title: "Complete applications", description: "Drafts missing documents before Finance can approve them", tabLabel: "Complete", amountSuffix: "requested" },
   { id: "reversals", title: "Payment reversals", description: "Officers asking to undo a recorded payment", tabLabel: "Reversals", amountSuffix: "to reverse" },
-  { id: "approvals", title: "Waiting on Finance approval", description: "Submitted applications Finance hasn't decided on", tabLabel: "Approvals", amountSuffix: "requested" },
+  { id: "approvals", title: "Waiting for approval", description: "Submitted applications not decided yet", tabLabel: "Approvals", amountSuffix: "requested" },
   { id: "disbursement", title: "Approved, not yet disbursed", description: "Borrowers still waiting for their money", tabLabel: "Disbursement", amountSuffix: "to pay out" },
   { id: "access", title: "Users & access", description: "Requests from your team", tabLabel: "Access", amountSuffix: null },
 ];

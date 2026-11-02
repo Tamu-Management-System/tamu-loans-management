@@ -177,15 +177,26 @@ the frontend shows one box per section. Shape: `DashboardToday` in `src/api/type
 }
 ```
 
-- Everyone with `loans.view` gets `activeLoans` first (open loans in their data scope, what's owed, how many late).
-- Loan officers also get `collections`, `followUps`, `applicationsToComplete` (their own portfolio).
-- Users with `users.manage` also get `awaitingApproval`, `approvedNotDisbursed`, `accessRequests`.
+**Every box depends on a permission, never on a role name**, so built-in and custom roles work the same way:
+
+| Section | Who gets it |
+|---|---|
+| `activeLoans` (first) | `loans.view`: open loans in their data scope |
+| `collections` | `own` data scope with `loans.view` (their borrowers), or `branch` scope with `payments.record` (the whole market) |
+| `followUps` | `own` data scope with `loans.view` |
+| `applicationsToComplete` | `applications.create` (their own drafts) |
+| `awaitingApproval` | `applications.approve` (to decide) or `users.manage` (to follow up) |
+| `approvedNotDisbursed` | `loans.disburse` (to pay out) or `users.manage` |
+| `accessRequests` | `users.manage` |
 - Payment matching and payment reversals are not in the MVP (`unmatchedPayments`, `paymentReversals` aren't sent).
 - Must stay consistent with `GET /worklist`: e.g. `collections.dueCount` = open instalment and promise tasks.
 
 ### `GET /worklist`
 
-Today's tasks for the signed-in user, open and done. Each task has a `type`; its fields depend on the
+Today's tasks for the signed-in user, open and done: their own tasks (their borrowers and drafts) plus shared
+tasks their permissions cover: `awaiting-approval` → `applications.approve` or `users.manage`,
+`awaiting-disbursement` → `loans.disburse` or `users.manage`, `access-request` → `users.manage`. People who can
+approve or pay out get "Review" / "Pay out"; others (e.g. Admin) get "Remind Finance". Each task has a `type`; its fields depend on the
 type (see `WorklistTask` in `src/api/types.ts`). Common fields:
 
 | Field | Meaning |
@@ -265,7 +276,11 @@ longer be undone. **Open question:** undoing a recorded payment is effectively a
 aren't allowed to do (`payments.reverse`). Decide with the client whether payment undo should become a reversal
 request to an admin instead.
 
-## Portfolio section ("My portfolio" / "Branch portfolio")
+## Portfolio section ("My portfolio" / "Market portfolio")
+
+**Who sees it:** anyone with `loans.view`. `own` scope gets "My portfolio" (early warnings + `GET /portfolio/summary`,
+which must work for any own-scope user, not only built-in officers); `branch` scope gets "Market portfolio" (recent
+activity if they have `audit.view`, team performance).
 
 **Scope:** the role's data access (`own` or `branch`). Shapes are in `src/api/types.ts`. Every figure here is
 **calculated from the loans, their schedules and their payments** (never stored or typed in); the definitions are
@@ -919,7 +934,8 @@ Nothing an admin can change is hard-coded in the frontend: it reads these and fo
                 "payoutAccounts": [{ "method": "MTN MoMo", "number": "0772 900 410", "accountName": "Tamu Cleaning Services" }],
                 "branches": ["Kampala Central", "Mbarara"] },
   "loanRules": { "approverCannotDisburse": true, "creatorCannotApprove": true, "phoneChangeNeedsApproval": true, "oneOpenLoanPerBorrower": true,
-                 "recoveryAfterDaysLate": 60, "recoveryMode": "suggest", "seriouslyLateDays": 30 },
+                 "recoveryAfterDaysLate": 60, "recoveryMode": "suggest", "seriouslyLateDays": 30,
+                 "par30TargetPercent": 5, "earlyWarningDays": 7, "onlineLinkValidHours": 72 },
   "payments": { "repaymentMethods": ["Cash", "MTN MoMo", "Airtel Money"], "payoutMethods": ["MTN MoMo", "Airtel Money"],
                 "referenceRequired": true, "backdateDays": 3, "allowOverpayment": true },
   "security": { "idleTimeoutMinutes": 15, "nationalIdVisibleSeconds": 30, "inviteValidHours": 48, "maxFailedSignIns": 5, "lockoutMinutes": 15, "minPasswordLength": 12 },
@@ -938,6 +954,10 @@ What each setting does on the server:
 - `recoveryMode: "auto"` with `recoveryAfterDaysLate`: a daily job sends loans that late to recovery (by
   "Automatic (Loan rules)"); a loan a person brought back isn't sent again automatically. `"suggest"` only flags them.
 - `oneOpenLoanPerBorrower`: `409` on a new application while the borrower has a loan to repay.
+- `par30TargetPercent`: the `targetPercent` returned by `/portfolio/risk` and the sidebar risk summary.
+- `earlyWarningDays`: loans at least this late appear in early warnings.
+- `onlineLinkValidHours`: lifetime of a new online application link (existing links keep their expiry).
+- `seriouslyLateDays`: also decides which late loans go first (`do-first`) on the worklist.
 - `phoneChangeNeedsApproval: false`: a new mobile money number applies straight away (still logged).
 - Payments: refuse methods not in `repaymentMethods`/`payoutMethods`; require `reference` for mobile money when
   `referenceRequired`; `paidOn` (new, optional on `POST /payments`) may be up to `backdateDays` in the past;
@@ -1037,5 +1057,11 @@ The client confirmed the fields below; the endpoints above already use them.
 - **Payout consent**: the payout is confirmed in a second step in the app before `POST /applications/{id}/disburse`.
 - **Reports** for every role (own portfolio or branch): Today / This week / This month / Last month / This year /
   custom; `GET /reports/{name}/export?format=pdf|csv` (`reports.export`, now on all built-in roles).
+  `GET /reports/{name}?from=&to=` returns `Report` (`src/api/types.ts`): `figures`, **`charts`** (1–2 `ReportChart`s:
+  `kind` `trend` = values per day/week/month with an optional dashed `target` series, `donut` = how a total
+  splits, `bars` = one bar per category; `ordered: true` for bands like days late) and a `table`. Charts per report:
+  Portfolio: outstanding by product + by how late (donuts); Collections: collected vs expected (trend) + by payment
+  method (donut); Disbursements: amount lent (trend) + by product (donut); Officers: collection rate (bars) +
+  outstanding by officer (donut).
 - **Dashboard** (`GET /dashboard/today`): `activeLoans: { count, outstanding, lateCount }` comes first, then
   `collections`; payment matching (`unmatchedPayments`) is no longer shown.

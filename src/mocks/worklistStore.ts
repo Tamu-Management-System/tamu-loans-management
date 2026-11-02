@@ -3,14 +3,25 @@
 // Today's tasks are worked out from the sample data (seed.ts). Everything resets on page reload.
 import "./seed";
 import type { PaymentMethod, WorklistTask } from "../api/types";
+import type { Permission } from "../auth/permissions";
 import { borrowers } from "./borrowerDirectory";
 import { borrowerDetails, nextPayment } from "./borrowerProfiles";
 import { applications, loans, officers } from "./fixtures";
 import { earlyWarnings } from "./portfolioFigures";
 import { staff } from "./staff";
 import { roles } from "./fixtures";
+import { systemSettings } from "./systemSettings";
 
-const ADMIN_ID = "u-martin";
+/** Loans this late go first on the worklist (Loan rules → seriously late) */
+const seriouslyLate = () => systemSettings.loanRules.seriouslyLateDays;
+
+/** Tasks that belong to no one person; who sees them depends on what they're allowed to do */
+const SHARED = "shared";
+const SHARED_TASK_PERMISSIONS: Partial<Record<WorklistTask["type"], Permission[]>> = {
+  "awaiting-approval": ["applications.approve", "users.manage"],
+  "awaiting-disbursement": ["loans.disburse", "users.manage"],
+  "access-request": ["users.manage"],
+};
 const TODAY = new Date().toLocaleDateString("en-CA");
 
 const borrowerOf = (loanId: string) => {
@@ -44,8 +55,8 @@ function seedTasks(): Record<string, WorklistTask[]> {
     const late = mine.filter((loan) => loan.daysPastDue > 0 && !loan.recovery).sort((a, b) => b.daysPastDue - a.daysPastDue);
     late.forEach((loan, index) => {
       const base = { ...open(), id: `task-${loan.id}`, loanId: loan.id, borrower: borrowerOf(loan.id), amountDue: loan.arrearsAmount ?? 0, amountPaid: 0, daysPastDue: loan.daysPastDue, warning: signalFor(loan.id) };
-      if (index % 4 === 1 && loan.daysPastDue <= 30) tasks.push({ ...base, type: "promise-due", priority: "do-first", promiseMadeOn: new Date(Date.now() - (2 + (index % 4)) * 86_400_000).toISOString().slice(0, 10) });
-      else tasks.push({ ...base, type: "overdue", priority: loan.daysPastDue > 30 ? "do-first" : "do-today" });
+      if (index % 4 === 1 && loan.daysPastDue < seriouslyLate()) tasks.push({ ...base, type: "promise-due", priority: "do-first", promiseMadeOn: new Date(Date.now() - (2 + (index % 4)) * 86_400_000).toISOString().slice(0, 10) });
+      else tasks.push({ ...base, type: "overdue", priority: loan.daysPastDue >= seriouslyLate() ? "do-first" : "do-today" });
     });
     // Applications they still have to finish
     for (const app of applications) {
@@ -71,13 +82,20 @@ function seedTasks(): Record<string, WorklistTask[]> {
     if (member.status === "invited" && member.invite)
       admin.push({ ...open(), id: `task-acc-${member.id}`, type: "access-request", priority: "routine", user: { name: member.name, role: roles[member.roleId]?.name ?? "" }, kind: "invite-pending", requestedAt: member.invite.sentAt });
   }
-  lists[ADMIN_ID] = admin;
+  lists[SHARED] = admin;
   return lists;
 }
 
 export const worklists = seedTasks();
 
+/** Someone's own tasks (their borrowers, their drafts) */
 export const tasksFor = (userId: string): WorklistTask[] => worklists[userId] ?? [];
+
+/** Everything on a person's worklist: their own tasks, plus shared ones their permissions cover (any role, built-in or custom) */
+export const tasksForUser = (userId: string, can: (permission: Permission) => boolean): WorklistTask[] => [
+  ...tasksFor(userId),
+  ...(worklists[SHARED] ?? []).filter((task) => SHARED_TASK_PERMISSIONS[task.type]?.some(can)),
+];
 
 export function findTask(taskId: string): WorklistTask | undefined {
   return Object.values(worklists).flat().find((task) => task.id === taskId);
@@ -115,7 +133,7 @@ export function addFollowUpTask(userId: string, loanId: string): WorklistTask | 
     ...open(),
     id: `task-${loanId.toLowerCase()}-${Date.now()}`,
     type: "overdue",
-    priority: loan.daysPastDue > 30 ? "do-first" : "do-today",
+    priority: loan.daysPastDue >= seriouslyLate() ? "do-first" : "do-today",
     loanId,
     borrower: borrowerOf(loanId),
     amountDue: loan.arrearsAmount ?? 0,
