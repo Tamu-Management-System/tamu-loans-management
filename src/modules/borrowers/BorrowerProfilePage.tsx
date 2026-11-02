@@ -9,7 +9,7 @@ import { Avatar } from "../../components/ui/Avatar";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { useToast } from "../../components/ui/Toast";
-import { formatDate, formatMonthYear, formatRelativeDay, formatUGX } from "../../lib/format";
+import { formatDate, formatMonthYear, formatRelativeDay, formatUGX, dayCount } from "../../lib/format";
 import { useAnnounce } from "../dashboard/useAnnounce";
 import { RecordPaymentDialog } from "../payments/RecordPaymentDialog";
 import { BorrowerActivityTab } from "./BorrowerActivityTab";
@@ -29,7 +29,6 @@ const TABS = [
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
-const INCOME_PERIOD = { daily: "a day", weekly: "a week", monthly: "a month" } as const;
 const REPAYMENT_SCHEDULE = { daily: "Daily", weekly: "Weekly", monthly: "Monthly" } as const;
 
 /** "0772 418 230" -> "0772418230", for tel: and sms: links */
@@ -218,6 +217,7 @@ function Overview({ borrower }: { borrower: BorrowerProfile }) {
     <div className={styles.overview}>
       <CurrentLoanCard borrower={borrower} />
 
+      {/* Who they are and where they work in one card; how to reach them (and their next of kin) in the other */}
       <section className={styles.card} aria-labelledby="personal-details">
         <h2 id="personal-details" className={styles.cardTitle}>
           Personal details
@@ -227,42 +227,27 @@ function Overview({ borrower }: { borrower: BorrowerProfile }) {
           <Detail label="National ID">
             <NationalIdField borrowerId={borrower.id} masked={borrower.nationalIdMasked} />
           </Detail>
+          <Detail label="Gender">{borrower.gender ? (borrower.gender === "female" ? "Female" : "Male") : "—"}</Detail>
+          <Detail label="Address">{borrower.area}</Detail>
+          <Detail label="Shop / premises">{borrower.premises}</Detail>
+          <Detail label="Registered">{formatDate(borrower.registeredOn)}</Detail>
+        </dl>
+      </section>
+
+      <section className={styles.card} aria-labelledby="contact-details">
+        <h2 id="contact-details" className={styles.cardTitle}>
+          Contact and next of kin
+        </h2>
+        <dl className={styles.details}>
           <Detail label="Main phone">
             {borrower.phone}
             <span className={styles.fieldHint}>Mobile money</span>
             {borrower.pendingPhoneChange && <PendingPhoneChangeNotice borrower={borrower} />}
           </Detail>
-          <Detail label="Shop / premises">{borrower.premises}</Detail>
-          <Detail label="Area">{borrower.area}</Detail>
-          <Detail label="Registered">{formatDate(borrower.registeredOn)}</Detail>
-        </dl>
-      </section>
-
-      <section className={styles.card} aria-labelledby="other-details">
-        <div className={styles.cardHeader}>
-          <h2 id="other-details" className={styles.cardTitle}>
-            Other details
-          </h2>
-          <span className={styles.optionalTag} title="Not on Tamu's paper forms yet">
-            Optional
-          </span>
-        </div>
-        <dl className={styles.details}>
           <Detail label="Other phone">{borrower.secondaryPhone ?? "—"}</Detail>
-          <Detail label="Occupation">{borrower.work.occupation ?? "—"}</Detail>
-          <Detail label="Income (approx.)">
-            {borrower.work.income ? `${formatUGX(borrower.work.income.amount)} ${INCOME_PERIOD[borrower.work.income.period]}` : "—"}
-          </Detail>
-          <Detail label="Next of kin">
-            {borrower.nextOfKin ? (
-              <>
-                {borrower.nextOfKin.name}
-                <span className={styles.fieldHint}>{[borrower.nextOfKin.relationship, borrower.nextOfKin.phone].filter(Boolean).join(" · ")}</span>
-              </>
-            ) : (
-              "—"
-            )}
-          </Detail>
+          <Detail label="Next of kin">{borrower.nextOfKin?.name || "—"}</Detail>
+          <Detail label="Relationship">{borrower.nextOfKin?.relationship || "—"}</Detail>
+          <Detail label="Next of kin's phone">{borrower.nextOfKin?.phone || "—"}</Detail>
         </dl>
       </section>
     </div>
@@ -407,7 +392,7 @@ function LoanDetails({ loan, borrowerName }: { loan: BorrowerCurrentLoan; borrow
           <p className={`${styles.alert} ${loan.daysPastDue > 30 ? styles.alertDanger : ""}`} role="note">
             <Icon name="warning" size={16} strokeWidth={1.9} />
             <span>
-              <b>{loan.daysPastDue} days late.</b> {formatUGX(loan.arrearsAmount)} overdue since {formatDate(loan.nextPayment.dueOn)}.
+              <b>{dayCount(loan.daysPastDue)} late.</b> {formatUGX(loan.arrearsAmount)} overdue since {formatDate(loan.nextPayment.dueOn)}.
             </span>
           </p>
         ) : (

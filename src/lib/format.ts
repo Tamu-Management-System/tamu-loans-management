@@ -89,3 +89,6 @@ export const formatMonthYear = (iso: string) => {
 
 /** ISO date -> "12 June 2026" (as on Tamu's forms) */
 export const formatLongDate = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+
+/** "1 day", "12 days" */
+export const dayCount = (days: number) => `${days} day${days === 1 ? "" : "s"}`;

@@ -27,7 +27,7 @@ export function DashboardPage() {
             {greeting()}, {firstName(user.name)}
           </h1>
           <p className={styles.subtitle}>
-            {today} · {user.branch} branch
+            {today} · {user.branch} market
           </p>
         </div>
         {can("payments.record") && (

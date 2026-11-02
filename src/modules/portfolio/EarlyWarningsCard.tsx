@@ -8,6 +8,7 @@ import { revealWorklistTask } from "../dashboard/revealWorklistTask";
 import { TASK_GROUP } from "../dashboard/worklistConfig";
 import { useWorklistFilter } from "../dashboard/worklistFilter";
 import styles from "./Portfolio.module.css";
+import { dayCount } from "../../lib/format";
 
 interface EarlyWarningsCardProps {
   warnings: EarlyWarningList;
@@ -51,7 +52,7 @@ export function EarlyWarningsCard({ warnings, announce }: EarlyWarningsCardProps
               <div className={styles.listRowText}>
                 <b>{item.borrowerName}</b>{" "}
                 <span className={styles.mutedText}>
-                  <span className={styles.noWrap}>{item.loanId}</span> · {item.daysPastDue ? `${item.daysPastDue} days late` : "up to date"}
+                  <span className={styles.noWrap}>{item.loanId}</span> · {item.daysPastDue ? `${dayCount(item.daysPastDue)} late` : "up to date"}
                 </span>
                 <div className={styles.warningLine}>
                   <Icon name="warning" size={13} strokeWidth={1.8} />

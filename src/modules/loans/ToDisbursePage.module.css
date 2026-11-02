@@ -251,3 +251,30 @@
     justify-content: center;
   }
 }
+
+/* Payout consent */
+.consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 12px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  cursor: pointer;
+}
+
+.consent:has(input:checked) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.consent input {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--color-primary);
+}

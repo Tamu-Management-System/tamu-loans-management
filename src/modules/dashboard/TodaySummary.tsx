@@ -1,20 +1,29 @@
 import { useDashboardToday } from "../../api/dashboard";
 import type { DashboardToday } from "../../api/types";
-import { useFeatureFlags } from "../../app/featureFlags";
 import { formatUGX } from "../../lib/format";
 import { SummaryTile, type SummaryTileProps } from "./SummaryTile";
 import { useWorklistFilter, type WorklistFilter } from "./worklistFilter";
 import styles from "./TodaySummary.module.css";
 
-type TileDefinition = Omit<SummaryTileProps, "selected" | "onSelect"> & { filter: WorklistFilter };
+type TileDefinition = Omit<SummaryTileProps, "selected" | "onSelect"> & { filter: WorklistFilter | null };
 
 const plural = (count: number, singular: string, pluralForm: string) => (count === 1 ? singular : pluralForm);
 
 /** Turns the API's sections into boxes, in the order of the approved design. */
-function buildTiles(today: DashboardToday, showUpcomingModules: boolean): TileDefinition[] {
+function buildTiles(today: DashboardToday): TileDefinition[] {
   const tiles: TileDefinition[] = [];
-  const { collections, followUps, applicationsToComplete, unmatchedPayments, paymentReversals, awaitingApproval, approvedNotDisbursed, accessRequests } = today;
+  const { activeLoans, collections, followUps, applicationsToComplete, paymentReversals, awaitingApproval, approvedNotDisbursed, accessRequests } = today;
 
+  // Active loans first, then what's due to collect (the client's order)
+  if (activeLoans)
+    tiles.push({
+      filter: null,
+      href: "/loans/active",
+      label: "Active loans",
+      icon: "loans",
+      value: activeLoans.count,
+      detail: `${formatUGX(activeLoans.outstanding)} outstanding · ${activeLoans.lateCount} late`,
+    });
   if (collections)
     tiles.push({
       filter: "collect",
@@ -39,15 +48,6 @@ function buildTiles(today: DashboardToday, showUpcomingModules: boolean): TileDe
       icon: "document",
       value: applicationsToComplete.count,
       detail: "Missing documents or guarantor consent",
-    });
-  if (unmatchedPayments)
-    tiles.push({
-      filter: "match",
-      label: "Payments to match",
-      icon: "link",
-      value: unmatchedPayments.count,
-      detail: `${formatUGX(unmatchedPayments.amount)} not yet on any loan`,
-      upcoming: showUpcomingModules ? undefined : { feature: "Payment matching", module: "Module 4 · Mobile Money reconciliation" },
     });
   if (paymentReversals)
     tiles.push({
@@ -87,9 +87,8 @@ function buildTiles(today: DashboardToday, showUpcomingModules: boolean): TileDe
 /** The "Today" section: four boxes summarising today's work. Selecting one filters the worklist. */
 export function TodaySummary() {
   const { data: today, isPending, isError, refetch } = useDashboardToday();
-  const { showUpcomingModules } = useFeatureFlags();
   const { selected, toggle } = useWorklistFilter();
-  const tiles = today ? buildTiles(today, showUpcomingModules) : [];
+  const tiles = today ? buildTiles(today) : [];
 
   if (today && tiles.length === 0) return null;
 
@@ -115,7 +114,7 @@ export function TodaySummary() {
           {isPending
             ? Array.from({ length: 4 }, (_, index) => <div key={index} className={`${styles.tile} ${styles.tileLoading}`} />)
             : tiles.map(({ filter, ...tile }) => (
-                <SummaryTile key={filter} {...tile} selected={selected === filter} onSelect={() => toggle(filter)} />
+                <SummaryTile key={tile.label} {...tile} selected={!!filter && selected === filter} onSelect={() => filter && toggle(filter)} />
               ))}
         </div>
       )}

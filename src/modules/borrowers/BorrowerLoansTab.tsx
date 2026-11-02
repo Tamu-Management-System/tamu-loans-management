@@ -5,7 +5,7 @@ import { useAuth } from "../../auth/AuthContext";
 import type { BorrowerLoanRecord } from "../../api/types";
 import { Icon } from "../../components/ui/Icon";
 import { useToast } from "../../components/ui/Toast";
-import { formatDate, formatUGX } from "../../lib/format";
+import { formatDate, formatUGX, dayCount } from "../../lib/format";
 import chipStyles from "./BorrowerStatusChip.module.css";
 import styles from "./BorrowerLoansTab.module.css";
 
@@ -16,7 +16,7 @@ const LATE_DAYS_DANGER = 30;
 function RepaymentChip({ loan }: { loan: BorrowerLoanRecord }) {
   if (loan.status === "active") return <span className={`${chipStyles.chip} ${chipStyles.chipActive}`}>Active · on time</span>;
   if (loan.status === "in-arrears") {
-    return <span className={`${chipStyles.chip} ${loan.daysPastDue > LATE_DAYS_DANGER ? chipStyles.chipDanger : chipStyles.chipWarning}`}>Active · {loan.daysPastDue} days late</span>;
+    return <span className={`${chipStyles.chip} ${loan.daysPastDue > LATE_DAYS_DANGER ? chipStyles.chipDanger : chipStyles.chipWarning}`}>Active · {dayCount(loan.daysPastDue)} late</span>;
   }
   return loan.mostDaysLate === 0 ? (
     <span className={`${chipStyles.chip} ${chipStyles.chipNeutral}`}>Cleared · on time</span>

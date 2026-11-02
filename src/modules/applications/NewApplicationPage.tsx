@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { useCreateApplication, useUpdateApplication } from "../../api/applications";
 import { useBorrowerList, useBorrowerProfile } from "../../api/borrowers";
 import { ApiError } from "../../api/client";
-import type { ApplicationDraft, BorrowerStatus, DocumentFile, LoanProduct, NewApplicationResult, RepaymentSchedule } from "../../api/types";
+import type { ApplicationDraft, BorrowerStatus, DocumentFile, GuarantorDetails, LoanProduct, NewApplicationResult, NewBorrowerDetails, RepaymentSchedule } from "../../api/types";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { useToast } from "../../components/ui/Toast";
@@ -13,9 +13,19 @@ import { describeInterest, describeLength, FIRST_PAYMENT_WITHIN_DAYS, summariseT
 import { useLoanProducts, useSystemSettings } from "../../api/settings";
 import { BorrowerStatusChip } from "../borrowers/BorrowerStatusChip";
 import { describeFile } from "../borrowers/documents/documentFormat";
-import { PersonFields, TextField } from "./ApplicationFields";
-import { borrowerErrors, normaliseNationalId, personErrors, sameAsError, type BorrowerDraft, type FieldErrors, type PersonDraft } from "./applicationValidation";
-import { IdPhotoInput, type IdPhoto } from "./IdPhotoInput";
+import { BorrowerExtraFields, PersonFields, TextField } from "./ApplicationFields";
+import {
+  borrowerErrors,
+  EMPTY_BORROWER,
+  EMPTY_GUARANTOR,
+  normaliseNationalId,
+  personErrors,
+  sameAsError,
+  type BorrowerDraft,
+  type FieldErrors,
+  type GuarantorDraft,
+  type PersonDraft,
+} from "./applicationValidation";
 import styles from "./NewApplication.module.css";
 
 type Route = "paper" | "online";
@@ -34,7 +44,6 @@ const ONLINE_STEPS: StepId[] = ["borrower", "terms", "route"];
 /** Continuing a paper draft: the borrower and the route are already set */
 const EDIT_STEPS: StepId[] = ["terms", "details", "guarantors", "signed", "review"];
 const MAX_PDF_BYTES = 5 * 1024 * 1024;
-const EMPTY_PERSON: PersonDraft = { fullName: "", nationalId: "", phone: "" };
 
 /** A borrower chosen in step 1, or someone new. */
 type Chosen = { kind: "existing"; id: string; name: string; phone: string; area: string; status: BorrowerStatus } | { kind: "new" };
@@ -53,7 +62,7 @@ const tomorrowDate = () => {
 };
 
 /** The draft's guarantors, padded to two. */
-const draftGuarantors = (draft: ApplicationDraft): [PersonDraft, PersonDraft] => [{ ...EMPTY_PERSON, ...draft.guarantors[0] }, { ...EMPTY_PERSON, ...draft.guarantors[1] }];
+const draftGuarantors = (draft: ApplicationDraft): [GuarantorDraft, GuarantorDraft] => [{ ...EMPTY_GUARANTOR, ...draft.guarantors[0] }, { ...EMPTY_GUARANTOR, ...draft.guarantors[1] }];
 
 /** The first payment date that suits the frequency (tomorrow, in a week, or in a month), within the product's window. */
 function defaultFirstPayment(schedule: RepaymentSchedule, withinDays = 90) {
@@ -106,10 +115,8 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
   );
   const [firstPaymentEdited, setFirstPaymentEdited] = useState(!!draft);
   const [route, setRoute] = useState<Route | null>(draft ? "paper" : null);
-  const [newBorrower, setNewBorrower] = useState<BorrowerDraft>({ ...EMPTY_PERSON, premises: "", area: "" });
-  const [idFront, setIdFront] = useState<IdPhoto | null>(null);
-  const [idBack, setIdBack] = useState<IdPhoto | null>(null);
-  const [guarantors, setGuarantors] = useState<[PersonDraft, PersonDraft]>(draft ? draftGuarantors(draft) : [{ ...EMPTY_PERSON }, { ...EMPTY_PERSON }]);
+  const [newBorrower, setNewBorrower] = useState<BorrowerDraft>(EMPTY_BORROWER);
+  const [guarantors, setGuarantors] = useState<[GuarantorDraft, GuarantorDraft]>(draft ? draftGuarantors(draft) : [{ ...EMPTY_GUARANTOR }, { ...EMPTY_GUARANTOR }]);
   const [signedPdf, setSignedPdf] = useState<File | null>(null);
   const [showErrors, setShowErrors] = useState(false);
   const [result, setResult] = useState<NewApplicationResult | null>(null);
@@ -129,11 +136,6 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
 
   // The chosen borrower's profile (premises, masked NIN) for the paper route
   const chosenProfile = useBorrowerProfile(chosen?.kind === "existing" ? chosen.id : "");
-
-  // Free photo previews when leaving the page
-  const photos = useRef<(IdPhoto | null)[]>([]);
-  photos.current = [idFront, idBack];
-  useEffect(() => () => photos.current.forEach((photo) => photo && URL.revokeObjectURL(photo.previewUrl)), []);
 
   // Nothing is saved until the officer saves a draft or submits
   const dirty = (!!chosen || !!draft) && !result;
@@ -163,8 +165,8 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
   // ----- Paper route checks -----
   const isNew = chosen?.kind === "new";
   const detailErrors: FieldErrors<BorrowerDraft> = isNew ? borrowerErrors(newBorrower) : {};
-  const photoErrors = isNew ? { front: idFront ? undefined : "Add a photo of the front of the National ID.", back: idBack ? undefined : "Add a photo of the back of the National ID." } : {};
-  const guarantorErrors = guarantors.map((guarantor, index) => {
+  const guarantorFieldErrors = guarantors.map((guarantor, index) => {
+    // Paper route: the relationship is on the signed consent, so officers don't type it
     const errors = personErrors(guarantor);
     const others = [...(isNew ? [{ nationalId: newBorrower.nationalId, who: "the borrower" }] : []), ...(index === 1 ? [{ nationalId: guarantors[0].nationalId, who: "guarantor 1" }] : [])];
     const duplicate = sameAsError(guarantor.nationalId, others);
@@ -176,8 +178,8 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
     borrower: !!chosen,
     terms: termsValid,
     route: !!route,
-    details: !isNew || (Object.keys(detailErrors).length === 0 && !photoErrors.front && !photoErrors.back),
-    guarantors: guarantorErrors.every((errors) => Object.keys(errors).length === 0),
+    details: !isNew || Object.keys(detailErrors).length === 0,
+    guarantors: guarantorFieldErrors.every((errors) => Object.keys(errors).length === 0),
     signed: !pdfError,
     review: true,
   };
@@ -205,6 +207,15 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
   };
 
   const cleanPerson = (person: PersonDraft): PersonDraft => ({ fullName: person.fullName.trim().replace(/\s+/g, " "), nationalId: normaliseNationalId(person.nationalId), phone: normalisePhone(person.phone) ?? person.phone.trim() });
+  const cleanGuarantor = (guarantor: GuarantorDraft): GuarantorDetails => ({ ...cleanPerson(guarantor), relationship: "" });
+  const cleanBorrower = (borrower: BorrowerDraft): NewBorrowerDetails => ({
+    ...cleanPerson(borrower),
+    gender: borrower.gender || "female",
+    secondaryPhone: normalisePhone(borrower.secondaryPhone),
+    area: borrower.area.trim(),
+    premises: borrower.premises.trim(),
+    nextOfKin: { name: borrower.kinName.trim().replace(/\s+/g, " "), phone: normalisePhone(borrower.kinPhone) ?? borrower.kinPhone.trim() },
+  });
   const send = (asRoute: Route, submit: boolean) => {
     if (!chosen || !termsValid) return;
     if (draft) {
@@ -213,7 +224,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
         .mutateAsync({
           application: {
             terms: { productId, amount: amountValue, repaymentSchedule: schedule, firstPaymentOn, numberOfPayments: paymentsValue },
-            guarantors: guarantors.filter((g) => Object.keys(personErrors(g)).length === 0).map(cleanPerson),
+            guarantors: guarantors.filter((g) => Object.keys(personErrors(g)).length === 0).map(cleanGuarantor),
             submit,
           },
           signedApplication: signedPdf && !pdfError ? signedPdf : null,
@@ -234,14 +245,12 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
           submit,
           ...(asRoute === "paper"
             ? {
-                newBorrower: isNew ? { ...cleanPerson(newBorrower), premises: newBorrower.premises.trim(), area: newBorrower.area.trim() } : undefined,
-                guarantors: guarantors.filter((g) => Object.keys(personErrors(g)).length === 0).map(cleanPerson),
+                newBorrower: isNew ? cleanBorrower(newBorrower) : undefined,
+                guarantors: guarantors.filter((g) => Object.keys(personErrors(g)).length === 0).map(cleanGuarantor),
               }
             : {}),
         },
         signedApplication: asRoute === "paper" && !pdfError ? signedPdf : null,
-        idFront: asRoute === "paper" && isNew ? idFront?.blob : null,
-        idBack: asRoute === "paper" && isNew ? idBack?.blob : null,
       },
       {
         onSuccess: (created) => {
@@ -328,7 +337,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
           />
           <div className={styles.dateField}>
             <span className={styles.fixedLabel}>Loan length</span>
-            <p className={styles.fixedValue}>{product ? `${describeLength(schedule, product.numberOfPayments)} · ${product.numberOfPayments} ${schedule} payments` : "Set by the loan product"}</p>
+            <p className={styles.fixedValue}>{product ? `${describeLength(schedule, product.numberOfPayments)} · ${product.numberOfPayments} ${schedule} payment${product.numberOfPayments === 1 ? "" : "s"}` : "Set by the loan product"}</p>
           </div>
         </div>
         {summary && (
@@ -377,7 +386,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
             onSelect={() => setRoute("paper")}
             icon="document"
             title="Paper forms"
-            text="The borrower and guarantors fill in and sign the printed forms. You type in their details and upload the signed forms as one PDF."
+            text="The borrower and guarantors fill in and sign the printed forms. You type in their details and upload the signed forms with their ID copies as one PDF."
           />
           <RouteOption
             selected={route === "online"}
@@ -396,17 +405,9 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
       const errors = showErrors ? detailErrors : {};
       content = (
         <>
-          <p className={styles.stepIntro}>As on the payment agreement and the National ID.</p>
+          <p className={styles.stepIntro}>As on the payment agreement and the National ID. Their ID copy is in the signed PDF, so no photos are needed here.</p>
           <PersonFields person={newBorrower} onChange={(changes) => setNewBorrower((current) => ({ ...current, ...changes }))} errors={errors} phoneLabel="Phone number (mobile money)" />
-          <div className={styles.pair}>
-            <TextField label="Shop / premises / building / arcade" value={newBorrower.premises} onChange={(premises) => setNewBorrower((current) => ({ ...current, premises }))} error={errors.premises} />
-            <TextField label="Area" value={newBorrower.area} onChange={(area) => setNewBorrower((current) => ({ ...current, area }))} error={errors.area} />
-          </div>
-          <h3 className={styles.subheading}>National ID copy</h3>
-          <div className={styles.photoPair}>
-            <IdPhotoInput label="Front" value={idFront} onChange={setIdFront} error={showErrors ? photoErrors.front : undefined} />
-            <IdPhotoInput label="Back" value={idBack} onChange={setIdBack} error={showErrors ? photoErrors.back : undefined} />
-          </div>
+          <BorrowerExtraFields borrower={newBorrower} onChange={(changes) => setNewBorrower((current) => ({ ...current, ...changes }))} errors={errors} />
         </>
       );
     } else {
@@ -414,24 +415,12 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
       content = (
         <>
           <p className={styles.stepIntro}>Already registered. Check these match the forms.</p>
-          {draft && !draft.idCopyComplete && (
-            <p className={styles.warning} role="note">
-              <Icon name="warning" size={16} strokeWidth={1.9} />
-              <span>
-                <b>Their National ID copy is missing.</b> Upload both sides in{" "}
-                <Link to={`/borrowers/${draft.borrower.id}?tab=documents`} target="_blank" rel="noopener">
-                  their Documents
-                </Link>{" "}
-                before submitting.
-              </span>
-            </p>
-          )}
           <dl className={styles.facts}>
             <Fact label="Full name">{profile?.name ?? "…"}</Fact>
             <Fact label="National ID">{profile?.nationalIdMasked ?? "…"}</Fact>
             <Fact label="Phone (mobile money)">{profile?.phone ?? "…"}</Fact>
+            <Fact label="Address">{profile?.area ?? "…"}</Fact>
             <Fact label="Shop / premises">{profile?.premises ?? "…"}</Fact>
-            <Fact label="Area">{profile?.area ?? "…"}</Fact>
           </dl>
           <p className={styles.note}>
             Something different on the forms? Update it with Edit details on{" "}
@@ -457,15 +446,15 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
               </h3>
               <PersonFields
                 person={guarantor}
+                phoneLabel="Phone number"
                 onChange={(changes) =>
                   setGuarantors((current) => {
-                    const copy: [PersonDraft, PersonDraft] = [{ ...current[0] }, { ...current[1] }];
+                    const copy: [GuarantorDraft, GuarantorDraft] = [{ ...current[0] }, { ...current[1] }];
                     copy[index] = { ...copy[index], ...changes };
                     return copy;
                   })
                 }
-                errors={showErrors ? guarantorErrors[index] : {}}
-                phoneLabel="Phone number"
+                errors={showErrors ? guarantorFieldErrors[index] : {}}
               />
             </section>
           ))}
@@ -481,7 +470,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
           <b>{borrowerName}</b>
           {isNew ? (
             <span>
-              NIN {normaliseNationalId(newBorrower.nationalId)} · {normalisePhone(newBorrower.phone)} · {newBorrower.premises}, {newBorrower.area} · ID photos added
+              NIN {normaliseNationalId(newBorrower.nationalId)} · {normalisePhone(newBorrower.phone)} · {newBorrower.gender === "male" ? "Male" : "Female"} · {newBorrower.area} · {newBorrower.premises} · Next of kin {newBorrower.kinName} ({normalisePhone(newBorrower.kinPhone)})
             </span>
           ) : (
             <span>
@@ -496,7 +485,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
           </b>
           {summary && (
             <span>
-              {paymentsValue} {schedule} payments of {formatUGX(summary.instalment)} · {formatLongDate(firstPaymentOn)} to {formatLongDate(summary.lastPaymentOn)} · total {formatUGX(summary.totalRepayable)}
+              {paymentsValue} {schedule} payment{paymentsValue === 1 ? "" : "s"} of {formatUGX(summary.instalment)} · {formatLongDate(firstPaymentOn)} to {formatLongDate(summary.lastPaymentOn)} · total {formatUGX(summary.totalRepayable)}
             </span>
           )}
         </ReviewRow>
@@ -746,7 +735,7 @@ function SignedPdfStep({ file, current, onChange, error }: { file: File | null; 
   const [dragging, setDragging] = useState(false);
   return (
     <>
-      <p className={styles.stepIntro}>The signed payment agreement and both guarantor consents, scanned together into one PDF.</p>
+      <p className={styles.stepIntro}>The signed payment agreement, both guarantor consents and the National ID copies of all three people, scanned together into one PDF.</p>
       {current && !file && (
         <p className={styles.note}>
           Current: <b>{describeFile(current, true)}</b>. Keep it, or choose a new PDF below to replace it (the old one stays in the history).

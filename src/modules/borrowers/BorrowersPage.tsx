@@ -66,7 +66,7 @@ export function BorrowersPage() {
       <div className={styles.header}>
         <div>
           <h1>Borrowers</h1>
-          <p className={styles.subtitle}>{seesBranch ? "Every borrower in the branch" : "Borrowers in your portfolio"}</p>
+          <p className={styles.subtitle}>{seesBranch ? "Every borrower in the market" : "Borrowers in your portfolio"}</p>
         </div>
         {can("applications.create") && (
           <Link to="/applications/new" className={styles.newApplication}>

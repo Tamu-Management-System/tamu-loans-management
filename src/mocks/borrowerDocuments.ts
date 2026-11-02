@@ -8,8 +8,8 @@ import type { BorrowerDocuments, DocumentFile, DocumentSlot, Guarantor, LoanPric
 import type { MockBorrower } from "./borrowerDirectory";
 import { borrowerDetails, maskNationalId } from "./borrowerProfiles";
 import { formatDate } from "../lib/format";
-import { describeInterest, LEGACY_PRICING, summariseTerms } from "../lib/repaymentSchedule";
-import { systemSettings } from "./systemSettings";
+import { describeInterest, LEGACY_PRICING, paymentDate, summariseTerms } from "../lib/repaymentSchedule";
+import { findProduct, pricingOf, systemSettings } from "./systemSettings";
 import { applications, loans, officers, type MockApplication } from "./fixtures";
 import { pastLoans } from "./loanHistory";
 import { addOnlineApplication, hasOnlineApplicationFor, openOnlineApplicationFor, revokeOnlineApplications, submittedOnlineApplicationsFor, type MockOnlineApplication, type OnlineSubmission, type StoredImage } from "./onlineApplications";
@@ -59,6 +59,7 @@ interface MockSection {
 const FIRST_NAMES = ["Grace", "John", "Mary", "Joseph", "Sarah", "David", "Ruth", "Robert", "Jane", "Samuel", "Prossy", "Hassan", "Gloria", "Kenneth"];
 const LAST_NAMES = ["Kato", "Okello", "Nakato", "Mugisha", "Auma", "Ssali", "Namusoke", "Tumwine", "Achieng", "Lwanga", "Nankya", "Opolot"];
 const PHONE_PREFIXES = ["0772", "0701", "0756", "0782", "0774", "0703"];
+const RELATIONSHIPS = ["Sister", "Brother", "Friend", "Workmate", "Neighbour", "Cousin", "Landlord", "Spouse"];
 const DAY_MS = 86_400_000;
 export const ONLINE_LINK_HOURS = 72;
 
@@ -106,7 +107,7 @@ export function documentSectionsFor(borrower: MockBorrower): MockSection[] {
     addDocumentVersion({ slotKey, borrowerId: borrower.id, fileName, contentType, sizeBytes: sizeBytes(), uploadedBy: by, uploadedAt: atTime(on, 9 + random() * 8), method });
   const guarantor = (): Guarantor & { nin: string } => {
     const nin = `C${random() < 0.5 ? "M" : "F"}${digits(10)}${letter()}${letter()}`;
-    return { name: `${pick(FIRST_NAMES)} ${pick(LAST_NAMES)}`, phone: `${pick(PHONE_PREFIXES)} ${digits(3)} ${digits(3)}`, nin, nationalIdMasked: maskNationalId(nin) };
+    return { name: `${pick(FIRST_NAMES)} ${pick(LAST_NAMES)}`, phone: `${pick(PHONE_PREFIXES)} ${digits(3)} ${digits(3)}`, nin, nationalIdMasked: maskNationalId(nin), relationship: pick(RELATIONSHIPS) };
   };
 
   const details = borrowerDetails.get(borrower.id);
@@ -115,27 +116,29 @@ export function documentSectionsFor(borrower: MockBorrower): MockSection[] {
     {
       id: "identity",
       title: "Identity",
-      subtitle: "Copy of the borrower's National ID (the original is seen in person)",
+      subtitle: "Photos of the borrower's National ID, from online applications. On paper applications the ID copy is in the signed PDF.",
       slots: [
-        { key: "national-id-front", label: "National ID · front", required: true, canCompleteOnline: false },
-        { key: "national-id-back", label: "National ID · back", required: true, canCompleteOnline: false },
+        { key: "national-id-front", label: "National ID · front", required: false, canCompleteOnline: false },
+        { key: "national-id-back", label: "National ID · back", required: false, canCompleteOnline: false },
       ],
     },
-    { id: "work", title: "Work", subtitle: "Optional", slots: [{ key: "workplace-photo", label: "Workplace photo", required: false, canCompleteOnline: false }] },
   ];
   // Sample files only for the seeded borrowers; people registered in the demo have only what was uploaded
   if (!borrower.addedInSession) {
-    if (application?.missing !== "National ID copy missing") {
+    // ID photos only come from the online form; on paper the ID copy is in the signed PDF
+    if (application?.route === "online" && application.missing !== "National ID copy missing") {
       sample("national-id-front", "national-id-front.jpg", "image/jpeg", borrower.registeredOn, "scanned");
       sample("national-id-back", "national-id-back.jpg", "image/jpeg", borrower.registeredOn, "scanned");
     }
-    if (random() < 0.5) sample("workplace-photo", "workplace.jpg", "image/jpeg", borrower.registeredOn, "scanned");
+    random(); // (was the workplace photo; kept so the rest of the sample data stays the same)
   }
 
   // Each loan or application: the guarantors (entered by the officer) and the signed loan application as proof
-  const loanSection = (reference: string, title: string, subtitle: string, forms: Omit<MockLoanForms, "guarantors">, signedOn: string, waitingOnline: boolean, noSignedYet = false, noGuarantors = false) => {
+  const loanSection = (reference: string, title: string, subtitle: string, forms: Omit<MockLoanForms, "guarantors">, signedOn: string, waitingOnline: boolean, noSignedYet = false, noGuarantors = false, entered?: MockApplication["guarantors"]) => {
     const pair = [guarantor(), guarantor()]; // always drawn, so the rest of the sample data stays the same
-    const loanForms: MockLoanForms = { ...forms, guarantors: noGuarantors ? [] : pair };
+    // The guarantors the officer entered on the application, when there is one
+    const named = entered?.map((g) => ({ name: g.fullName, phone: g.phone, nin: g.nationalId, nationalIdMasked: maskNationalId(g.nationalId), relationship: g.relationship ?? null }));
+    const loanForms: MockLoanForms = { ...forms, guarantors: noGuarantors ? [] : (named ?? pair) };
     const slot: MockSlot = { key: `${reference}:application`, label: "Signed loan application", required: true, canCompleteOnline: true, forms: loanForms };
     if (waitingOnline) {
       // Sent as an online link yesterday; not completed yet (unless that already happened in this demo)
@@ -155,28 +158,53 @@ export function documentSectionsFor(borrower: MockBorrower): MockSection[] {
     result.push(applicationSection(application));
   } else if (application) {
     const subtitle = { submitted: "Waiting for approval", approved: "Approved · waiting to be paid out", draft: application.returned ? `Sent back: ${application.returned.reason}` : "Draft", rejected: "Rejected" }[application.status];
+    const terms = application.terms;
     loanSection(application.id, `${application.id} · application`, subtitle,
-      { reference: application.id, amount: application.amount, dateBorrowed: new Date().toISOString().slice(0, 10), schedule: application.terms?.repaymentSchedule ?? "weekly" },
+      {
+        reference: application.id,
+        amount: application.amount,
+        dateBorrowed: (application.createdAt ?? new Date().toISOString()).slice(0, 10),
+        schedule: terms?.repaymentSchedule ?? "weekly",
+        ...(terms ? { firstPaymentOn: terms.firstPaymentOn, lastPaymentOn: summariseTerms(terms).lastPaymentOn, numberOfPayments: terms.numberOfPayments, pricing: terms.pricing } : {}),
+      },
       borrower.registeredOn, application.missing === "Guarantor consent missing", ["Signed application PDF missing", "Guarantor details missing"].includes(application.missing ?? "") || !!application.returned,
-      application.missing === "Guarantor details missing");
+      application.missing === "Guarantor details missing", application.guarantors);
   }
   const currentLoan = borrower.currentLoanId ? loans.find((l) => l.id === borrower.currentLoanId) : undefined;
   const terms = details?.loanTerms;
   if (currentLoan && terms) {
     const signedOn = new Date(Math.max(new Date(borrower.registeredOn).getTime(), new Date(terms.disbursedOn).getTime() - 2 * DAY_MS)).toISOString().slice(0, 10);
+    const product = findProduct(terms.productId);
     loanSection(currentLoan.id, `${currentLoan.id} · ${terms.product}`, currentLoan.outstandingBalance > 0 ? "Current loan" : "Cleared",
-      { reference: currentLoan.id, amount: terms.principal, dateBorrowed: terms.disbursedOn, schedule: terms.repaymentSchedule }, signedOn, false);
+      {
+        reference: currentLoan.id,
+        amount: terms.principal,
+        dateBorrowed: terms.disbursedOn,
+        schedule: terms.repaymentSchedule,
+        ...(terms.schedule ? { firstPaymentOn: terms.schedule.firstPaymentOn, lastPaymentOn: paymentDate(terms.schedule.firstPaymentOn, terms.repaymentSchedule, terms.schedule.numberOfPayments - 1), numberOfPayments: terms.schedule.numberOfPayments } : {}),
+        ...(product ? { pricing: pricingOf(product) } : {}),
+      }, signedOn, false);
   }
   for (const past of pastLoans.filter((l) => l.borrowerId === borrower.id).reverse()) {
+    const pastProduct = findProduct(past.productId);
     loanSection(past.id, `${past.id} · ${past.product}`, `Cleared ${formatDate(past.clearedOn)}`,
-      { reference: past.id, amount: past.principal, dateBorrowed: past.disbursedOn, schedule: "weekly" }, past.disbursedOn, false);
+      {
+        reference: past.id,
+        amount: past.principal,
+        dateBorrowed: past.disbursedOn,
+        schedule: past.repaymentSchedule,
+        firstPaymentOn: past.schedule.firstPaymentOn,
+        lastPaymentOn: paymentDate(past.schedule.firstPaymentOn, past.repaymentSchedule, past.schedule.numberOfPayments - 1),
+        numberOfPayments: past.schedule.numberOfPayments,
+        ...(pastProduct ? { pricing: pricingOf(pastProduct) } : {}),
+      }, past.disbursedOn, false);
   }
 
   sections.set(borrower.id, result);
   return result;
 }
 
-const publicGuarantor = (g: Guarantor & { nin: string }): Guarantor => ({ name: g.name, phone: g.phone, nationalIdMasked: g.nationalIdMasked });
+const publicGuarantor = (g: Guarantor & { nin: string }): Guarantor => ({ name: g.name, phone: g.phone, nationalIdMasked: g.nationalIdMasked, relationship: g.relationship });
 
 /** The borrower's documents as the API returns them (no full NINs, no file contents, no link tokens). */
 export function borrowerDocumentsResponse(borrower: MockBorrower): BorrowerDocuments {
@@ -283,7 +311,7 @@ function applicationForms(app: MockApplication): MockLoanForms {
     lastPaymentOn: summariseTerms(terms).lastPaymentOn,
     numberOfPayments: terms.numberOfPayments,
     pricing: terms.pricing,
-    guarantors: (app.guarantors ?? []).map((g) => ({ name: g.fullName, phone: g.phone, nin: g.nationalId, nationalIdMasked: maskNationalId(g.nationalId) })),
+    guarantors: (app.guarantors ?? []).map((g) => ({ name: g.fullName, phone: g.phone, nin: g.nationalId, nationalIdMasked: maskNationalId(g.nationalId), relationship: g.relationship ?? null })),
   };
 }
 
@@ -302,7 +330,7 @@ function applicationSection(app: MockApplication): MockSection {
 export function addApplicationSection(borrower: MockBorrower, app: MockApplication) {
   const existing = sections.get(borrower.id);
   if (!existing || existing.some((section) => section.id === app.id)) return;
-  existing.splice(2, 0, applicationSection(app)); // after Identity and Work, before older loans
+  existing.splice(1, 0, applicationSection(app)); // after Identity, before older loans
 }
 
 /** The one-time link for an online application (the borrower may not be registered yet). */
@@ -335,11 +363,20 @@ export function ingestOnlineApplications(borrower: MockBorrower) {
       const file = dataUrlBlob(image);
       addDocumentVersion({ ...base, slotKey, fileName: `${slotKey}.${file.type === "image/png" ? "png" : "jpg"}`, contentType: file.type === "image/png" ? "image/png" : "image/jpeg", sizeBytes: file.size, file });
     }
-    // The guarantors are now the ones named on the signed application
+    // The guarantors are now the ones named on the signed application, with photos of their IDs
     const section = documentSectionsFor(borrower).find((sec) => sec.slots.some((slot) => slot.key === application.slotKey));
     if (section?.forms) {
-      section.forms.guarantors = submission.details.guarantors.map((g) => ({ name: g.fullName, phone: g.phone, nin: g.nationalId, nationalIdMasked: maskNationalId(g.nationalId) }));
+      section.forms.guarantors = submission.details.guarantors.map((g) => ({ name: g.fullName, phone: g.phone, nin: g.nationalId, nationalIdMasked: maskNationalId(g.nationalId), relationship: g.relationship }));
     }
+    const reference = application.slotKey.split(":")[0];
+    submission.guarantorIds?.forEach((ids, index) => {
+      for (const [side, image] of [["front", ids.front], ["back", ids.back]] as const) {
+        const slotKey = `${reference}:guarantor-${index + 1}-id-${side}`;
+        if (section && !section.slots.some((slot) => slot.key === slotKey)) section.slots.push({ key: slotKey, label: `Guarantor ${index + 1} · National ID ${side}`, required: false, canCompleteOnline: false });
+        const file = dataUrlBlob(image);
+        addDocumentVersion({ ...base, slotKey, fileName: `guarantor-${index + 1}-id-${side}.${file.type === "image/png" ? "png" : "jpg"}`, contentType: file.type === "image/png" ? "image/png" : "image/jpeg", sizeBytes: file.size, file });
+      }
+    });
     added.push(application);
   }
   return added;
@@ -354,7 +391,7 @@ export async function documentFile(version: MockDocumentVersion, borrower: MockB
   const signedOnline = version.method === "online";
   if (key === "national-id-front") version.file = await nationalIdFront(borrower.name, borrower.nin);
   else if (key === "national-id-back") version.file = await nationalIdBack(borrower.nin);
-  else if (key === "workplace-photo") version.file = await workplacePhoto(details.premises, details.work.occupation ?? "Shop");
+  else if (key === "workplace-photo") version.file = await workplacePhoto(details.premises, "Shop");
   else if (slot?.forms && version.submission) {
     // Completed online: what the borrower filled in, with the three drawn signatures
     const { details, signatures } = version.submission;
@@ -392,14 +429,14 @@ export function markApplicationPaidOut(borrower: MockBorrower, appId: string, lo
 /** An application's guarantors as stored (with full NINs), for its officer to edit. */
 export function applicationGuarantors(borrower: MockBorrower, appId: string) {
   const forms = documentSectionsFor(borrower).find((section) => section.id === appId)?.forms;
-  return (forms?.guarantors ?? []).map((g) => ({ fullName: g.name, nationalId: g.nin, phone: g.phone }));
+  return (forms?.guarantors ?? []).map((g) => ({ fullName: g.name, nationalId: g.nin, phone: g.phone, relationship: g.relationship ?? "" }));
 }
 
 /** After the officer edits a draft: the guarantors and terms shown with its documents. */
 export function updateApplicationForms(borrower: MockBorrower, app: MockApplication) {
   const section = documentSectionsFor(borrower).find((sec) => sec.id === app.id);
   if (!section?.forms) return;
-  section.forms.guarantors = (app.guarantors ?? []).map((g) => ({ name: g.fullName, phone: g.phone, nin: g.nationalId, nationalIdMasked: maskNationalId(g.nationalId) }));
+  section.forms.guarantors = (app.guarantors ?? []).map((g) => ({ name: g.fullName, phone: g.phone, nin: g.nationalId, nationalIdMasked: maskNationalId(g.nationalId), relationship: g.relationship ?? null }));
   if (app.terms) {
     Object.assign(section.forms, {
       amount: app.terms.amount,

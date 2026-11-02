@@ -45,6 +45,12 @@
     box-shadow 0.15s;
 }
 
+/* A tile that opens a page (e.g. Active loans) looks like the others */
+a.tile {
+  color: inherit;
+  text-decoration: none;
+}
+
 .tile:hover:not(:disabled) {
   border-color: #c9ced5;
 }

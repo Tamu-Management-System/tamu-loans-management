@@ -45,7 +45,7 @@ export type DataScope = "own" | "branch";
 
 export const DATA_SCOPES: { value: DataScope; label: string; description: string }[] = [
   { value: "own", label: "Own portfolio", description: "Only the borrowers, loans and payments of people they look after." },
-  { value: "branch", label: "Whole branch", description: "Every borrower, loan and payment in the branch." },
+  { value: "branch", label: "Whole market", description: "Every borrower, loan and payment in the market." },
 ];
 
 /** The columns of the permissions matrix */
@@ -231,7 +231,7 @@ export const BUILT_IN_ROLES: Record<BuiltInRoleId, Role> = {
   finance: {
     id: "finance",
     name: "Finance",
-    description: "Approves and pays out loans, and sees the whole branch.",
+    description: "Approves and pays out loans, and sees the whole market.",
     builtIn: true,
     dataScope: "branch",
     permissions: [
@@ -278,6 +278,7 @@ export const BUILT_IN_ROLES: Record<BuiltInRoleId, Role> = {
       "payments.record",
       "recovery.view",
       "reports.view",
+      "reports.export",
     ],
   },
 };

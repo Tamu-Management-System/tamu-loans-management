@@ -61,7 +61,7 @@ export function AgreementWording({ form, borrower, guarantors }: WordingProps & 
       <p>
         The payee agrees to repay the Promisor an Interest of{" "}
         <b>
-          {terms.interestRatePercent}%{terms.interestLabel.endsWith("a month") ? " per month" : ""} Administration charge
+          {terms.interestRatePercent}%{/ a (day|week|month)$/.test(terms.interestLabel) ? ` per ${terms.interestLabel.split(" a ")[1]}` : ""} Administration charge
         </b>
         {terms.fee > 0 && <>, and a fee of {formatUGX(terms.fee)} {terms.feeCollection === "deducted" ? "taken from the amount paid out" : "added to the repayments"}</>}. The repayments will commence on{" "}
         {formatLongDate(terms.firstPaymentOn)}, till maturity. The last payment will be made on {formatLongDate(terms.lastPaymentOn)}, inclusive of Charge and Principal plus any other

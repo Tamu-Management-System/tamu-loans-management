@@ -42,6 +42,8 @@ export interface RiskSummary {
  * same endpoint serves every role.
  */
 export interface DashboardToday {
+  /** Open loans in the user's portfolio (or the branch), with what's still owed */
+  activeLoans?: { count: number; outstanding: number; lateCount: number };
   /** Instalments and promises due today in the user's portfolio */
   collections?: { dueCount: number; collectedAmount: number; expectedAmount: number };
   /** Overdue loans the user should follow up */
@@ -372,6 +374,7 @@ export interface BorrowerProfile {
   status: BorrowerStatus;
   phone: string;
   secondaryPhone: string | null;
+  /** Address: where they live */
   area: string;
   /** Shop / premises / building / arcade, as on the payment agreement */
   premises: string;
@@ -380,10 +383,10 @@ export interface BorrowerProfile {
   /** ISO date */
   registeredOn: string;
   officer: { id: string; name: string };
-  /** Optional: not on Tamu's forms yet (waiting for the client to confirm) */
+  /** Missing on some older records */
   nextOfKin: { name: string; phone: string; relationship: string } | null;
-  /** Optional: not on Tamu's forms yet (waiting for the client to confirm) */
-  work: { occupation: string | null; income: { amount: number; period: "daily" | "weekly" | "monthly" } | null };
+  /** Missing on some older records */
+  gender: "female" | "male" | null;
   currentLoan: BorrowerCurrentLoan | null;
   application: { id: string; status: BorrowerApplicationStatus; amount: number; missing: string | null } | null;
   loansCleared: number;
@@ -408,8 +411,8 @@ export interface BorrowerDetailsUpdate {
   secondaryPhone: string | null;
   area: string;
   premises: string;
-  nextOfKin: BorrowerProfile["nextOfKin"];
-  work: BorrowerProfile["work"];
+  nextOfKin: { name: string; phone: string; relationship: string };
+  gender: "female" | "male";
 }
 
 export type BorrowerActivityCategory = "money" | "contact" | "changes" | "access";
@@ -489,6 +492,30 @@ export interface Guarantor {
   name: string;
   phone: string;
   nationalIdMasked: string;
+  /** How they know the borrower, e.g. "Sister" */
+  relationship: string | null;
+}
+
+/** A guarantor as entered on an application */
+export interface GuarantorDetails {
+  fullName: string;
+  nationalId: string;
+  phone: string;
+  relationship: string;
+}
+
+/** A new borrower's details (paper route: typed from the signed forms; online: entered by the borrower) */
+export interface NewBorrowerDetails {
+  fullName: string;
+  nationalId: string;
+  phone: string;
+  secondaryPhone: string | null;
+  gender: "female" | "male";
+  /** Address: where they live */
+  area: string;
+  /** Shop / premises / building / arcade, as on the payment agreement */
+  premises: string;
+  nextOfKin: { name: string; phone: string };
 }
 
 /** A document the borrower should (or may) have, uploaded or not */
@@ -565,11 +592,12 @@ export interface OnlineApplicationPerson {
 
 /**
  * POST /public/forms/{token} (multipart): `details` (this, as JSON), `idFront` and `idBack` (photos
- * of the borrower's National ID), and `borrowerSignature`, `guarantor1Signature`, `guarantor2Signature`.
+ * of the borrower's National ID), `guarantor1IdFront`, `guarantor1IdBack`, `guarantor2IdFront`, `guarantor2IdBack`
+ * (the guarantors' IDs), and `borrowerSignature`, `guarantor1Signature`, `guarantor2Signature`.
  */
 export interface OnlineApplicationDetails {
-  borrower: OnlineApplicationPerson & { premises: string; area: string };
-  guarantors: [OnlineApplicationPerson, OnlineApplicationPerson];
+  borrower: NewBorrowerDetails;
+  guarantors: [GuarantorDetails, GuarantorDetails];
 }
 
 /** Loan terms the officer sets on a new application */
@@ -585,12 +613,15 @@ export interface ApplicationTerms {
   pricing?: LoanPricing;
 }
 
+/** How interest is charged: once on the loan, or for every day, week or month it runs */
+export type InterestBasis = "loan" | "day" | "week" | "month";
+
 /** Interest and fee terms, from a loan product */
 export interface LoanPricing {
   productName: string;
   interestRatePercent: number;
-  /** "loan": the rate once on the amount borrowed; "month": the rate for every month of the loan */
-  interestPer: "loan" | "month";
+  /** "loan": the rate once on the amount borrowed; "day" / "week" / "month": the rate for every day, week or month the loan runs */
+  interestPer: InterestBasis;
   fee: LoanFee;
 }
 
@@ -604,7 +635,7 @@ export interface LoanFee {
 
 /**
  * POST /applications (multipart): `application` (this, as JSON) and, on the paper route, the files:
- * `signedApplication` (one PDF) and, for a new borrower, `idFront` and `idBack`.
+ * `signedApplication` (one PDF). The ID copies are in that PDF, so no separate ID photos.
  */
 export interface NewApplicationRequest {
   /** An existing borrower, or null for someone new */
@@ -612,10 +643,10 @@ export interface NewApplicationRequest {
   terms: ApplicationTerms;
   /** paper: details typed from the signed forms; online: the borrower fills everything in through a link */
   route: "paper" | "online";
-  /** Paper route, new borrower: as on their National ID and the agreement */
-  newBorrower?: { fullName: string; nationalId: string; phone: string; premises: string; area: string };
+  /** Paper route, new borrower: as on their National ID and the agreement (their ID copy is in the signed PDF) */
+  newBorrower?: NewBorrowerDetails;
   /** Paper route */
-  guarantors?: { fullName: string; nationalId: string; phone: string }[];
+  guarantors?: GuarantorDetails[];
   /** Paper route: false saves a draft (anything may be missing except who the borrower is) */
   submit: boolean;
 }
@@ -697,7 +728,7 @@ export interface ApplicationDraft {
   id: string;
   borrower: { id: string; name: string; phone: string; area: string };
   terms: ApplicationTerms;
-  guarantors: { fullName: string; nationalId: string; phone: string }[];
+  guarantors: GuarantorDetails[];
   signedApplication: DocumentFile | null;
   /** Both sides of the borrower's ID copy are on file */
   idCopyComplete: boolean;
@@ -708,7 +739,7 @@ export interface ApplicationDraft {
 /** PATCH /applications/{id} (multipart): `application` (this, as JSON) and optionally a new `signedApplication` PDF */
 export interface UpdateApplicationRequest {
   terms: ApplicationTerms;
-  guarantors: { fullName: string; nationalId: string; phone: string }[];
+  guarantors: GuarantorDetails[];
   /** true submits it for approval (everything must be complete); false saves the draft */
   submit: boolean;
 }
@@ -904,6 +935,8 @@ export interface StaffMember {
   phone: string;
   photoUrl: string | null;
   role: { id: string; name: string };
+  /** Their market (the API calls it a branch), e.g. "Mbarara" */
+  branch: string;
   status: StaffStatus;
   /** ISO date-time; null if they've never signed in */
   lastSignInAt: string | null;
@@ -933,6 +966,8 @@ export interface InviteStaffRequest {
   email: string;
   phone: string;
   roleId: string;
+  /** One of the markets in business settings */
+  branch: string;
 }
 
 /** POST /staff/{id}/deactivate */
@@ -961,7 +996,7 @@ export interface LoanProduct {
   description: string;
   status: LoanProductStatus;
   repaymentSchedule: RepaymentSchedule;
-  interest: { ratePercent: number; per: "loan" | "month" };
+  interest: { ratePercent: number; per: InterestBasis };
   /** UGX */
   amount: { min: number; max: number };
   /** How long the loan runs, in payments: e.g. 3 for a three-month monthly loan */
@@ -1006,6 +1041,8 @@ export interface BusinessSettings {
   email: string;
   /** Tamu's accounts that loans are paid out from */
   payoutAccounts: PayoutAccount[];
+  /** Where Tamu works; staff each belong to one. Tamu calls them markets (the API keeps "branch") */
+  branches: string[];
 }
 
 export interface LoanRulesSettings {
@@ -1122,6 +1159,8 @@ export interface SignedInDevice {
 export interface SupportContacts {
   admins: { name: string; phone: string; email: string }[];
   business: { name: string; phone: string; email: string };
+  /** The system's developers, for technical problems */
+  technical: { name: string; phones: string[]; email: string };
 }
 
 // ---------- Reports ----------

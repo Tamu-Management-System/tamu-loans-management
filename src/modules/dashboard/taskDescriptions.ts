@@ -1,7 +1,7 @@
 // Words shown for each kind of worklist task. Kept apart from the components so
 // the row and the "Done today" list describe tasks the same way.
 import type { WorklistTask } from "../../api/types";
-import { daysSince, formatRelativeDay, formatShortDate, formatTime, formatUGX } from "../../lib/format";
+import { daysSince, formatRelativeDay, formatShortDate, formatTime, formatUGX, dayCount } from "../../lib/format";
 
 export type ChipTone = "info" | "warning" | "danger";
 
@@ -15,13 +15,13 @@ export function describeSubject(task: WorklistTask): { name: string; reference: 
     case "overdue":
       return { name: task.borrower.name, reference: task.loanId, detail: [task.borrower.phone, task.borrower.area].filter(Boolean).join(" · ") };
     case "application-incomplete":
-      return { name: task.borrower.name, reference: task.applicationId, detail: `${task.purpose} · ${task.borrower.phone}` };
+      return { name: task.borrower.name, reference: task.applicationId, detail: task.borrower.phone };
     case "payment-unmatched":
       return { name: `${task.payment.provider} payment`, reference: task.payment.reference, detail: `From ${task.payment.phone} · received ${formatTime(task.payment.receivedAt)}` };
     case "reversal-request":
       return { name: task.requestedBy, reference: task.loanId, detail: `Wants ${formatUGX(task.amount)} reversed · ${task.reason}` };
     case "awaiting-approval":
-      return { name: task.borrower.name, reference: task.applicationId, detail: `${task.purpose} · submitted by ${task.submittedBy}` };
+      return { name: task.borrower.name, reference: task.applicationId, detail: `Submitted by ${task.submittedBy}` };
     case "awaiting-disbursement": {
       const approved = daysSince(task.approvedOn) === 1 ? "yesterday" : `on ${formatShortDate(task.approvedOn)}`;
       return { name: task.borrower.name, reference: task.loanId, detail: `Approved by Finance ${approved} · ${task.officerName}'s borrower` };
@@ -44,9 +44,9 @@ export function describeStatus(task: WorklistTask): { tone: ChipTone; label: str
     case "instalment-due":
       return { tone: "info", label: "Due today", detail: "Installment" };
     case "promise-due":
-      return { tone: "warning", label: "Promised to pay today", detail: `Promise made ${formatShortDate(task.promiseMadeOn)} · ${task.daysPastDue} days late` };
+      return { tone: "warning", label: "Promised to pay today", detail: `Promise made ${formatShortDate(task.promiseMadeOn)} · ${dayCount(task.daysPastDue)} late` };
     case "overdue":
-      return { tone: task.daysPastDue > 30 ? "danger" : "warning", label: `${task.daysPastDue} days overdue`, detail: "Arrears to collect" };
+      return { tone: task.daysPastDue > 30 ? "danger" : "warning", label: `${dayCount(task.daysPastDue)} overdue`, detail: "Arrears to collect" };
     case "application-incomplete":
       return { tone: "warning", label: task.missingItem, detail: "Draft application" };
     case "payment-unmatched":

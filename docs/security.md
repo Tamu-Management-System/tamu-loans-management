@@ -25,7 +25,7 @@ can call the API directly.
 | Content Security Policy in production builds (scripts, styles, fonts, images and API calls only from listed sources) | `vite.config.ts` |
 | Production builds contain **no** mock API, sample data or demo accounts; `npm run build:demo` is for presentations only | `vite.config.ts` (`__MOCK_API_ENABLED__`) |
 | No source maps in production (they would publish readable source code) | `vite.config.ts` |
-| Permission checks in the UI (`can("loans.approve")`), never role names | `src/auth/permissions.ts` |
+| Permission checks in the UI (`can("applications.approve")`), never role names | `src/auth/permissions.ts` |
 | Nothing sensitive in browser storage: only UI preferences and the last-activity time | — |
 | National ID numbers are masked; showing one is a separate request, recorded by the server and masked again after 30 seconds or when the tab is hidden; never cached | `src/modules/borrowers/NationalIdField.tsx` |
 | Documents (ID photos, agreements) are fetched with the session and previewed from memory (`blob:`), never linked directly; only JPEG, PNG and PDF are rendered, anything else can only be downloaded | `src/modules/borrowers/documents/DocumentPreviewDialog.tsx` |
@@ -65,7 +65,7 @@ can call the API directly.
 
 ### 2.4 Authorisation
 - Check the permission on **every** endpoint; never trust the frontend.
-- **Data isolation (QA scenario 1):** users with only `loans.view.own` must get `404` for anything outside their own
+- **Data isolation (QA scenario 1):** users whose role has `dataScope: "own"` must get `404` for anything outside their own
   portfolio, by id, in lists, search results and exports.
 - **Four-eyes rule:** the person who approved a loan can't disburse it (Settings → Loan rules).
 - **Staff and roles:** nobody can change their own role or switch off their own account. Refuse any change that
@@ -73,11 +73,11 @@ can call the API directly.
 - **Leavers:** switching an account off ends all its sessions at once and blocks sign-in; the account and its
   history are never deleted. Their borrowers move to another officer first. Turning it back on sends a new invite
   (new password), never the old one.
-- Money operations (payments, reversals, disbursements): validate amounts server-side, make them idempotent
+- Money operations (payments, disbursements): validate amounts server-side, make them idempotent
   (an idempotency key, so a double click can't pay twice), and never trust balances sent by the client.
 
 ### 2.5 Audit trail
-- Append-only log of who did what, when, from where: sign-ins, payments, reversals, approvals, disbursements,
+- Append-only log of who did what, when, from where: sign-ins, payments, approvals, disbursements,
   permission and role changes, document views and downloads.
 - Anyone with `audit.view` can read it (Admin and Finance by default); nobody can edit or delete it.
 - Exports need `audit.export` (Admin by default), are CSV with formula injection neutralised, and are logged.

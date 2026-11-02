@@ -111,7 +111,7 @@ function SidebarRiskCard() {
             }
           }}
         >
-          <span className={styles.riskLabel}>{risk.scope === "own" ? "MY RISK" : "BRANCH RISK"}</span>
+          <span className={styles.riskLabel}>{risk.scope === "own" ? "MY RISK" : "MARKET RISK"}</span>
           <span className={styles.riskValue}>PAR30 {risk.par30Percent.toFixed(1)}%</span>
           <span className={styles.riskDetail}>
             {aboveTarget ? "Above" : "Within"} the {risk.targetPercent}% target · {loansLabel}

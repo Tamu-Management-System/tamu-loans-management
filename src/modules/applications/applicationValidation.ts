@@ -11,10 +11,28 @@ export interface PersonDraft {
   phone: string;
 }
 
-export interface BorrowerDraft extends PersonDraft {
-  premises: string;
-  area: string;
+/** A guarantor: the person's details plus how they know the borrower */
+export interface GuarantorDraft extends PersonDraft {
+  relationship: string;
 }
+
+export type Gender = "female" | "male";
+
+/** A new borrower, as on the payment agreement and the client's data list */
+export interface BorrowerDraft extends PersonDraft {
+  gender: Gender | "";
+  /** Optional alternative contact */
+  secondaryPhone: string;
+  premises: string;
+  /** Where they live (the API calls it `area`) */
+  area: string;
+  kinName: string;
+  kinPhone: string;
+}
+
+export const EMPTY_PERSON: PersonDraft = { fullName: "", nationalId: "", phone: "" };
+export const EMPTY_GUARANTOR: GuarantorDraft = { ...EMPTY_PERSON, relationship: "" };
+export const EMPTY_BORROWER: BorrowerDraft = { ...EMPTY_PERSON, gender: "", secondaryPhone: "", premises: "", area: "", kinName: "", kinPhone: "" };
 
 export type FieldErrors<T> = Partial<Record<keyof T, string>>;
 
@@ -28,8 +46,20 @@ export function personErrors(person: PersonDraft): FieldErrors<PersonDraft> {
 
 export function borrowerErrors(borrower: BorrowerDraft): FieldErrors<BorrowerDraft> {
   const errors: FieldErrors<BorrowerDraft> = personErrors(borrower);
-  if (!borrower.premises.trim()) errors.premises = "Enter your shop, premises, building or arcade.";
-  if (!borrower.area.trim()) errors.area = "Enter your area.";
+  if (!borrower.gender) errors.gender = "Choose female or male.";
+  if (borrower.secondaryPhone.trim() && !normalisePhone(borrower.secondaryPhone)) errors.secondaryPhone = "Enter a mobile number, or leave it empty.";
+  else if (borrower.secondaryPhone.trim() && normalisePhone(borrower.secondaryPhone) === normalisePhone(borrower.phone)) errors.secondaryPhone = "Use a different number from the main one, or leave it empty.";
+  if (!borrower.premises.trim()) errors.premises = "Enter the shop, premises, building or arcade.";
+  if (!borrower.area.trim()) errors.area = "Enter the address.";
+  if (borrower.kinName.trim().split(/\s+/).filter(Boolean).length < 2) errors.kinName = "Enter the next of kin's full name.";
+  if (!normalisePhone(borrower.kinPhone)) errors.kinPhone = "Enter the next of kin's mobile number.";
+  else if (normalisePhone(borrower.kinPhone) === normalisePhone(borrower.phone)) errors.kinPhone = "Use the next of kin's own number, not the borrower's.";
+  return errors;
+}
+
+export function guarantorErrors(guarantor: GuarantorDraft): FieldErrors<GuarantorDraft> {
+  const errors: FieldErrors<GuarantorDraft> = personErrors(guarantor);
+  if (!guarantor.relationship.trim()) errors.relationship = "Say how they know the borrower, e.g. sister, friend, landlord.";
   return errors;
 }
 

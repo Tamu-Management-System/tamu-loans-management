@@ -84,7 +84,8 @@ export function BorrowerDocumentsTab({ borrowerId }: { borrowerId: string }) {
         </p>
       )}
 
-      {data.sections.map((section) => {
+      {/* Identity holds ID photos from the online form; paper borrowers' IDs are in the signed PDF, so hide it when empty */}
+      {data.sections.filter((section) => section.id !== "identity" || section.slots.some((slot) => slot.file)).map((section) => {
         const missingHere = section.slots.filter((slot) => slot.required && !slot.file).length;
         return (
           <section key={section.id} className={styles.card} aria-labelledby={`documents-${section.id}`}>
@@ -106,7 +107,7 @@ export function BorrowerDocumentsTab({ borrowerId }: { borrowerId: string }) {
                     <dd>
                       <b>{guarantor.name}</b>
                       <span>
-                        ID {guarantor.nationalIdMasked} · {guarantor.phone}
+                        {guarantor.relationship ? `${guarantor.relationship} · ` : ""}ID {guarantor.nationalIdMasked} · {guarantor.phone}
                       </span>
                     </dd>
                   </div>

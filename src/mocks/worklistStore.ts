@@ -1,56 +1,78 @@
 // Mutable mock state for the worklist and payments, so the demo behaves like a real
 // backend: recording a payment changes the loan balance, the task and the dashboard numbers.
-// Everything resets on page reload. Sample data matches the approved mockup.
+// Today's tasks are worked out from the sample data (seed.ts). Everything resets on page reload.
+import "./seed";
 import type { PaymentMethod, WorklistTask } from "../api/types";
-import { earlyWarningSignals, loans, OFFICER_IDS } from "./fixtures";
+import { borrowers } from "./borrowerDirectory";
+import { borrowerDetails, nextPayment } from "./borrowerProfiles";
+import { applications, loans, officers } from "./fixtures";
+import { earlyWarnings } from "./portfolioFigures";
+import { staff } from "./staff";
+import { roles } from "./fixtures";
 
 const ADMIN_ID = "u-martin";
-
-const isoDaysAgo = (days: number, hour = 9, minute = 0) => {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  date.setHours(hour, minute, 0, 0);
-  return date.toISOString();
-};
-const isoDate = (daysAgo: number) => isoDaysAgo(daysAgo).slice(0, 10);
+const TODAY = new Date().toLocaleDateString("en-CA");
 
 const borrowerOf = (loanId: string) => {
   const loan = loans.find((l) => l.id === loanId)!;
   return { name: loan.borrowerName, phone: loan.phone, area: loan.area };
 };
 
-// A getter so every task gets its own notes list (a shared array would leak notes between tasks)
 /** Warning text shared with the Early warnings card, so both say the same thing. */
-const signalFor = (loanId: string) => earlyWarningSignals.find((warning) => warning.loanId === loanId)?.signal;
+const warnings = earlyWarnings(() => true);
+const signalFor = (loanId: string) => warnings.find((warning) => warning.loanId === loanId)?.signal;
 
+// A getter so every task gets its own notes list (a shared array would leak notes between tasks)
 const open = () => ({ status: "open" as const, notes: [] as string[] });
+const hoursSince = (iso: string) => Math.round((Date.now() - new Date(iso).getTime()) / 3_600_000);
 
+/** Each officer's work today, from their loans and applications; approvals, payouts and invites for the admin */
 function seedTasks(): Record<string, WorklistTask[]> {
-  return {
-    [OFFICER_IDS.sharon]: [
-      { ...open(), id: "task-1042", type: "instalment-due", priority: "routine", loanId: "TL-1042", borrower: borrowerOf("TL-1042"), amountDue: 450_000, amountPaid: 0 },
-      { ...open(), id: "task-1063", type: "instalment-due", priority: "do-today", loanId: "TL-1063", borrower: borrowerOf("TL-1063"), amountDue: 280_000, amountPaid: 0, warning: signalFor("TL-1063") },
-      { ...open(), id: "task-1201", type: "instalment-due", priority: "do-today", loanId: "TL-1201", borrower: borrowerOf("TL-1201"), amountDue: 210_000, amountPaid: 0, warning: signalFor("TL-1201") },
-      { ...open(), id: "task-0987", type: "promise-due", priority: "do-first", loanId: "TL-0987", borrower: borrowerOf("TL-0987"), amountDue: 300_000, amountPaid: 0, promiseMadeOn: isoDate(7), daysPastDue: 9 },
-      { ...open(), id: "task-0743", type: "overdue", priority: "do-first", loanId: "TL-0743", borrower: borrowerOf("TL-0743"), amountDue: 1_240_000, amountPaid: 0, daysPastDue: 38, warning: signalFor("TL-0743") },
-      { ...open(), id: "task-0799", type: "overdue", priority: "do-today", loanId: "TL-0799", borrower: borrowerOf("TL-0799"), amountDue: 450_000, amountPaid: 0, daysPastDue: 12 },
-      { ...open(), id: "task-0891", type: "overdue", priority: "do-today", loanId: "TL-0891", borrower: borrowerOf("TL-0891"), amountDue: 180_000, amountPaid: 0, daysPastDue: 3 },
-      { ...open(), id: "task-app-311", type: "application-incomplete", priority: "do-today", applicationId: "APP-311", borrower: { name: "Godfrey Byaruhanga", phone: "0772 660 418" }, amountRequested: 2_500_000, purpose: "Business expansion", missingItem: "Guarantor consent missing" },
-      { ...open(), id: "task-app-318", type: "application-incomplete", priority: "do-today", applicationId: "APP-318", borrower: { name: "Winnie Nabirye", phone: "0758 309 772" }, amountRequested: 600_000, purpose: "Working capital", missingItem: "National ID copy missing" },
-      { ...open(), id: "task-pay-4471", type: "payment-unmatched", priority: "do-today", payment: { provider: "Airtel Money", phone: "0755 401 772", amount: 450_000, reference: "AT261027.4471", receivedAt: isoDaysAgo(0, 9, 2) } },
-      { ...open(), id: "task-pay-0815", type: "payment-unmatched", priority: "do-today", payment: { provider: "MTN MoMo", phone: "0779 551 203", amount: 210_000, reference: "MP261027.0815", receivedAt: isoDaysAgo(0, 8, 15) } },
-    ],
-    [ADMIN_ID]: [
-      { ...open(), id: "task-rev-1105", type: "reversal-request", priority: "do-first", loanId: "TL-1105", requestedBy: "Joel Okello", requestedAt: isoDaysAgo(1, 16, 10), amount: 450_000, reason: "recorded on the wrong loan" },
-      { ...open(), id: "task-rev-0954", type: "reversal-request", priority: "do-today", loanId: "TL-0954", requestedBy: "Ruth Atim", requestedAt: isoDaysAgo(0, 9, 5), amount: 380_000, reason: "entered twice" },
-      { ...open(), id: "task-apr-316", type: "awaiting-approval", priority: "do-first", applicationId: "APP-316", borrower: { name: "Charles Ouma", phone: "0703 118 245" }, amountRequested: 1_500_000, purpose: "Shop stock", submittedBy: "Sarah Kyomuhendo", hoursWaiting: 61 },
-      { ...open(), id: "task-apr-314", type: "awaiting-approval", priority: "routine", applicationId: "APP-314", borrower: { name: "Lydia Kemigisha", phone: "0781 554 016" }, amountRequested: 800_000, purpose: "School fees", submittedBy: "Joel Okello", hoursWaiting: 20 },
-      { ...open(), id: "task-dis-1214", type: "awaiting-disbursement", priority: "do-first", loanId: "TL-1214", borrower: { name: "Joyce Nabukenya", phone: "0772 118 940" }, amount: 1_200_000, officerName: "Peter Mugisha", approvedOn: isoDate(3) },
-      { ...open(), id: "task-dis-1216", type: "awaiting-disbursement", priority: "do-today", loanId: "TL-1216", borrower: { name: "Isaac Waiswa", phone: "0701 664 207" }, amount: 700_000, officerName: "Sharon Nakalema", approvedOn: isoDate(1) },
-      { ...open(), id: "task-acc-kigozi", type: "access-request", priority: "do-today", user: { name: "Paul Kigozi", role: "Finance" }, kind: "password-reset", requestedAt: isoDaysAgo(0, 8, 40) },
-      { ...open(), id: "task-acc-ainomugisha", type: "access-request", priority: "routine", user: { name: "Esther Ainomugisha", role: "Loan officer" }, kind: "invite-pending", requestedAt: isoDaysAgo(3) },
-    ],
-  };
+  const lists: Record<string, WorklistTask[]> = {};
+  for (const officer of officers) {
+    const tasks: WorklistTask[] = [];
+    const mine = loans.filter((loan) => loan.officerId === officer.id && loan.outstandingBalance > 0);
+    // Instalments due today
+    for (const loan of mine) {
+      if (loan.daysPastDue > 0) continue;
+      const borrower = borrowers.find((b) => b.currentLoanId === loan.id);
+      const terms = borrower ? borrowerDetails.get(borrower.id)?.loanTerms : null;
+      const next = terms ? nextPayment(terms, loan.outstandingBalance) : null;
+      if (next?.dueOn === TODAY) tasks.push({ ...open(), id: `task-${loan.id}`, type: "instalment-due", priority: "routine", loanId: loan.id, borrower: borrowerOf(loan.id), amountDue: next.amount, amountPaid: 0 });
+    }
+    // Late loans to follow up (the recovery team has the long-overdue ones); a couple promised to pay today
+    const late = mine.filter((loan) => loan.daysPastDue > 0 && !loan.recovery).sort((a, b) => b.daysPastDue - a.daysPastDue);
+    late.forEach((loan, index) => {
+      const base = { ...open(), id: `task-${loan.id}`, loanId: loan.id, borrower: borrowerOf(loan.id), amountDue: loan.arrearsAmount ?? 0, amountPaid: 0, daysPastDue: loan.daysPastDue, warning: signalFor(loan.id) };
+      if (index % 4 === 1 && loan.daysPastDue <= 30) tasks.push({ ...base, type: "promise-due", priority: "do-first", promiseMadeOn: new Date(Date.now() - (2 + (index % 4)) * 86_400_000).toISOString().slice(0, 10) });
+      else tasks.push({ ...base, type: "overdue", priority: loan.daysPastDue > 30 ? "do-first" : "do-today" });
+    });
+    // Applications they still have to finish
+    for (const app of applications) {
+      if (app.officerId !== officer.id || app.status !== "draft" || app.route === "online") continue;
+      const missingItem = app.returned ? `Sent back: ${app.returned.reason}` : app.missing;
+      if (!missingItem) continue;
+      tasks.push({ ...open(), id: `task-${app.id}`, type: "application-incomplete", priority: "do-today", applicationId: app.id, borrower: { name: app.borrowerName, phone: app.phone }, amountRequested: app.amount, purpose: "", missingItem });
+    }
+    lists[officer.id] = tasks;
+  }
+
+  const officerName = (id: string) => officers.find((o) => o.id === id)?.name ?? "";
+  const admin: WorklistTask[] = [];
+  for (const app of applications) {
+    if (app.status === "submitted" && app.submittedAt) {
+      const hoursWaiting = hoursSince(app.submittedAt);
+      admin.push({ ...open(), id: `task-apr-${app.id}`, type: "awaiting-approval", priority: hoursWaiting > 48 ? "do-first" : "routine", applicationId: app.id, borrower: { name: app.borrowerName, phone: app.phone }, amountRequested: app.amount, purpose: "", submittedBy: officerName(app.officerId), hoursWaiting });
+    }
+    if (app.status === "approved" && !app.loanId && app.decided)
+      admin.push({ ...open(), id: `task-dis-${app.id}`, type: "awaiting-disbursement", priority: "do-today", loanId: app.id, borrower: { name: app.borrowerName, phone: app.phone }, amount: app.amount, officerName: officerName(app.officerId), approvedOn: app.decided.at.slice(0, 10) });
+  }
+  for (const member of staff) {
+    if (member.status === "invited" && member.invite)
+      admin.push({ ...open(), id: `task-acc-${member.id}`, type: "access-request", priority: "routine", user: { name: member.name, role: roles[member.roleId]?.name ?? "" }, kind: "invite-pending", requestedAt: member.invite.sentAt });
+  }
+  lists[ADMIN_ID] = admin;
+  return lists;
 }
 
 export const worklists = seedTasks();

@@ -24,6 +24,12 @@
   transform: rotate(180deg);
 }
 
+.downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 /* ---------- Tabs and dates ---------- */
 .tabs {
   display: flex;
@@ -492,8 +498,12 @@
     font-size: 23px;
   }
 
-  .header > button {
+  .downloads {
     width: 100%;
+  }
+
+  .downloads > button {
+    flex: 1;
     justify-content: center;
   }
 

@@ -3,15 +3,8 @@ import { ApiError } from "../../api/client";
 import { useUpdateBorrower } from "../../api/borrowers";
 import type { BorrowerProfile } from "../../api/types";
 import { Dialog, Field } from "../../components/ui/Dialog";
-import { Select } from "../../components/ui/Select";
 import { normalisePhone } from "../../lib/phone";
 import styles from "./EditBorrowerDialog.module.css";
-
-const INCOME_PERIODS = [
-  { value: "daily", label: "a day" },
-  { value: "weekly", label: "a week" },
-  { value: "monthly", label: "a month" },
-] as const;
 
 interface EditBorrowerDialogProps {
   borrower: BorrowerProfile;
@@ -27,16 +20,13 @@ type FormState = {
   kinName: string;
   kinRelationship: string;
   kinPhone: string;
-  occupation: string;
-  income: string;
-  incomePeriod: "daily" | "weekly" | "monthly";
+  gender: "female" | "male" | "";
 };
 
 /**
- * Updates the borrower's details. Name and National ID are locked (they must match the ID card).
- * Contact and shop / premises come from Tamu's payment agreement; the rest is optional until the
- * client confirms it. A new main phone, the mobile money payout number, only takes effect after a
- * second person approves it.
+ * Updates the borrower's details (the fields the client confirmed). Name and National ID are locked
+ * (they must match the ID card). A new main phone, the mobile money payout number, only takes effect
+ * after a second person approves it.
  */
 export function EditBorrowerDialog({ borrower, onClose, onSaved }: EditBorrowerDialogProps) {
   const id = useId();
@@ -49,9 +39,7 @@ export function EditBorrowerDialog({ borrower, onClose, onSaved }: EditBorrowerD
     kinName: borrower.nextOfKin?.name ?? "",
     kinRelationship: borrower.nextOfKin?.relationship ?? "",
     kinPhone: borrower.nextOfKin?.phone ?? "",
-    occupation: borrower.work.occupation ?? "",
-    income: borrower.work.income ? String(borrower.work.income.amount) : "",
-    incomePeriod: borrower.work.income?.period ?? "weekly",
+    gender: borrower.gender ?? "",
   };
   const [form, setForm] = useState(initial);
   const [submitted, setSubmitted] = useState(false);
@@ -59,17 +47,15 @@ export function EditBorrowerDialog({ borrower, onClose, onSaved }: EditBorrowerD
 
   const phone = normalisePhone(form.phone);
   const secondaryPhone = form.secondaryPhone.trim() ? normalisePhone(form.secondaryPhone) : null;
-  const kinGiven = !!(form.kinName.trim() || form.kinRelationship.trim() || form.kinPhone.trim());
   const kinPhone = form.kinPhone.trim() ? normalisePhone(form.kinPhone) : null;
-  const income = form.income.trim() ? Number(form.income) : null;
   const errors: Partial<Record<keyof FormState, string>> = {};
   if (!phone) errors.phone = "Enter a Ugandan mobile number, e.g. 0772 418 230.";
-  if (!form.area.trim()) errors.area = "Enter the area.";
+  if (!form.gender) errors.gender = "Choose female or male.";
+  if (!form.area.trim()) errors.area = "Enter the address.";
   if (!form.premises.trim()) errors.premises = "Enter the shop, premises, building or arcade.";
   if (form.secondaryPhone.trim() && !secondaryPhone) errors.secondaryPhone = "Enter a Ugandan mobile number, or leave it empty.";
-  if (kinGiven && !form.kinName.trim()) errors.kinName = "Enter the name, or clear the next of kin fields.";
-  if (kinGiven && !kinPhone) errors.kinPhone = "Enter a Ugandan mobile number.";
-  if (income !== null && !(Number.isFinite(income) && income > 0)) errors.income = "Enter an amount, or leave it empty.";
+  if (!form.kinName.trim()) errors.kinName = "Enter the next of kin's name.";
+  if (!kinPhone) errors.kinPhone = "Enter the next of kin's mobile number.";
   const valid = Object.keys(errors).length === 0;
   const changed = (Object.keys(initial) as (keyof FormState)[]).some((key) => form[key].trim() !== initial[key].trim());
   const phoneChanging = !!phone && phone !== borrower.phone && phone !== borrower.pendingPhoneChange?.newPhone;
@@ -77,15 +63,15 @@ export function EditBorrowerDialog({ borrower, onClose, onSaved }: EditBorrowerD
 
   const submit = () => {
     setSubmitted(true);
-    if (!valid || !phone) return;
+    if (!valid || !phone || !kinPhone || !form.gender) return;
     update.mutate(
       {
         phone,
         secondaryPhone,
         area: form.area.trim(),
         premises: form.premises.trim(),
-        nextOfKin: kinGiven && kinPhone ? { name: form.kinName.trim(), relationship: form.kinRelationship.trim(), phone: kinPhone } : null,
-        work: { occupation: form.occupation.trim() || null, income: income ? { amount: Math.round(income), period: form.incomePeriod } : null },
+        nextOfKin: { name: form.kinName.trim(), relationship: form.kinRelationship.trim(), phone: kinPhone },
+        gender: form.gender,
       },
       {
         onSuccess: () => {
@@ -127,7 +113,7 @@ export function EditBorrowerDialog({ borrower, onClose, onSaved }: EditBorrowerD
       <p className={styles.locked}>Name and National ID can't be changed here because they must match the ID card. Ask an admin to correct them.</p>
 
       <fieldset className={styles.group}>
-        <legend>As on the payment agreement</legend>
+        <legend>Contact and address</legend>
         {input("phone", { label: "Main phone (mobile money)", inputMode: "tel" })}
         {phoneChanging && (
           <p className={styles.approvalNote} role="note">
@@ -139,30 +125,29 @@ export function EditBorrowerDialog({ borrower, onClose, onSaved }: EditBorrowerD
             A change to {borrower.pendingPhoneChange.newPhone} is already waiting for approval.
           </p>
         )}
+        {input("secondaryPhone", { label: "Other phone (optional)", inputMode: "tel" })}
+        <Field label="Gender" htmlFor={`${id}-gender`} hint={show("gender") ? <span className={styles.error}>{show("gender")}</span> : undefined}>
+          <div className={styles.choices} role="radiogroup" id={`${id}-gender`} aria-label="Gender">
+            {(["female", "male"] as const).map((option) => (
+              <label key={option} className={form.gender === option ? styles.choiceSelected : undefined}>
+                <input type="radio" name={`${id}-gender`} checked={form.gender === option} onChange={() => setForm((current) => ({ ...current, gender: option }))} />
+                {option === "female" ? "Female" : "Male"}
+              </label>
+            ))}
+          </div>
+        </Field>
         <div className={styles.pair}>
+          {input("area", { label: "Address", hint: "Where they live" })}
           {input("premises", { label: "Shop / premises / building / arcade" })}
-          {input("area", { label: "Area" })}
         </div>
       </fieldset>
 
       <fieldset className={styles.group}>
-        <legend>
-          Optional <span className={styles.legendNote}>· not on Tamu's forms yet</span>
-        </legend>
-        <div className={styles.pair}>
-          {input("secondaryPhone", { label: "Other phone", inputMode: "tel" })}
-          {input("occupation", { label: "Occupation" })}
-        </div>
-        <div className={styles.income}>
-          {input("income", { label: "Approximate income (UGX)", inputMode: "numeric" })}
-          <Field label="Per" htmlFor={`${id}-period`}>
-            <Select id={`${id}-period`} value={form.incomePeriod} onChange={(incomePeriod) => setForm((current) => ({ ...current, incomePeriod }))} options={[...INCOME_PERIODS]} />
-          </Field>
-        </div>
-        {input("kinName", { label: "Next of kin's name" })}
+        <legend>Next of kin</legend>
+        {input("kinName", { label: "Full name" })}
         <div className={styles.pair}>
           {input("kinRelationship", { label: "Relationship" })}
-          {input("kinPhone", { label: "Next of kin's phone", inputMode: "tel" })}
+          {input("kinPhone", { label: "Phone", inputMode: "tel" })}
         </div>
       </fieldset>
     </Dialog>

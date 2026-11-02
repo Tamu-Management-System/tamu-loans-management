@@ -1,5 +1,6 @@
 import type { BorrowerApplicationStatus, BorrowerStatus } from "../../api/types";
 import styles from "./BorrowerStatusChip.module.css";
+import { dayCount } from "../../lib/format";
 
 /** Past this many days late the chip turns red, in line with PAR30. */
 const LATE_DAYS_DANGER = 30;
@@ -16,7 +17,7 @@ export function BorrowerStatusChip({ status, daysPastDue = 0, applicationStatus 
     case "active":
       return <span className={`${styles.chip} ${styles.chipActive}`}>Active</span>;
     case "in-arrears":
-      return <span className={`${styles.chip} ${daysPastDue > LATE_DAYS_DANGER ? styles.chipDanger : styles.chipWarning}`}>{daysPastDue} days late</span>;
+      return <span className={`${styles.chip} ${daysPastDue > LATE_DAYS_DANGER ? styles.chipDanger : styles.chipWarning}`}>{dayCount(daysPastDue)} late</span>;
     case "cleared":
       return <span className={`${styles.chip} ${styles.chipNeutral}`}>Cleared</span>;
     case "applicant":

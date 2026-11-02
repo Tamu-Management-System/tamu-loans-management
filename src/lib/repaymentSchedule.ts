@@ -1,7 +1,7 @@
 // Loan terms worked out from what the officer sets and the loan product's pricing, following Tamu's
 // payment agreement: interest on the amount borrowed, an optional fee, repaid daily, weekly or monthly
 // from the first payment date. The backend must use the same rules (docs/api-contract.md).
-import type { LatePenalty, LoanPricing, RepaymentSchedule } from "../api/types";
+import type { InterestBasis, LatePenalty, LoanPricing, RepaymentSchedule } from "../api/types";
 
 /** Older loans, made before loan products: 18% on the amount borrowed, no fee */
 export const LEGACY_PRICING: LoanPricing = { productName: "Standard loan", interestRatePercent: 18, interestPer: "loan", fee: { type: "none", value: 0, collection: "added" } };
@@ -39,10 +39,22 @@ export function paymentDate(firstPaymentOn: string, schedule: RepaymentSchedule,
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-/** How many months a loan runs (part months count as a fraction), for interest charged per month */
-export function loanMonths(repaymentSchedule: RepaymentSchedule, numberOfPayments: number) {
-  if (repaymentSchedule === "monthly") return numberOfPayments;
-  return (numberOfPayments * (repaymentSchedule === "weekly" ? 7 : 1)) / 30;
+const DAYS_PER_PAYMENT: Record<RepaymentSchedule, number> = { daily: 1, weekly: 7, monthly: 30 };
+const DAYS_PER_PERIOD: Record<Exclude<InterestBasis, "loan">, number> = { day: 1, week: 7, month: 30 };
+const SCHEDULE_PERIOD: Record<RepaymentSchedule, Exclude<InterestBasis, "loan">> = { daily: "day", weekly: "week", monthly: "month" };
+
+/** The highest rate each basis allows (the screens and the API use the same limits) */
+export const INTEREST_LIMITS: Record<InterestBasis, number> = { loan: 100, day: 5, week: 20, month: 30 };
+
+/**
+ * How many times the rate is charged: once for "loan"; otherwise the days, weeks or months the loan runs
+ * (e.g. 4.5% a week on a 4-week loan is charged 4 times). When the basis and the schedule differ, the loan's
+ * length is counted in days (a month as 30).
+ */
+export function interestPeriods(repaymentSchedule: RepaymentSchedule, numberOfPayments: number, per: InterestBasis) {
+  if (per === "loan") return 1;
+  if (SCHEDULE_PERIOD[repaymentSchedule] === per) return numberOfPayments;
+  return (numberOfPayments * DAYS_PER_PAYMENT[repaymentSchedule]) / DAYS_PER_PERIOD[per];
 }
 
 export function feeAmount(amount: number, fee: LoanPricing["fee"]) {
@@ -52,8 +64,8 @@ export function feeAmount(amount: number, fee: LoanPricing["fee"]) {
 }
 
 export function summariseTerms({ amount, repaymentSchedule, firstPaymentOn, numberOfPayments, pricing = LEGACY_PRICING }: LoanTermsInput): LoanTermsSummary {
-  const months = pricing.interestPer === "month" ? loanMonths(repaymentSchedule, numberOfPayments) : 1;
-  const interest = Math.round((amount * pricing.interestRatePercent * months) / 100);
+  const periods = interestPeriods(repaymentSchedule, numberOfPayments, pricing.interestPer);
+  const interest = Math.round((amount * pricing.interestRatePercent * periods) / 100);
   const fee = feeAmount(amount, pricing.fee);
   const totalRepayable = amount + interest + (pricing.fee.collection === "added" ? fee : 0);
   const instalment = Math.floor(totalRepayable / numberOfPayments / 100) * 100;
@@ -71,13 +83,16 @@ export function summariseTerms({ amount, repaymentSchedule, firstPaymentOn, numb
 /** The latest first payment an officer can set: about one period after the application, with some slack */
 export const FIRST_PAYMENT_WITHIN_DAYS: Record<RepaymentSchedule, number> = { daily: 7, weekly: 14, monthly: 35 };
 
+/** The default loan length, one month, in payments: 30 daily, 4 weekly or 1 monthly (admins can change it per product) */
+export const ONE_MONTH_OF_PAYMENTS: Record<RepaymentSchedule, number> = { daily: 30, weekly: 4, monthly: 1 };
+
 /** "3 months", "12 weeks", "30 days" */
 export const describeLength = (schedule: RepaymentSchedule, payments: number) =>
   `${payments} ${schedule === "daily" ? "day" : schedule === "weekly" ? "week" : "month"}${payments === 1 ? "" : "s"}`;
 
 /** "18% of the amount" or "5% a month" */
 export const describeInterest = (pricing: Pick<LoanPricing, "interestRatePercent" | "interestPer">) =>
-  pricing.interestPer === "month" ? `${pricing.interestRatePercent}% a month` : `${pricing.interestRatePercent}% of the amount`;
+  pricing.interestPer === "loan" ? `${pricing.interestRatePercent}% of the amount` : `${pricing.interestRatePercent}% a ${pricing.interestPer}`;
 
 /**
  * Late fees on an overdue amount under a product's penalty rule. `daysLate` counts from the oldest

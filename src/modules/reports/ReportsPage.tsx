@@ -19,8 +19,9 @@ const REPORTS: { name: ReportName; label: string; description: string; branchOnl
   { name: "officers", label: "Officers", description: "How each loan officer is doing", branchOnly: true },
 ];
 
-type Range = "week" | "month" | "last-month" | "year" | "custom";
+type Range = "today" | "week" | "month" | "last-month" | "year" | "custom";
 const RANGES: { value: Range; label: string }[] = [
+  { value: "today", label: "Today" },
   { value: "week", label: "This week" },
   { value: "month", label: "This month" },
   { value: "last-month", label: "Last month" },
@@ -32,6 +33,7 @@ const RANGES: { value: Range; label: string }[] = [
 function rangeDates(range: Range, from: string | null, to: string | null) {
   const today = new Date();
   const iso = toDateInputValue;
+  if (range === "today") return { from: iso(today), to: iso(today) };
   if (range === "week") {
     const monday = new Date(today);
     monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
@@ -65,10 +67,10 @@ export function ReportsPage() {
       return next;
     });
 
-  const exportCsv = () =>
+  const download = (format: "pdf" | "csv") =>
     exportReport
-      .mutateAsync({ name: active.name, from: dates.from, to: dates.to })
-      .then(() => showToast({ message: `${active.label} report exported.` }))
+      .mutateAsync({ name: active.name, from: dates.from, to: dates.to, format })
+      .then(() => showToast({ message: `${active.label} report downloaded (${format.toUpperCase()}).` }))
       .catch((error) => showToast({ message: error instanceof ApiError ? error.message : "The export didn't work. Try again." }));
 
   return (
@@ -76,13 +78,19 @@ export function ReportsPage() {
       <div className={styles.header}>
         <div>
           <h1>Reports</h1>
-          <p className={styles.subtitle}>{seesBranch ? "The whole branch" : "Your portfolio"}</p>
+          <p className={styles.subtitle}>{seesBranch ? "The whole market" : "Your portfolio"}</p>
         </div>
         {can("reports.export") && (
-          <Button variant="secondary" onClick={exportCsv} disabled={exportReport.isPending || !report}>
-            <Icon name="upload" size={16} strokeWidth={1.8} className={styles.exportIcon} />
-            {exportReport.isPending ? "Exporting…" : "Export CSV"}
-          </Button>
+          <div className={styles.downloads}>
+            <Button variant="secondary" onClick={() => download("pdf")} disabled={exportReport.isPending || !report}>
+              <Icon name="upload" size={16} strokeWidth={1.8} className={styles.exportIcon} />
+              Download PDF
+            </Button>
+            <Button variant="secondary" onClick={() => download("csv")} disabled={exportReport.isPending || !report}>
+              <Icon name="upload" size={16} strokeWidth={1.8} className={styles.exportIcon} />
+              Download CSV
+            </Button>
+          </div>
         )}
       </div>
 
@@ -193,7 +201,7 @@ export function ReportsPage() {
                     </tfoot>
                   )}
                 </table>
-                {report.table.rows.length > 200 && <p className={styles.tableNote}>Showing the first 200 rows. Export CSV for all {report.table.rows.length.toLocaleString("en-US")}.</p>}
+                {report.table.rows.length > 200 && <p className={styles.tableNote}>Showing the first 200 rows. Download the PDF or CSV for all {report.table.rows.length.toLocaleString("en-US")}.</p>}
               </div>
             )}
           </section>

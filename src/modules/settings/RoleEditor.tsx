@@ -101,7 +101,7 @@ function RoleForm({ role, copyOf, roles }: { role: RoleSummary | null; copyOf: R
   const problems = [
     name.trim().length < 3 && "Give the role a name.",
     granted.size === 0 && "Choose at least one permission.",
-    dataScope === "own" && branchOnly.length > 0 && "Roles that manage staff, roles or settings must see the whole branch.",
+    dataScope === "own" && branchOnly.length > 0 && "Roles that manage staff, roles or settings must see the whole market.",
   ].filter(Boolean) as string[];
 
   // Leaving with unsaved changes: the browser asks first
@@ -161,7 +161,7 @@ function RoleForm({ role, copyOf, roles }: { role: RoleSummary | null; copyOf: R
     if (granted.has("applications.create") && granted.has("applications.approve"))
       list.push(settings?.loanRules.creatorCannotApprove === false ? "Can start and approve applications, and Loan rules allow approving their own." : "Can start and approve; nobody can approve an application they started.");
     if (granted.has("users.manage") && granted.has("roles.manage")) list.push("Can create roles and give them to anyone: full control of who can do what.");
-    if (granted.has("payments.record") && dataScope === "branch") list.push("Can record payments on any loan in the branch.");
+    if (granted.has("payments.record") && dataScope === "branch") list.push("Can record payments on any loan in the market.");
     return list;
   }, [granted, dataScope, settings]);
 
@@ -282,7 +282,7 @@ function RoleForm({ role, copyOf, roles }: { role: RoleSummary | null; copyOf: R
                           <tr className={styles.matrixGroup}>
                             <th scope="colgroup" colSpan={PERMISSION_ACTIONS.length + (readOnly ? 1 : 2)}>
                               {group}
-                              <span>{group === "Lending" ? `Sees ${dataScope === "own" ? "their own portfolio" : "the whole branch"}` : "Not limited by data access"}</span>
+                              <span>{group === "Lending" ? `Sees ${dataScope === "own" ? "their own portfolio" : "the whole market"}` : "Not limited by data access"}</span>
                             </th>
                           </tr>
                           {groupModules.map((module) => {

@@ -3,15 +3,16 @@
 import type { BorrowerActivityCategory, BorrowerActivityItem } from "../api/types";
 import type { MockBorrower } from "./borrowerDirectory";
 import { borrowerDocumentsResponse } from "./borrowerDocuments";
-import { INTEREST_RATE, borrowerDetails, nextPayment } from "./borrowerProfiles";
-import { applications, loans, officers, users } from "./fixtures";
+import { borrowerDetails } from "./borrowerProfiles";
+import { loanPayments } from "./loanPayments";
+import { applications, loans, officers } from "./fixtures";
 import { pastLoans } from "./loanHistory";
 
 type Actor = BorrowerActivityItem["actor"];
 
 const DAY_MS = 86_400_000;
 const SESSION_STARTED = Date.now();
-const FINANCE: Actor = { name: users.find((u) => u.roleId === "finance")?.name ?? "Finance", role: "Finance" };
+const FINANCE: Actor = { name: "Joan Nansubuga", role: "Finance" };
 const SYSTEM: Actor = { name: "Tamu Loans", role: "Automatic" };
 const ugx = (amount: number) => `UGX ${amount.toLocaleString("en-US")}`;
 
@@ -58,43 +59,32 @@ function seedTimeline(borrower: MockBorrower): BorrowerActivityItem[] {
     }
   }
 
-  const loanEvents = (loanId: string, principal: number, disbursedOn: string) => {
+  // Each loan, repaid or current: applied, approved, paid out, every payment, calls when it fell behind, repaid
+  const loanEvents = (loanId: string, principal: number, disbursedOn: string, payoutBy: string) => {
     const disbursed = dayAt(disbursedOn, 10, 6);
     items.push(event("changes", `Applied for ${loanId} · ${ugx(principal)}`, officer, disbursed - 3 * DAY_MS));
     items.push(event("changes", `Approved ${loanId}`, FINANCE, disbursed - DAY_MS));
-    items.push(event("money", `Disbursed ${ugx(principal)} for ${loanId} · MTN MoMo`, FINANCE, disbursed));
-    return disbursed;
-  };
-  const payments = (loanId: string, from: number, to: number, count: number, amount: number) => {
-    for (let i = 1; i <= count; i++) {
-      const at = from + ((to - from) * i) / (count + 1);
-      items.push(event("money", `Recorded ${ugx(amount)} on ${loanId} · ${random() < 0.6 ? "MTN MoMo" : random() < 0.5 ? "Airtel Money" : "Cash"}`, officer, at));
-    }
+    items.push(event("money", `Disbursed ${ugx(principal)} for ${loanId} · MTN MoMo`, { name: payoutBy, role: "Finance" }, disbursed));
+    for (const payment of loanPayments(loanId).filter((p) => new Date(p.paidAt).getTime() < SESSION_STARTED))
+      items.push(event("money", `Recorded ${ugx(payment.amount)} on ${loanId} · ${payment.method}`, officer, payment.paidAt));
   };
 
   for (const past of pastLoans.filter((l) => l.borrowerId === borrower.id)) {
-    const disbursed = loanEvents(past.id, past.principal, past.disbursedOn);
-    const cleared = dayAt(past.clearedOn, 11, 6);
-    const count = 3 + Math.floor(random() * 3);
-    payments(past.id, disbursed, cleared, count, Math.round((past.principal * (1 + INTEREST_RATE)) / (count + 1) / 1000) * 1000);
-    if (past.mostDaysLate > 0) items.push(event("contact", `Called about ${past.id}: promised to pay`, officer, cleared - 20 * DAY_MS));
-    items.push(event("money", `${past.id} repaid in full and closed`, SYSTEM, cleared));
+    loanEvents(past.id, past.principal, past.disbursedOn, FINANCE.name);
+    if (past.mostDaysLate > 3) items.push(event("contact", `Called about ${past.id}: promised to pay`, officer, dayAt(past.clearedOn, 9, 2) - 2 * DAY_MS));
+    items.push(event("money", `${past.id} repaid in full and closed`, SYSTEM, dayAt(past.clearedOn, 17, 1)));
   }
 
   const loan = borrower.currentLoanId ? loans.find((l) => l.id === borrower.currentLoanId) : undefined;
   const terms = borrowerDetails.get(borrower.id)?.loanTerms;
   // Loans paid out in the demo (made from an application) get their real events as they happen
   if (loan && terms && !loan.applicationId) {
-    const disbursed = loanEvents(loan.id, terms.principal, terms.disbursedOn);
-    const instalment = nextPayment(terms, terms.totalRepayable, 0, 0)?.amount ?? 0;
-    // Payments up to the last one before the loan fell behind
-    const lastPaid = loan.daysPastDue > 0 ? Date.now() - (loan.daysPastDue + 2) * DAY_MS : Date.now() - 2 * DAY_MS;
-    const count = Math.max(0, Math.min(5, Math.floor((lastPaid - disbursed) / ({ daily: 1, weekly: 7, monthly: 30 }[terms.repaymentSchedule] * DAY_MS))));
-    if (lastPaid > disbursed) payments(loan.id, disbursed, lastPaid, count, instalment);
+    loanEvents(loan.id, terms.principal, terms.disbursedOn, loan.payout?.by ?? FINANCE.name);
     if (loan.daysPastDue > 0) {
       items.push(event("contact", `Called about ${loan.id}: no answer`, officer, Date.now() - Math.min(loan.daysPastDue - 1, 6) * DAY_MS));
       if (loan.daysPastDue > 3) items.push(event("contact", `Called about ${loan.id}: promised to pay`, officer, Date.now() - Math.min(loan.daysPastDue - 2, 3) * DAY_MS));
     }
+    if (loan.recovery) items.push(event("changes", `Sent ${loan.id} to recovery: ${loan.recovery.reason}`, { name: loan.recovery.by, role: "Finance" }, loan.recovery.since));
   }
 
   const application = borrower.applicationId ? applications.find((a) => a.id === borrower.applicationId) : undefined;

@@ -10,7 +10,12 @@ export interface PdfImage {
 
 export type PdfLine =
   | { text: string; size?: number; /** space above, in points */ gap?: number }
-  | { image: PdfImage; /** height on the page, in points */ height: number; gap?: number };
+  | { image: PdfImage; /** height on the page, in points */ height: number; gap?: number }
+  /** Several pieces of text on one line, e.g. a table row; `x` is from the left edge, right-aligned cells end at `x` */
+  | { cells: { text: string; x: number; align?: "left" | "right" }[]; size?: number; gap?: number };
+
+/** Roughly how wide Helvetica text is (good enough to right-align numbers) */
+const textWidth = (text: string, size: number) => text.length * size * 0.52;
 
 const encoder = new TextEncoder();
 
@@ -34,6 +39,11 @@ export function buildPdf(pages: PdfLine[][]): Blob {
       if ("text" in line) {
         y -= line.gap ?? 18;
         return `BT /F1 ${line.size ?? 11} Tf 56 ${y} Td (${pdfText(line.text)}) Tj ET`;
+      }
+      if ("cells" in line) {
+        const size = line.size ?? 9;
+        y -= line.gap ?? 14;
+        return line.cells.map((cell) => `BT /F1 ${size} Tf ${(cell.align === "right" ? cell.x - textWidth(cell.text, size) : cell.x).toFixed(1)} ${y} Td (${pdfText(cell.text)}) Tj ET`).join("\n");
       }
       const width = (line.image.width / line.image.height) * line.height;
       y -= (line.gap ?? 8) + line.height;

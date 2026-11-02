@@ -8,7 +8,7 @@ import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { useToast } from "../../components/ui/Toast";
 import { formatCompactAmount, formatDate, formatUGX } from "../../lib/format";
-import { describeLength, latePenalty, summariseTerms } from "../../lib/repaymentSchedule";
+import { describeLength, INTEREST_LIMITS, latePenalty, ONE_MONTH_OF_PAYMENTS, summariseTerms } from "../../lib/repaymentSchedule";
 import { NumberField, Segmented, SettingRow, SettingsGroup } from "./SettingsForm";
 import styles from "./Settings.module.css";
 
@@ -98,7 +98,7 @@ export function LoanProductsSection() {
                       </span>
                     </td>
                     <td data-label="Interest">
-                      {product.interest.ratePercent}%<span className={styles.secondary}>{product.interest.per === "month" ? "a month" : "of the amount"}</span>
+                      {product.interest.ratePercent}%<span className={styles.secondary}>{product.interest.per === "loan" ? "of the amount" : `a ${product.interest.per}`}</span>
                     </td>
                     <td data-label="Amount">
                       UGX {formatCompactAmount(product.amount.min)} – {formatCompactAmount(product.amount.max)}
@@ -122,9 +122,9 @@ const BLANK_PRODUCT: SaveLoanProductRequest = {
   name: "",
   description: "",
   repaymentSchedule: "weekly",
-  interest: { ratePercent: 18, per: "loan" },
-  amount: { min: 200_000, max: 5_000_000 },
-  numberOfPayments: 12,
+  interest: { ratePercent: 4.5, per: "week" },
+  amount: { min: 100_000, max: 5_000_000 },
+  numberOfPayments: ONE_MONTH_OF_PAYMENTS.weekly,
   fee: { type: "none", value: 0, collection: "added" },
   penalty: { type: "none", value: 0, per: "missed-payment", graceDays: 3 },
 };
@@ -132,7 +132,7 @@ const BLANK_PRODUCT: SaveLoanProductRequest = {
 /** What's wrong with a product, or null (the API checks the same) */
 function productProblem(p: SaveLoanProductRequest) {
   if (p.name.trim().length < 3) return "Give the product a name.";
-  if (p.interest.ratePercent < 0 || p.interest.ratePercent > (p.interest.per === "month" ? 30 : 100)) return `Interest: 0 to ${p.interest.per === "month" ? 30 : 100}%.`;
+  if (p.interest.ratePercent < 0 || p.interest.ratePercent > INTEREST_LIMITS[p.interest.per]) return `Interest: 0 to ${INTEREST_LIMITS[p.interest.per]}%${p.interest.per === "loan" ? "" : ` a ${p.interest.per}`}.`;
   if (p.amount.min < 10_000) return "The smallest loan must be at least UGX 10,000.";
   if (p.amount.max < p.amount.min) return "The biggest loan can't be smaller than the smallest.";
   if (p.amount.max > 100_000_000) return "The biggest loan can be up to UGX 100,000,000.";
@@ -284,22 +284,30 @@ function ProductForm({ product, copyOf }: { product: LoanProduct | null; copyOf:
               {scheduleLocked ? (
                 <span className={styles.lockedValue}>{scheduleLabel(form.repaymentSchedule)}</span>
               ) : (
-                <Segmented label="Repaid" value={form.repaymentSchedule} onChange={(value) => set("repaymentSchedule", value)} options={SCHEDULES.map(({ value, label }) => ({ value, label }))} />
+                <Segmented
+                  label="Repaid"
+                  value={form.repaymentSchedule}
+                  // Switching how often it's repaid resets the length to one month of payments
+                  onChange={(value) => setForm((before) => ({ ...before, repaymentSchedule: value, numberOfPayments: ONE_MONTH_OF_PAYMENTS[value] }))}
+                  options={SCHEDULES.map(({ value, label }) => ({ value, label }))}
+                />
               )}
             </SettingRow>
           </SettingsGroup>
 
           <SettingsGroup title="Interest">
-            <SettingRow label="Rate" htmlFor={ids.rate} description={form.interest.per === "loan" ? "Charged once on the amount borrowed, as on Tamu's agreement." : "Charged for every month the loan runs."}>
+            <SettingRow label="Rate" htmlFor={ids.rate} description={form.interest.per === "loan" ? "Charged once on the amount borrowed." : `Charged for every ${form.interest.per} the loan runs.`}>
               <span className={styles.controlStack}>
-                <NumberField id={ids.rate} value={form.interest.ratePercent} onChange={(ratePercent) => set("interest", { ...form.interest, ratePercent })} min={0} max={form.interest.per === "month" ? 30 : 100} unit="%" allowDecimal />
+                <NumberField id={ids.rate} value={form.interest.ratePercent} onChange={(ratePercent) => set("interest", { ...form.interest, ratePercent })} min={0} max={INTEREST_LIMITS[form.interest.per]} unit="%" allowDecimal />
                 <Segmented
                   label="Interest charged"
                   value={form.interest.per}
                   onChange={(per) => set("interest", { ...form.interest, per })}
                   options={[
-                    { value: "loan", label: "On the loan" },
+                    { value: "day", label: "Per day" },
+                    { value: "week", label: "Per week" },
                     { value: "month", label: "Per month" },
+                    { value: "loan", label: "Once" },
                   ]}
                 />
               </span>
@@ -400,7 +408,7 @@ function ProductForm({ product, copyOf }: { product: LoanProduct | null; copyOf:
                 <NumberField label="Example amount" value={amount} onChange={setExampleAmount} min={form.amount.min} max={form.amount.max} step={50_000} unit="UGX" unitBefore wide />
               </label>
               <p className={styles.previewTerms}>
-                {payments} {form.repaymentSchedule} payments
+                {payments} {form.repaymentSchedule} payment{payments === 1 ? "" : "s"}
               </p>
               <dl className={styles.previewFigures}>
                 <div>

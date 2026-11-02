@@ -5,23 +5,18 @@ import type { ApplicationDetail, ApplicationDraft, ApplicationList, ApplicationS
 
 export interface NewApplicationUpload {
   application: NewApplicationRequest;
-  /** Paper route: the signed agreement and both consents, scanned into one PDF */
+  /** Paper route: the signed agreement, both consents and the ID copies, scanned into one PDF */
   signedApplication?: Blob | null;
-  /** Paper route, new borrower */
-  idFront?: Blob | null;
-  idBack?: Blob | null;
 }
 
 /** Creates an application (paper draft, paper submitted for approval, or online with a link). */
 export function useCreateApplication() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ application, signedApplication, idFront, idBack }: NewApplicationUpload) => {
+    mutationFn: ({ application, signedApplication }: NewApplicationUpload) => {
       const form = new FormData();
       form.append("application", JSON.stringify(application));
       if (signedApplication) form.append("signedApplication", signedApplication, "signed-application.pdf");
-      if (idFront) form.append("idFront", idFront, "id-front.jpg");
-      if (idBack) form.append("idBack", idBack, "id-back.jpg");
       return api.upload<NewApplicationResult>("/applications", form);
     },
     // New borrower, application counts, dashboard tasks, audit preview

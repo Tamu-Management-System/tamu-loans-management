@@ -30,6 +30,9 @@ export function DisburseDialog({ loan, onClose }: { loan: LoanToDisburse; onClos
   const [amountText, setAmountText] = useState("");
   const [paidOn, setPaidOn] = useState(today);
   const [submitted, setSubmitted] = useState(false);
+  // Second step: the person paying out confirms what they sent before it's recorded
+  const [confirming, setConfirming] = useState(false);
+  const [consent, setConsent] = useState(false);
 
   const amount = Number(amountText.replace(/\D/g, "")) || 0;
   const errors = {
@@ -48,6 +51,12 @@ export function DisburseDialog({ loan, onClose }: { loan: LoanToDisburse; onClos
   const submit = () => {
     setSubmitted(true);
     if (!valid) return;
+    setConsent(false);
+    setConfirming(true);
+  };
+
+  const record = () => {
+    if (!consent) return;
     // The dialog closes when the list refreshes, so confirm from the request itself
     disburse
       .mutateAsync({ method, reference: reference.trim(), amount, paidOn })
@@ -61,14 +70,49 @@ export function DisburseDialog({ loan, onClose }: { loan: LoanToDisburse; onClos
   const show = (key: keyof typeof errors) => (submitted ? errors[key] : undefined);
   const serverError = disburse.error instanceof ApiError ? disburse.error.message : disburse.error ? "The payout couldn't be recorded. Try again." : null;
 
+  if (confirming)
+    return (
+      <Dialog
+        title="Confirm payout"
+        subtitle={`${loan.applicationId} · ${loan.borrower.name}`}
+        submitLabel="Record payout"
+        submittingLabel="Recording…"
+        submitting={disburse.isPending}
+        submitDisabled={!consent}
+        cancelLabel="Back"
+        onCancel={() => {
+          disburse.reset();
+          setConfirming(false);
+        }}
+        error={serverError}
+        onSubmit={record}
+        onClose={onClose}
+      >
+        <SummaryBox
+          ariaLabel="The payout"
+          rows={[
+            ["Sent to", `${loan.borrower.name} · ${loan.payTo}`],
+            ["From", from ? `Tamu's ${from.method} · ${from.number}` : method],
+            ["Transaction ID", reference.trim()],
+            ["Paid out on", formatLongDate(paidOn)],
+            ["Amount", formatUGX(amount)],
+          ]}
+        />
+        <label className={styles.consent}>
+          <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} />
+          <span>
+            I confirm I sent <b>{formatUGX(amount)}</b> to {loan.borrower.name} on <b>{loan.payTo}</b>, and the transaction ID above is from the confirmation message. Once recorded, the loan starts and this can't be undone.
+          </span>
+        </label>
+      </Dialog>
+    );
+
   return (
     <Dialog
       title={`Pay out ${loan.applicationId}`}
       subtitle={`${loan.borrower.name} · ${formatUGX(loan.amount)} · ${loan.terms.pricing.productName}`}
-      submitLabel="Record payout"
-      submittingLabel="Recording…"
-      submitting={disburse.isPending}
-      error={serverError ?? (submitted && !valid ? "Check the highlighted fields." : null)}
+      submitLabel="Continue"
+      error={submitted && !valid ? "Check the highlighted fields." : null}
       onSubmit={submit}
       onClose={onClose}
     >

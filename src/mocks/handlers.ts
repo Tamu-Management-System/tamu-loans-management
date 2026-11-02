@@ -1,7 +1,8 @@
+import "./seed"; // the sample data, before anything reads it
 // Mock API endpoints. Each handler matches an endpoint in docs/api-contract.md;
 // keep the two in step so the contract stays the backend developer's spec.
 import { http, HttpResponse, delay } from "msw";
-import { formatShortDate } from "../lib/format";
+import { formatShortDate, dayCount } from "../lib/format";
 import type {
   ActivityList,
   ArrearsBreakdown,
@@ -79,6 +80,7 @@ import type {
   MyProfile,
   SignedInDevice,
   SupportContacts,
+  NewBorrowerDetails,
   InviteStaffRequest,
   DeactivateStaffRequest,
   SaveRoleRequest,
@@ -90,17 +92,11 @@ import type { CurrentUser } from "../auth/types";
 import {
   activityLog,
   applications,
-  arrearsFigures,
   currentDemoUser,
   DEMO_PASSWORD,
-  earlyWarningSignals,
   loans,
   officers,
   PAR30_TARGET_PERCENT,
-  par30History,
-  portfolioRiskFigures,
-  portfolioSummaries,
-  riskSummaries,
   roles,
   setDemoSession,
   signedInDemoUser,
@@ -108,14 +104,17 @@ import {
   type MockUser,
 } from "./fixtures";
 import { borrowers, borrowerStatus } from "./borrowerDirectory";
+import { arrears, earlyWarnings, officerSummary, par30History, riskNow, teamPerformance, type OfficerFilter } from "./portfolioFigures";
 import { categoryOf, targetOf } from "./auditLog";
+import { buildPdf, type PdfLine } from "./samplePdf";
+import { formatValue } from "../modules/reports/reportFormat";
 import { borrowerDetails, maskNationalId, nextPayment } from "./borrowerProfiles";
 import { pastLoans } from "./loanHistory";
 import { addApplicationSection, addDocumentVersion, markApplicationPaidOut, applicationGuarantors, updateApplicationForms, applicationVersionFor, createOnlineLinkForApplication, borrowerDocumentsResponse, createOnlineLink, describeSlot, documentFile, findDocument, findSlot, ingestOnlineApplications } from "./borrowerDocuments";
 import { assignBorrower, findOnlineApplication, linkProblem, submitOnlineApplication, submittedForNewBorrowers, type StoredImage } from "./onlineApplications";
 import { nextBorrowerId } from "./borrowerDirectory";
 import { loanPayments, recordLoanPayment } from "./loanPayments";
-import { describeLength, describePenalty, feeAmount, FIRST_PAYMENT_WITHIN_DAYS, latePenalty, paymentDate, summariseTerms } from "../lib/repaymentSchedule";
+import { describeLength, describePenalty, feeAmount, INTEREST_LIMITS, FIRST_PAYMENT_WITHIN_DAYS, latePenalty, paymentDate, summariseTerms } from "../lib/repaymentSchedule";
 import { borrowerActivityPage, recordBorrowerEvent } from "./borrowerActivity";
 import { addFollowUpTask, clockTime, describePayment, findTask, nextPaymentId, openTaskForLoan, rememberForUndo, tasksFor, ugx, undo } from "./worklistStore";
 
@@ -299,11 +298,10 @@ function editableDraft(user: MockUser, id: string) {
 
 /** What a draft still needs, first thing first (null when it can be submitted). */
 function draftMissing(app: (typeof applications)[number], borrower: (typeof borrowers)[number]) {
-  const identity = borrowerDocumentsResponse(borrower).sections.find((section) => section.id === "identity")?.slots ?? [];
+  // The ID copies are in the signed PDF, so there's nothing else to check for
   const signed = borrowerDocumentsResponse(borrower).sections.find((section) => section.id === app.id)?.slots[0]?.file;
   if ((app.guarantors ?? applicationGuarantors(borrower, app.id)).length < 2) return "Guarantor details missing";
   if (!signed) return "Signed application PDF missing";
-  if (identity.some((slot) => !slot.file)) return "National ID copy missing";
   return null;
 }
 
@@ -340,7 +338,7 @@ function loanListItems(user: MockUser): LoanListItem[] {
     const terms = borrower ? borrowerDetails.get(borrower.id)?.loanTerms : null;
     if (!borrower || !terms) continue;
     const paidOff = loan.outstandingBalance <= 0;
-    const instalment = paidOff ? null : nextPayment(terms, loan.outstandingBalance, loan.daysPastDue, Number(loan.id.replace(/\D/g, "")));
+    const instalment = paidOff ? null : nextPayment(terms, loan.outstandingBalance);
     items.push({
       id: loan.id,
       borrower: { id: borrower.id, name: borrower.name },
@@ -364,7 +362,7 @@ function loanListItems(user: MockUser): LoanListItem[] {
   for (const past of pastLoans) {
     const borrower = borrowers.find((b) => b.id === past.borrowerId);
     if (!borrower || !canSeeRecord(user, borrower.officerId)) continue;
-    const total = Math.round(past.principal * 1.18);
+    const total = past.totalRepayable;
     items.push({
       id: past.id,
       borrower: { id: borrower.id, name: borrower.name },
@@ -372,7 +370,7 @@ function loanListItems(user: MockUser): LoanListItem[] {
       principal: past.principal,
       totalRepayable: total,
       balance: 0,
-      repaymentSchedule: null,
+      repaymentSchedule: past.repaymentSchedule,
       disbursedOn: past.disbursedOn,
       clearedOn: past.clearedOn,
       status: "cleared",
@@ -412,7 +410,7 @@ const daysBetween = (fromIso: string, toIso: string) => Math.round((new Date(`${
 const nextApplicationId = () => `APP-${Math.max(...applications.map((a) => Number(a.id.slice(4)))) + 1}`;
 
 /** Registers someone new (from a paper application, or an online one they completed). */
-function registerBorrower(person: { fullName: string; nationalId: string; phone: string; premises: string; area: string }, officerId: string) {
+function registerBorrower(person: NewBorrowerDetails, officerId: string) {
   const borrower = {
     id: nextBorrowerId(),
     name: person.fullName,
@@ -427,7 +425,13 @@ function registerBorrower(person: { fullName: string; nationalId: string; phone:
     addedInSession: true,
   };
   borrowers.push(borrower);
-  borrowerDetails.set(borrower.id, { premises: person.premises, secondaryPhone: null, nextOfKin: null, work: { occupation: null, income: null }, loanTerms: null });
+  borrowerDetails.set(borrower.id, {
+    premises: person.premises,
+    secondaryPhone: person.secondaryPhone ?? null,
+    nextOfKin: person.nextOfKin ? { name: person.nextOfKin.name, phone: person.nextOfKin.phone, relationship: "" } : null,
+    gender: person.gender ?? null,
+    loanTerms: null,
+  });
   return borrower as (typeof borrowers)[number];
 }
 
@@ -502,6 +506,7 @@ function staffMember(member: MockStaff): StaffMember {
     phone: member.phone,
     photoUrl: member.photoUrl,
     role: { id: member.roleId, name: role?.name ?? "Deleted role" },
+    branch: member.branch,
     status: member.status,
     lastSignInAt: member.lastSignInAt,
     invite: member.invite && member.status === "invited" ? { ...member.invite, expired: inviteExpired(member) } : null,
@@ -565,6 +570,11 @@ function settingsProblem(section: SettingsSection, body: unknown): string | null
     if (!Array.isArray(b.payoutAccounts) || b.payoutAccounts.length === 0) return "Add at least one payout account.";
     for (const account of b.payoutAccounts)
       if (!["MTN MoMo", "Airtel Money"].includes(account.method) || !normalisePhone(account.number ?? "") || !account.accountName?.trim()) return "Check the payout accounts: method, number and name.";
+    const markets = Array.isArray(b.branches) ? b.branches.map((name) => (typeof name === "string" ? name.trim() : "")) : [];
+    if (markets.length === 0 || markets.some((name) => name.length < 2 || name.length > 40)) return "Add at least one market, each with a name.";
+    if (new Set(markets.map((name) => name.toLowerCase())).size !== markets.length) return "Each market needs a different name.";
+    const stranded = staff.find((member) => member.status !== "deactivated" && !markets.includes(member.branch));
+    if (stranded) return `${stranded.name} works in ${stranded.branch}. Move them to another market before removing it.`;
     return null;
   }
   if (section === "loanRules") {
@@ -615,7 +625,7 @@ function productProblem(body: SaveLoanProductRequest, productId: string | null):
   if (loanProducts.some((p) => p.id !== productId && p.name.toLowerCase() === name.toLowerCase())) return `There's already a product called ${name}.`;
   if (!["daily", "weekly", "monthly"].includes(body.repaymentSchedule)) return "Choose how often it's repaid.";
   const rate = body.interest?.ratePercent;
-  if (!["loan", "month"].includes(body.interest?.per) || typeof rate !== "number" || rate < 0 || rate > (body.interest.per === "month" ? 30 : 100)) return "Check the interest rate.";
+  if (!(body.interest?.per in INTEREST_LIMITS) || typeof rate !== "number" || rate < 0 || rate > INTEREST_LIMITS[body.interest.per]) return "Check the interest rate.";
   const { amount } = body;
   if (!Number.isInteger(amount?.min) || !Number.isInteger(amount?.max) || amount.min < 10_000 || amount.max < amount.min || amount.max > 100_000_000) return "Check the amount limits: at least UGX 10,000, and the most can't be below the least.";
   if (!Number.isInteger(body.numberOfPayments) || body.numberOfPayments < 1 || body.numberOfPayments > 365) return "The loan length must be 1 to 365 payments.";
@@ -724,9 +734,47 @@ function bucketsFor(from: string, to: string) {
   const labelOf = (key: string) => {
     const date = new Date(`${unit === "month" ? `${key}-01` : key}T00:00:00`);
     const month = date.toLocaleDateString("en-US", { month: "short" });
-    return unit === "month" ? month : unit === "week" ? `${date.getDate()} ${month}` : String(date.getDate());
+    return unit === "month" ? month : `${date.getDate()} ${month}`;
   };
   return { unit, keys, keyOf, labelOf };
+}
+
+const REPORT_TITLES: Record<ReportName, string> = { portfolio: "Portfolio", collections: "Collections", disbursements: "Disbursements", officers: "Officer performance" };
+const REPORT_ROWS_PER_PAGE = 48;
+
+/** A report as a printable PDF: title, dates, headline figures, then the table (several pages if needed) */
+function reportPdf(report: Report, user: MockUser) {
+  const day = (iso: string) => formatValue(iso, "date");
+  const header: PdfLine[] = [
+    { text: `${systemSettings.business.name} · ${REPORT_TITLES[report.name]} report`, size: 15, gap: 0 },
+    { text: `${report.name === "portfolio" ? `As of ${day(report.to)}` : `${day(report.from)} to ${day(report.to)}`} · ${report.scope === "branch" ? "Whole market" : `${user.name}'s portfolio`}`, size: 10, gap: 20 },
+    { text: `Exported by ${user.name} on ${day(new Date().toLocaleDateString("en-CA"))}`, size: 8, gap: 14 },
+    ...report.figures.map((figure, index): PdfLine => ({ text: `${figure.label}: ${formatValue(figure.value, figure.format)}`, size: 11, gap: index === 0 ? 26 : 16 })),
+    { text: report.table.title, size: 12, gap: 28 },
+  ];
+  // Column positions across the page (numbers right-aligned at the end of their column)
+  const columns = report.table.columns;
+  const width = 595 - 56 * 2;
+  const step = width / columns.length;
+  const cellsOf = (values: (string | number | null)[], bold = false): PdfLine => ({
+    size: 8,
+    gap: bold ? 18 : 13,
+    cells: columns.map((column, index) => {
+      const numeric = !["text", "date"].includes(column.format);
+      const value = values[index];
+      const text = bold && typeof value === "string" ? value : value === null || value === undefined ? "" : formatValue(value, column.format);
+      return { text: text.length > 26 ? `${text.slice(0, 25)}…` : text, x: numeric ? 56 + step * (index + 1) - 6 : 56 + step * index, align: numeric ? "right" : "left" };
+    }),
+  });
+  const headings = cellsOf(columns.map((column) => column.label.toUpperCase()), true);
+  const rows = report.table.rows.map((row) => cellsOf(columns.map((column) => row[column.key] ?? null)));
+  if (report.table.total) rows.push(cellsOf(columns.map((column) => report.table.total![column.key] ?? null)));
+  const pages: PdfLine[][] = [];
+  for (let start = 0; start < Math.max(rows.length, 1); start += REPORT_ROWS_PER_PAGE) {
+    const chunk = rows.slice(start, start + REPORT_ROWS_PER_PAGE);
+    pages.push([...(start === 0 ? header : [{ text: `${REPORT_TITLES[report.name]} report (continued)`, size: 11, gap: 0 }]), headings, ...(chunk.length ? chunk : [{ text: "Nothing in these dates.", size: 9, gap: 16 }])]);
+  }
+  return buildPdf(pages);
 }
 
 /** One of the four reports for this user: their own portfolio, or the branch */
@@ -734,7 +782,7 @@ function buildReport(user: MockUser, name: string, params: URLSearchParams): { r
   if (!REPORT_NAMES.includes(name as ReportName)) return { error: notFound("That report wasn't found.") };
   if (!hasPermission(user, "reports.view")) return { error: forbidden("You can't view reports.") };
   const branch = seesBranch(user);
-  if (name === "officers" && !branch) return { error: forbidden("Officer performance is for branch-wide roles.") };
+  if (name === "officers" && !branch) return { error: forbidden("Officer performance is for market-wide roles.") };
   const today = new Date().toLocaleDateString("en-CA");
   const dateParam = (key: string, fallback: string) => (/^\d{4}-\d{2}-\d{2}$/.test(params.get(key) ?? "") ? params.get(key)! : fallback);
   const to = dateParam("to", today) > today ? today : dateParam("to", today);
@@ -941,44 +989,26 @@ function buildReport(user: MockUser, name: string, params: URLSearchParams): { r
   };
 }
 
+/** What's missing or wrong in a new borrower's details (both routes), or null */
+function newBorrowerProblem(person: Partial<NewBorrowerDetails> | undefined) {
+  if (!person) return "Enter the borrower's details.";
+  if (!["female", "male"].includes(person.gender ?? "")) return "Choose the borrower's gender.";
+  if (person.secondaryPhone && !normalisePhone(person.secondaryPhone)) return "Check the other phone number, or leave it empty.";
+  if (!person.area?.trim()) return "Enter the borrower's address.";
+  if (!person.premises?.trim()) return "Enter the borrower's shop or premises.";
+  if (!person.nextOfKin?.name?.trim() || !normalisePhone(person.nextOfKin.phone ?? "")) return "Enter the next of kin's name and mobile number.";
+  return null;
+}
+
 /** Audit log entry for the signed-in demo user. */
 function audit(user: MockUser, description: string, details?: { label: string; value: string }[]) {
   activityLog.unshift({ id: `act-${Date.now()}-${activityLog.length}`, actor: { id: user.id, name: user.name, role: roles[user.roleId]?.name ?? "", photoUrl: user.photoUrl }, description, at: new Date().toISOString(), details });
 }
 
 const scopeOf = (user: MockUser) => (seesBranch(user) ? "branch" : "own");
+/** The loans a user may see, for the portfolio figures */
+const visibleTo = (user: MockUser): OfficerFilter => (officerId) => canSeeRecord(user, officerId);
 const limitParam = (request: Request, fallback: number) => Number(new URL(request.url).searchParams.get("limit")) || fallback;
-
-/** Weekly PAR30 between monthly values, with a fixed-seed wiggle so the demo chart looks like real data. */
-function weeklySeries(monthly: { month: string; par30Percent: number }[]) {
-  const POINTS_PER_MONTH = 5;
-  let seed = 11;
-  const noise = () => {
-    seed = (seed * 9301 + 49297) % 233280;
-    return seed / 233280 - 0.5;
-  };
-  const points: { date: string; par30Percent: number }[] = [];
-  for (let m = 0; m < monthly.length - 1; m++) {
-    const start = new Date(`${monthly[m].month}-01T00:00:00`);
-    const end = new Date(`${monthly[m + 1].month}-01T00:00:00`);
-    for (let k = 0; k < POINTS_PER_MONTH; k++) {
-      const date = new Date(start.getTime() + ((end.getTime() - start.getTime()) * k) / POINTS_PER_MONTH);
-      const value = monthly[m].par30Percent + ((monthly[m + 1].par30Percent - monthly[m].par30Percent) * k) / POINTS_PER_MONTH + (k ? noise() * 0.9 : 0);
-      points.push({ date: date.toISOString().slice(0, 10), par30Percent: Math.round(value * 100) / 100 });
-    }
-  }
-  points.push({ date: new Date().toISOString().slice(0, 10), par30Percent: monthly[monthly.length - 1].par30Percent });
-  return points;
-}
-
-/** The last 12 months as YYYY-MM, oldest first, ending with the current month. */
-function lastTwelveMonths() {
-  const now = new Date();
-  return Array.from({ length: 12 }, (_, index) => {
-    const date = new Date(now.getFullYear(), now.getMonth() - 11 + index, 1);
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-  });
-}
 
 /** Balances are calculated each morning at 8:00. */
 function balancesAsOf() {
@@ -1309,11 +1339,11 @@ export const handlers = [
         disbursedOn: terms.disbursedOn,
         clearedOn: paidOff ? today : null,
         daysPastDue: paidOff ? 0 : loan.daysPastDue,
-        arrearsAmount: paidOff ? 0 : Math.min(loan.arrearsAmount || (nextPayment(terms, balance, loan.daysPastDue, 0)?.amount ?? 0), balance),
+        arrearsAmount: paidOff ? 0 : Math.min(loan.arrearsAmount || (nextPayment(terms, balance)?.amount ?? 0), balance),
         mostDaysLate: loan.daysPastDue,
-        nextPayment: paidOff ? null : nextPayment(terms, balance, loan.daysPastDue, Number(loan.id.replace(/\D/g, ""))),
+        nextPayment: paidOff ? null : nextPayment(terms, balance),
         recovery: paidOff ? null : recoveryOf(loan),
-        lateFees: lateFeesOf(terms, schedule, paidOff ? 0 : loan.daysPastDue, paidOff ? 0 : Math.min(loan.arrearsAmount || (nextPayment(terms, balance, loan.daysPastDue, 0)?.amount ?? 0), balance)),
+        lateFees: lateFeesOf(terms, schedule, paidOff ? 0 : loan.daysPastDue, paidOff ? 0 : Math.min(loan.arrearsAmount || (nextPayment(terms, balance)?.amount ?? 0), balance)),
         applicationId: loan.applicationId ?? null,
         approvedBy: app?.decided?.by ?? null,
         payout: loan.payout ?? null,
@@ -1323,11 +1353,15 @@ export const handlers = [
       });
     }
 
-    // An older loan, repaid before schedules and payments were kept in the system
+    // A loan repaid in full: its schedule (all paid) and its payments
     const past = pastLoans.find((l) => l.id === loanId);
     const borrower = past && borrowers.find((b) => b.id === past.borrowerId);
     if (!past || !borrower || !canSeeRecord(user, borrower.officerId)) return HttpResponse.json({ message: "That loan wasn't found." }, { status: 404 });
-    const total = Math.round(past.principal * 1.18);
+    const total = past.totalRepayable;
+    const pastSchedule: LoanInstalment[] = Array.from({ length: past.schedule.numberOfPayments }, (_, index) => {
+      const amount = index === past.schedule.numberOfPayments - 1 ? total - past.schedule.instalment * index : past.schedule.instalment;
+      return { number: index + 1, dueOn: paymentDate(past.schedule.firstPaymentOn, past.repaymentSchedule, index), amount, paid: amount, status: "paid" as const };
+    });
     const version = applicationVersionFor(borrower, past.id);
     return HttpResponse.json<LoanDetail>({
       id: past.id,
@@ -1341,7 +1375,7 @@ export const handlers = [
       totalRepayable: total,
       repaid: total,
       balance: 0,
-      repaymentSchedule: null,
+      repaymentSchedule: past.repaymentSchedule,
       disbursedOn: past.disbursedOn,
       clearedOn: past.clearedOn,
       daysPastDue: 0,
@@ -1352,8 +1386,8 @@ export const handlers = [
       applicationId: null,
       approvedBy: null,
       payout: null,
-      schedule: [],
-      payments: [],
+      schedule: pastSchedule,
+      payments: loanPayments(past.id),
       signedApplication: publicDocument(version),
     });
   }),
@@ -1416,7 +1450,7 @@ export const handlers = [
       id: app.id,
       borrower: { id: borrower.id, name: borrower.name, phone: borrower.phone, area: borrower.area },
       terms: termsOf(app),
-      guarantors: app.guarantors ?? applicationGuarantors(borrower, app.id),
+      guarantors: (app.guarantors ?? applicationGuarantors(borrower, app.id)).map((g) => ({ ...g, relationship: g.relationship ?? "" })),
       signedApplication: sections.find((section) => section.id === app.id)?.slots[0]?.file ?? null,
       idCopyComplete: identity.every((slot) => !!slot.file),
       missing: app.missing,
@@ -1450,7 +1484,7 @@ export const handlers = [
 
     app.terms = terms;
     app.amount = terms.amount;
-    app.guarantors = guarantors.map((g) => ({ fullName: g.fullName.trim().replace(/\s+/g, " "), nationalId: g.nationalId, phone: normalisePhone(g.phone)! }));
+    app.guarantors = guarantors.map((g) => ({ fullName: g.fullName.trim().replace(/\s+/g, " "), nationalId: g.nationalId, phone: normalisePhone(g.phone)!, relationship: g.relationship?.trim() ?? "" }));
     if (signedFile) {
       addDocumentVersion({ borrowerId: borrower.id, slotKey: `${app.id}:application`, fileName: "loan-application.pdf", contentType: "application/pdf", sizeBytes: signedFile.size, uploadedBy: user.name, uploadedAt: new Date().toISOString(), method: "scanned", file: new Blob([await signedFile.arrayBuffer()], { type: "application/pdf" }) });
     }
@@ -1564,7 +1598,10 @@ export const handlers = [
       if (!person?.fullName?.trim() || person.fullName.trim().split(/\s+/).length < 2) return invalid("Enter the borrower's full name, as on their National ID.");
       if (!NATIONAL_ID.test(person.nationalId ?? "")) return invalid("Check the borrower's National ID number.");
       if (!normalisePhone(person.phone ?? "")) return invalid("Check the borrower's phone number.");
-      if (submit && (!person.premises?.trim() || !person.area?.trim())) return invalid("Enter the borrower's shop or premises and area.");
+      if (submit) {
+        const problem = newBorrowerProblem(person);
+        if (problem) return invalid(problem);
+      }
       // Not saying whose: an officer mustn't learn about another officer's borrowers
       if (borrowers.some((b) => b.nin === person.nationalId)) return HttpResponse.json({ message: "A borrower with this National ID is already registered. Search for them instead, or ask an admin." }, { status: 409 });
     }
@@ -1579,18 +1616,25 @@ export const handlers = [
     const signedFile = signed instanceof File && signed.size > 0 ? signed : null;
     if (signedFile && (signedFile.size > MAX_UPLOAD_BYTES || (await sniffDocumentType(signedFile)) !== "application/pdf")) return HttpResponse.json({ message: "The signed application must be one PDF, up to 5 MB." }, { status: 415 });
     if (submit && !signedFile) return invalid("Upload the signed application (one PDF).");
-    const idPhotos = { idFront: form.get("idFront"), idBack: form.get("idBack") };
-    for (const photo of Object.values(idPhotos)) {
-      if (photo instanceof File && photo.size > 0 && (photo.size > MAX_UPLOAD_BYTES || !["image/jpeg", "image/png"].includes((await sniffDocumentType(photo)) ?? ""))) return HttpResponse.json({ message: "ID photos must be JPEG or PNG, up to 5 MB." }, { status: 415 });
-    }
-    const hasIdPhotos = Object.values(idPhotos).every((photo) => photo instanceof File && photo.size > 0);
-    if (submit && !borrower && !hasIdPhotos) return invalid("Add photos of both sides of the borrower's National ID.");
+    // The ID copies are in the signed PDF: no separate ID photos on the paper route
 
     // Create it
     const officerId = officers.some((o) => o.id === user.id) ? user.id : (borrower?.officerId ?? officers[0].id);
-    if (paper && !borrower && person) borrower = registerBorrower({ ...person, fullName: person.fullName.trim().replace(/\s+/g, " "), phone: normalisePhone(person.phone)!, premises: person.premises?.trim() ?? "", area: person.area?.trim() ?? "" }, officerId);
+    if (paper && !borrower && person)
+      borrower = registerBorrower(
+        {
+          ...person,
+          fullName: person.fullName.trim().replace(/\s+/g, " "),
+          phone: normalisePhone(person.phone)!,
+          secondaryPhone: person.secondaryPhone ? normalisePhone(person.secondaryPhone) : null,
+          premises: person.premises?.trim() ?? "",
+          area: person.area?.trim() ?? "",
+          nextOfKin: person.nextOfKin?.name?.trim() && normalisePhone(person.nextOfKin.phone ?? "") ? { name: person.nextOfKin.name.trim(), phone: normalisePhone(person.nextOfKin.phone)! } : { name: "", phone: "" },
+        },
+        officerId,
+      );
     const missing = paper
-      ? [guarantors.length < 2 && "Guarantor details missing", !signedFile && "Signed application PDF missing", !borrower?.addedInSession || hasIdPhotos ? null : "National ID photos missing"].find(Boolean) || null
+      ? [guarantors.length < 2 && "Guarantor details missing", !signedFile && "Signed application PDF missing"].find(Boolean) || null
       : "Waiting for the borrower to complete it online";
     const app = {
       id: nextApplicationId(),
@@ -1604,7 +1648,7 @@ export const handlers = [
       borrowerId: borrower?.id ?? null,
       terms,
       route: body.route,
-      guarantors: guarantors.map((g) => ({ fullName: g.fullName.trim(), nationalId: g.nationalId, phone: normalisePhone(g.phone)! })),
+      guarantors: guarantors.map((g) => ({ fullName: g.fullName.trim(), nationalId: g.nationalId, phone: normalisePhone(g.phone)!, relationship: g.relationship?.trim() ?? "" })),
       createdAt: new Date().toISOString(),
       ...(submit ? { submittedAt: new Date().toISOString() } : {}),
     };
@@ -1618,13 +1662,6 @@ export const handlers = [
     const base = { uploadedBy: user.name, uploadedAt: new Date().toISOString(), method: "scanned" as const };
     if (borrower && signedFile) {
       addDocumentVersion({ ...base, borrowerId: borrower.id, slotKey: `${app.id}:application`, fileName: "loan-application.pdf", contentType: "application/pdf", sizeBytes: signedFile.size, file: new Blob([await signedFile.arrayBuffer()], { type: "application/pdf" }) });
-    }
-    if (borrower && hasIdPhotos) {
-      for (const [field, slotKey] of [["idFront", "national-id-front"], ["idBack", "national-id-back"]] as const) {
-        const photo = idPhotos[field] as File;
-        const type = (await sniffDocumentType(photo)) as "image/jpeg" | "image/png";
-        addDocumentVersion({ ...base, borrowerId: borrower.id, slotKey, fileName: `${slotKey}.${type === "image/png" ? "png" : "jpg"}`, contentType: type, sizeBytes: photo.size, file: new Blob([await photo.arrayBuffer()], { type }) });
-      }
     }
 
     let onlineLink: NewApplicationResult["onlineLink"] = null;
@@ -1674,11 +1711,17 @@ export const handlers = [
       if (!normalisePhone(person.phone ?? "")) return HttpResponse.json({ message: `Check the phone number for ${person.fullName}.` }, { status: 422 });
     }
     if (new Set(people.map((p) => p.nationalId)).size !== 3) return HttpResponse.json({ message: "The borrower and the two guarantors must be three different people." }, { status: 422 });
-    if (!details.borrower.premises?.trim() || !details.borrower.area?.trim()) return HttpResponse.json({ message: "Enter your shop or premises and your area." }, { status: 422 });
+    const borrowerProblem = newBorrowerProblem(details.borrower);
+    if (borrowerProblem) return HttpResponse.json({ message: borrowerProblem }, { status: 422 });
+    if (details.guarantors.some((g) => !g.relationship?.trim())) return HttpResponse.json({ message: "Say how each guarantor knows you." }, { status: 422 });
 
     const images = {
       idFront: await imageFromForm(form, "idFront", true, MAX_UPLOAD_BYTES),
       idBack: await imageFromForm(form, "idBack", true, MAX_UPLOAD_BYTES),
+      g1Front: await imageFromForm(form, "guarantor1IdFront", true, MAX_UPLOAD_BYTES),
+      g1Back: await imageFromForm(form, "guarantor1IdBack", true, MAX_UPLOAD_BYTES),
+      g2Front: await imageFromForm(form, "guarantor2IdFront", true, MAX_UPLOAD_BYTES),
+      g2Back: await imageFromForm(form, "guarantor2IdBack", true, MAX_UPLOAD_BYTES),
       borrower: await imageFromForm(form, "borrowerSignature", false, 512 * 1024),
       guarantor1: await imageFromForm(form, "guarantor1Signature", false, 512 * 1024),
       guarantor2: await imageFromForm(form, "guarantor2Signature", false, 512 * 1024),
@@ -1688,14 +1731,26 @@ export const handlers = [
     const image = (value: StoredImage | string) => value as StoredImage;
 
     const normalised: OnlineApplicationDetails = {
-      borrower: { ...details.borrower, fullName: details.borrower.fullName.trim(), phone: normalisePhone(details.borrower.phone)!, premises: details.borrower.premises.trim(), area: details.borrower.area.trim() },
-      guarantors: details.guarantors.map((g) => ({ fullName: g.fullName.trim(), nationalId: g.nationalId, phone: normalisePhone(g.phone)! })) as OnlineApplicationDetails["guarantors"],
+      borrower: {
+        ...details.borrower,
+        fullName: details.borrower.fullName.trim(),
+        phone: normalisePhone(details.borrower.phone)!,
+        secondaryPhone: details.borrower.secondaryPhone ? normalisePhone(details.borrower.secondaryPhone) : null,
+        premises: details.borrower.premises.trim(),
+        area: details.borrower.area.trim(),
+        nextOfKin: { name: details.borrower.nextOfKin.name.trim(), phone: normalisePhone(details.borrower.nextOfKin.phone)! },
+      },
+      guarantors: details.guarantors.map((g) => ({ fullName: g.fullName.trim(), nationalId: g.nationalId, phone: normalisePhone(g.phone)!, relationship: g.relationship.trim() })) as OnlineApplicationDetails["guarantors"],
     };
     // The link stops working now
     submitOnlineApplication(token, {
       details: normalised,
       idFront: image(images.idFront),
       idBack: image(images.idBack),
+      guarantorIds: [
+        { front: image(images.g1Front), back: image(images.g1Back) },
+        { front: image(images.g2Front), back: image(images.g2Back) },
+      ],
       signatures: { borrower: image(images.borrower), guarantor1: image(images.guarantor1), guarantor2: image(images.guarantor2) },
     });
     const borrower = borrowers.find((b) => b.id === application!.borrowerId);
@@ -1771,7 +1826,7 @@ export const handlers = [
         kind: "loan",
         id: loan.id,
         title: loan.borrowerName,
-        subtitle: `${loan.id} · ${loan.phone} · ${loan.daysPastDue ? `${loan.daysPastDue} days late` : "up to date"}`,
+        subtitle: `${loan.id} · ${loan.phone} · ${loan.daysPastDue ? `${dayCount(loan.daysPastDue)} late` : "up to date"}`,
         href: `/loans/${loan.id}`,
       }));
     const applicationResults: SearchResult[] = applications
@@ -1820,6 +1875,10 @@ export const handlers = [
       tasks.filter((task): task is Extract<WorklistTask, { type: T }> => task.type === type && task.status === "open");
     const today: DashboardToday = {};
     const isOfficer = hasPermission(user, "loans.view") && !seesBranch(user);
+    if (hasPermission(user, "loans.view")) {
+      const open = loans.filter((loan) => loan.outstandingBalance > 0 && canSeeRecord(user, loan.officerId));
+      today.activeLoans = { count: open.length, outstanding: open.reduce((sum, loan) => sum + loan.outstandingBalance, 0), lateCount: open.filter((loan) => loan.daysPastDue > 0).length };
+    }
 
     if (isOfficer) {
       const dueToday = tasks.filter((task) => task.type === "instalment-due" || task.type === "promise-due");
@@ -1832,12 +1891,8 @@ export const handlers = [
       const overdue = openOf("overdue");
       today.followUps = { overdueCount: overdue.length, over30DaysCount: overdue.filter((task) => task.daysPastDue > 30).length };
       today.applicationsToComplete = { count: openOf("application-incomplete").length };
-      const unmatched = openOf("payment-unmatched");
-      today.unmatchedPayments = { count: unmatched.length, amount: unmatched.reduce((sum, task) => sum + task.payment.amount, 0) };
     }
     if (hasPermission(user, "users.manage")) {
-      const reversals = openOf("reversal-request");
-      today.paymentReversals = { count: reversals.length, amount: reversals.reduce((sum, task) => sum + task.amount, 0) };
       const waiting = openOf("awaiting-approval");
       today.awaitingApproval = { count: waiting.length, over48HoursCount: waiting.filter((task) => task.hoursWaiting > 48).length };
       const disbursements = openOf("awaiting-disbursement");
@@ -1966,33 +2021,23 @@ export const handlers = [
 
   http.get(`${API_BASE}/portfolio/risk`, async () => {
     await delay(150);
-    const scope = scopeOf(currentDemoUser());
-    const months = lastTwelveMonths();
-    const monthly = par30History[scope].map((par30Percent, index) => ({ month: months[index], par30Percent }));
-    const body: PortfolioRisk = {
-      scope,
-      asOf: balancesAsOf(),
-      ...portfolioRiskFigures[scope],
-      par30Percent: monthly[monthly.length - 1].par30Percent,
-      targetPercent: PAR30_TARGET_PERCENT,
-      monthly,
-      weekly: weeklySeries(monthly),
-    };
+    const user = currentDemoUser();
+    const filter = visibleTo(user);
+    const { monthly, weekly } = par30History(filter);
+    const body: PortfolioRisk = { scope: scopeOf(user), asOf: balancesAsOf(), ...riskNow(filter), targetPercent: PAR30_TARGET_PERCENT, monthly, weekly };
     return HttpResponse.json(body);
   }),
 
   http.get(`${API_BASE}/portfolio/arrears`, async () => {
     await delay(150);
-    const scope = scopeOf(currentDemoUser());
-    return HttpResponse.json<ArrearsBreakdown>({ scope, ...arrearsFigures[scope] });
+    const user = currentDemoUser();
+    return HttpResponse.json<ArrearsBreakdown>({ scope: scopeOf(user), ...arrears(visibleTo(user)) });
   }),
 
   http.get(`${API_BASE}/portfolio/early-warnings`, async ({ request }) => {
     await delay(150);
     const user = currentDemoUser();
-    const visible = earlyWarningSignals
-      .map((warning) => ({ warning, loan: loans.find((l) => l.id === warning.loanId)! }))
-      .filter(({ loan }) => canSeeRecord(user, loan.officerId));
+    const visible = earlyWarnings(visibleTo(user)).map((warning) => ({ warning, loan: loans.find((l) => l.id === warning.loanId)! }));
     const userTasks = tasksFor(user.id);
     const body: EarlyWarningList = {
       total: visible.length,
@@ -2013,8 +2058,9 @@ export const handlers = [
 
   http.get(`${API_BASE}/portfolio/summary`, async () => {
     await delay(120);
-    const summary = portfolioSummaries[currentDemoUser().id];
-    return summary ? HttpResponse.json<PortfolioSummary>(summary) : HttpResponse.json({ message: "No portfolio for this user." }, { status: 404 });
+    const user = currentDemoUser();
+    if (!officers.some((officer) => officer.id === user.id)) return HttpResponse.json({ message: "No portfolio for this user." }, { status: 404 });
+    return HttpResponse.json<PortfolioSummary>(officerSummary(user.id));
   }),
 
   http.get(`${API_BASE}/activity`, async ({ request }) => {
@@ -2058,20 +2104,8 @@ export const handlers = [
   http.get(`${API_BASE}/team/performance`, async () => {
     await delay(150);
     if (!seesBranch(currentDemoUser())) return HttpResponse.json({ message: "You can't view team performance." }, { status: 403 });
-    const body: OfficerPerformance[] = officers
-      .map((officer) => {
-        const officerTasks = tasksFor(officer.id);
-        return {
-          officerId: officer.id,
-          name: officer.name,
-          photoUrl: officer.photoUrl,
-          portfolioAmount: officer.portfolioAmount,
-          loanCount: officer.loanCount,
-          par30Percent: officer.par30Percent,
-          collectedToday: officerTasks.reduce((sum, task) => sum + ("amountPaid" in task ? task.amountPaid : 0), 0),
-          expectedToday: officer.expectedToday,
-        };
-      })
+    const body: OfficerPerformance[] = teamPerformance()
+      .map((officer) => ({ ...officer, collectedToday: tasksFor(officer.officerId).reduce((sum, task) => sum + ("amountPaid" in task ? task.amountPaid : 0), 0) }))
       .sort((a, b) => b.par30Percent - a.par30Percent);
     return HttpResponse.json(body);
   }),
@@ -2170,7 +2204,7 @@ export const handlers = [
     const paidOff = !!loan && loan.outstandingBalance <= 0;
     // What's overdue can't be more than what's left to pay; for a late loan that's what is due now
     const overdue = loan ? Math.min(loan.arrearsAmount ?? 0, loan.outstandingBalance) : 0;
-    const instalment = loan && terms ? nextPayment(terms, loan.outstandingBalance, loan.daysPastDue, Number(loan.id.replace(/\D/g, ""))) : null;
+    const instalment = loan && terms ? nextPayment(terms, loan.outstandingBalance) : null;
 
     return HttpResponse.json<BorrowerProfile>({
       id: borrower.id,
@@ -2184,7 +2218,7 @@ export const handlers = [
       registeredOn: borrower.registeredOn,
       officer: { id: borrower.officerId, name: officers.find((o) => o.id === borrower.officerId)?.name ?? "" },
       nextOfKin: details.nextOfKin,
-      work: details.work,
+      gender: details.gender,
       currentLoan:
         loan && terms && !paidOff
           ? {
@@ -2383,26 +2417,24 @@ export const handlers = [
     const kinPhone = body.nextOfKin ? normalisePhone(body.nextOfKin.phone ?? "") : null;
     if (!phone) return HttpResponse.json({ message: "The main phone must be a Ugandan mobile number, e.g. 0772 418 230." }, { status: 422 });
     if (body.secondaryPhone?.trim() && !secondaryPhone) return HttpResponse.json({ message: "The other phone must be a Ugandan mobile number." }, { status: 422 });
-    if (!body.area?.trim() || !body.premises?.trim()) return HttpResponse.json({ message: "Enter the area and the shop or premises." }, { status: 422 });
-    // Optional extras: next of kin needs a name and phone if given; income needs an amount if given
-    if (body.nextOfKin && (!body.nextOfKin.name?.trim() || !kinPhone)) return HttpResponse.json({ message: "Give the next of kin's name and a Ugandan mobile number, or leave next of kin empty." }, { status: 422 });
-    if (body.work?.income && !(body.work.income.amount > 0)) return HttpResponse.json({ message: "Enter the income as an amount above zero, or leave it empty." }, { status: 422 });
+    if (!body.area?.trim() || !body.premises?.trim()) return HttpResponse.json({ message: "Enter the address and the shop or premises." }, { status: 422 });
+    if (!["female", "male"].includes(body.gender)) return HttpResponse.json({ message: "Choose female or male." }, { status: 422 });
+    if (!body.nextOfKin?.name?.trim() || !kinPhone) return HttpResponse.json({ message: "Give the next of kin's name and a Ugandan mobile number." }, { status: 422 });
 
     const details = borrowerDetails.get(borrower.id)!;
-    const nextOfKin = body.nextOfKin && kinPhone ? { name: body.nextOfKin.name.trim(), relationship: body.nextOfKin.relationship?.trim() ?? "", phone: kinPhone } : null;
-    const work = { occupation: body.work?.occupation?.trim() || null, income: body.work?.income ? { amount: Math.round(body.work.income.amount), period: body.work.income.period } : null };
+    const nextOfKin = { name: body.nextOfKin.name.trim(), relationship: body.nextOfKin.relationship?.trim() ?? "", phone: kinPhone };
     const changed: string[] = [];
     if (secondaryPhone !== details.secondaryPhone) changed.push("other phone");
-    if (body.area.trim() !== borrower.area) changed.push("area");
+    if (body.area.trim() !== borrower.area) changed.push("address");
+    if (body.gender !== details.gender) changed.push("gender");
     if (body.premises.trim() !== details.premises) changed.push("shop / premises");
     if (JSON.stringify(nextOfKin) !== JSON.stringify(details.nextOfKin)) changed.push("next of kin");
-    if (JSON.stringify(work) !== JSON.stringify(details.work)) changed.push("work and income");
 
     details.secondaryPhone = secondaryPhone;
     borrower.area = body.area.trim();
     details.premises = body.premises.trim();
     details.nextOfKin = nextOfKin;
-    details.work = work;
+    details.gender = body.gender;
     const currentLoan = borrower.currentLoanId ? loans.find((l) => l.id === borrower.currentLoanId) : undefined;
     if (currentLoan) currentLoan.area = borrower.area;
     if (changed.length) {
@@ -2495,8 +2527,13 @@ export const handlers = [
       const text = value === null ? "" : String(value);
       return `"${(/^[=+\-@]/.test(text) ? `'${text}` : text).replace(/"/g, '""')}"`;
     };
+    const pdf = new URL(request.url).searchParams.get("format") === "pdf";
+    audit(user, `exported the ${report.name} report as ${pdf ? "PDF" : "CSV"} (${report.from} to ${report.to})`);
+    if (pdf)
+      return new HttpResponse(reportPdf(report, user), {
+        headers: { "Content-Type": "application/pdf", "Cache-Control": "no-store", "Content-Disposition": `attachment; filename="${report.name}-report.pdf"` },
+      });
     const rows = [report.table.columns.map((c) => c.label), ...[...report.table.rows, ...(report.table.total ? [report.table.total] : [])].map((row) => report.table.columns.map((c) => row[c.key] ?? null))];
-    audit(user, `exported the ${report.name} report (${report.from} to ${report.to})`);
     return new HttpResponse(rows.map((row) => row.map(cell).join(",")).join("\r\n"), {
       headers: { "Content-Type": "text/csv; charset=utf-8", "Cache-Control": "no-store", "Content-Disposition": `attachment; filename="${report.name}-report.csv"` },
     });
@@ -2510,7 +2547,7 @@ export const handlers = [
     const member = findStaff(user.id);
     const signIns = activityLog
       .filter((item) => item.actor.id === user.id && /^(signed in|failed sign-in)/.test(item.description))
-      .slice(0, 8)
+      .slice(0, 4)
       .map((item, index) => ({ at: item.at, device: index % 3 === 2 ? "Android phone · Kampala" : "Chrome on Windows · Kampala", success: item.description === "signed in" }));
     return HttpResponse.json<MyProfile>({
       id: user.id,
@@ -2605,7 +2642,11 @@ export const handlers = [
       .filter((member) => member.status === "active" && roles[member.roleId]?.permissions.includes("users.manage"))
       .map((member) => ({ name: member.name, phone: member.phone, email: member.email }));
     const { name, phone, email } = systemSettings.business;
-    return HttpResponse.json<SupportContacts>({ admins, business: { name, phone, email } });
+    return HttpResponse.json<SupportContacts>({
+      admins,
+      business: { name, phone, email },
+      technical: { name: "KadoshDev (technical support)", phones: ["+256 782 835 907"], email: "daniel@kadoshdev.com" },
+    });
   }),
 
   // ---------- Settings: system settings and loan products ----------
@@ -2724,6 +2765,7 @@ export const handlers = [
     if (!EMAIL_PATTERN.test(email)) return invalid("Enter a valid email address.");
     if (!phone) return invalid("Enter a Ugandan mobile number, e.g. 0772 123 456.");
     if (!roles[body.roleId]) return invalid("Choose a role.");
+    if (!systemSettings.business.branches.includes(body.branch)) return invalid("Choose a market.");
     const taken = staff.find((member) => member.email.toLowerCase() === email);
     if (taken) return HttpResponse.json({ message: `${taken.name} already uses this email${taken.status === "deactivated" ? " (switched off). Turn their account back on instead" : ""}.` }, { status: 409 });
     const member: MockStaff = {
@@ -2732,7 +2774,7 @@ export const handlers = [
       email,
       phone,
       photoUrl: null,
-      branch: user.branch,
+      branch: body.branch,
       roleId: body.roleId,
       status: "invited",
       lastSignInAt: null,
@@ -2740,7 +2782,7 @@ export const handlers = [
       deactivated: null,
     };
     staff.push(member);
-    audit(user, `invited ${name} as ${roles[body.roleId].name}`);
+    audit(user, `invited ${name} as ${roles[body.roleId].name} (${body.branch})`);
     return HttpResponse.json(staffMember(member), { status: 201 });
   }),
 
@@ -2786,6 +2828,21 @@ export const handlers = [
     const before = roles[member.roleId]?.name ?? "no role";
     member.roleId = roleId;
     audit(user, `changed ${member.name}'s role from ${before} to ${role.name}`, [{ label: "Role", value: `${before} → ${role.name}` }]);
+    return HttpResponse.json(staffMember(member));
+  }),
+
+  http.put(`${API_BASE}/staff/:staffId/branch`, async ({ params, request }) => {
+    await delay(250);
+    const user = currentDemoUser();
+    if (!hasPermission(user, "users.manage")) return forbidden("You can't change staff details.");
+    const member = findStaff(String(params.staffId));
+    if (!member || member.status === "deactivated") return notFound("That person wasn't found.");
+    const { branch } = (await request.json()) as { branch: string };
+    if (!systemSettings.business.branches.includes(branch)) return invalid("Choose a market.");
+    if (member.branch === branch) return HttpResponse.json(staffMember(member));
+    const before = member.branch;
+    member.branch = branch;
+    audit(user, `moved ${member.name} to the ${branch} market (was ${before})`, [{ label: "Market", value: `${before} → ${branch}` }]);
     return HttpResponse.json(staffMember(member));
   }),
 
@@ -2842,7 +2899,7 @@ export const handlers = [
     roles[id] = { id, name: body.name.trim(), description: body.description.trim(), builtIn: false, dataScope: body.dataScope === "own" ? "own" : "branch", permissions: cleanPermissions(body.permissions) };
     if (roles[id].dataScope === "own" && roles[id].permissions.some((p) => p.startsWith("users.") || p.startsWith("roles.") || p.startsWith("settings."))) {
       delete roles[id];
-      return invalid("Roles that manage staff, roles or settings must see the whole branch.");
+      return invalid("Roles that manage staff, roles or settings must see the whole market.");
     }
     audit(user, `created the role ${roles[id].name}`);
     return HttpResponse.json({ ...roles[id], userCount: 0 }, { status: 201 });
@@ -2866,7 +2923,7 @@ export const handlers = [
     const added = permissions.filter((p) => !role.permissions.includes(p));
     const removed = role.permissions.filter((p) => !permissions.includes(p));
     const dataScope = body.dataScope === "own" ? "own" : "branch";
-    if (dataScope === "own" && permissions.some((p) => p.startsWith("users.") || p.startsWith("roles.") || p.startsWith("settings."))) return invalid("Roles that manage staff, roles or settings must see the whole branch.");
+    if (dataScope === "own" && permissions.some((p) => p.startsWith("users.") || p.startsWith("roles.") || p.startsWith("settings."))) return invalid("Roles that manage staff, roles or settings must see the whole market.");
     Object.assign(role, { name: body.name.trim(), description: body.description.trim(), dataScope, permissions });
     audit(user, `changed the role ${role.name}${added.length ? `; added ${added.join(", ")}` : ""}${removed.length ? `; removed ${removed.join(", ")}` : ""}`);
     return HttpResponse.json({ ...role, userCount: staff.filter((member) => member.roleId === role.id && member.status !== "deactivated").length });
@@ -2896,6 +2953,7 @@ export const handlers = [
     await delay(120);
     const user = currentDemoUser();
     const scope = seesBranch(user) ? "branch" : "own";
-    return HttpResponse.json<RiskSummary>({ scope, ...riskSummaries[scope], targetPercent: PAR30_TARGET_PERCENT });
+    const risk = riskNow(visibleTo(user));
+    return HttpResponse.json<RiskSummary>({ scope, par30Percent: risk.par30Percent, loansOver30Days: risk.loansOver30Days, targetPercent: PAR30_TARGET_PERCENT });
   }),
 ];

@@ -121,3 +121,62 @@
   white-space: nowrap;
 }
 
+
+/* Gender (and other short choices) */
+.choiceField {
+  margin: 18px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.choiceField legend {
+  margin-bottom: 6px;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--color-surface-subtle);
+}
+
+.choices label {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 44px;
+  border-radius: 9px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.choices input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.choices label:has(input:focus-visible) {
+  outline: 2px solid var(--color-primary);
+}
+
+.choices .choiceSelected {
+  background: var(--color-surface);
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.12);
+  color: var(--color-primary);
+}
+
+.groupHeading {
+  margin: 26px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+}

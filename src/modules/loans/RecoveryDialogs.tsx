@@ -4,7 +4,7 @@ import { useReturnFromRecovery, useSendToRecovery } from "../../api/loans";
 import type { RecoveryReason } from "../../api/types";
 import { Dialog, Field, RadioOption } from "../../components/ui/Dialog";
 import { useToast } from "../../components/ui/Toast";
-import { formatUGX } from "../../lib/format";
+import { formatUGX, dayCount } from "../../lib/format";
 import styles from "./RecoveryDialogs.module.css";
 
 const REASONS: { value: RecoveryReason; label: string; description: string }[] = [
@@ -45,7 +45,7 @@ export function SendToRecoveryDialog({ loan, onClose }: { loan: LoanSummary; onC
   return (
     <Dialog
       title={`Send ${loan.id} to recovery`}
-      subtitle={`${loan.borrowerName} · ${formatUGX(loan.balance)} to pay${loan.daysPastDue > 0 ? ` · ${loan.daysPastDue} days late` : ""}`}
+      subtitle={`${loan.borrowerName} · ${formatUGX(loan.balance)} to pay${loan.daysPastDue > 0 ? ` · ${dayCount(loan.daysPastDue)} late` : ""}`}
       submitLabel="Send to recovery"
       submittingLabel="Sending…"
       submitting={send.isPending}

@@ -92,7 +92,7 @@ export function UsersSection() {
               <tr>
                 <th>NAME</th>
                 <th>ROLE</th>
-                <th>{status === "active" ? "LAST SIGNED IN" : status === "invited" ? "INVITE" : "SWITCHED OFF"}</th>
+                {status !== "active" && <th>{status === "invited" ? "INVITE" : "SWITCHED OFF"}</th>}
                 <th className={styles.actionsHeading}>
                   <span className="sr-only">Actions</span>
                 </th>
@@ -117,18 +117,22 @@ export function UsersSection() {
                     </td>
                     <td className={styles.role}>
                       {member.role.name}
-                      <span className={styles.secondary}>{member.phone}</span>
+                      <span className={styles.secondary}>
+                        {member.branch} · {member.phone}
+                      </span>
                     </td>
-                    <td className={styles.when}>
-                      <StatusDetail member={member} />
-                    </td>
+                    {status !== "active" && (
+                      <td className={styles.when}>
+                        <StatusDetail member={member} />
+                      </td>
+                    )}
                     <td className={styles.actions}>
                       {!canManage ? null : isYou ? (
                         <span className={styles.secondary}>Ask another admin to change your account</span>
                       ) : member.status === "active" ? (
                         <>
-                          <button type="button" className={styles.textButton} onClick={() => setDialog({ kind: "role", member })} aria-label={`Change ${member.name}'s role`}>
-                            Change role
+                          <button type="button" className={styles.textButton} onClick={() => setDialog({ kind: "role", member })} aria-label={`Change ${member.name}'s role or market`}>
+                            Role & market
                           </button>
                           <button type="button" className={`${styles.textButton} ${styles.textButtonDanger}`} onClick={() => setDialog({ kind: "deactivate", member })} aria-label={`Switch off ${member.name}'s account`}>
                             Switch off
@@ -166,8 +170,6 @@ export function UsersSection() {
   );
 }
 
-const capitalise = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
-
 /** "2 days", "5 hours" (rounded up) until a future time */
 function timeLeft(iso: string) {
   const hours = Math.max(1, Math.ceil((new Date(iso).getTime() - Date.now()) / 3_600_000));
@@ -198,7 +200,7 @@ function StatusDetail({ member }: { member: StaffMember }) {
         <span className={styles.secondary}>by {member.deactivated.by}</span>
       </>
     );
-  return <>{member.lastSignInAt ? capitalise(formatRelativeDay(member.lastSignInAt)) : "Never"}</>;
+  return null;
 }
 
 /**

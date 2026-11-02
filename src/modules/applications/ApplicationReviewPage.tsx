@@ -19,7 +19,7 @@ const STATUS_LABEL = { draft: "Draft", "awaiting-borrower": "Waiting for borrowe
 
 const CHECKS = [
   { key: "signedPdfMatchesDetails", label: "The signed PDF matches the details: borrower, amount, payments and both guarantors" },
-  { key: "idCopyMatchesNin", label: "The National ID copy matches the borrower's name and NIN" },
+  { key: "idCopyMatchesNin", label: "The National ID copies (in the signed PDF, or the photos) match the names and NINs" },
   { key: "guarantorsSigned", label: "The borrower and both guarantors signed (agreement and both consents)" },
 ] as const;
 type CheckKey = (typeof CHECKS)[number]["key"];
@@ -149,7 +149,7 @@ export function ApplicationReviewPage() {
                   <Row key={index} label={`Guarantor ${index + 1}`}>
                     {guarantor.name}
                     <span className={styles.hint}>
-                      ID {guarantor.nationalIdMasked} · {guarantor.phone}
+                      {guarantor.relationship ? `${guarantor.relationship} · ` : ""}ID {guarantor.nationalIdMasked} · {guarantor.phone}
                     </span>
                   </Row>
                 ))}
@@ -159,27 +159,35 @@ export function ApplicationReviewPage() {
             )}
           </Card>
 
-          <Card title="National ID copy">
-            <div className={styles.idCopies}>
-              {(["idFront", "idBack"] as const).map((side) => {
-                const file = a.documents[side];
-                const label = side === "idFront" ? "Front" : "Back";
-                return file ? (
-                  <button key={side} type="button" className={styles.idButton} onClick={() => setViewing({ title: `National ID · ${label.toLowerCase()}`, document: file, isForm: false })}>
-                    <Icon name="image" size={18} strokeWidth={1.8} />
-                    <span>
-                      <b>View {label.toLowerCase()}</b>
-                      <small>{describeFile(file)}</small>
+          {/* Paper applications: the ID copy is in the signed PDF. Online ones have photos. */}
+          {(a.documents.idFront || a.documents.idBack || a.route === "online") && (
+            <Card title="National ID photos">
+              <div className={styles.idCopies}>
+                {(["idFront", "idBack"] as const).map((side) => {
+                  const file = a.documents[side];
+                  const label = side === "idFront" ? "Front" : "Back";
+                  return file ? (
+                    <button
+                      key={side}
+                      type="button"
+                      className={styles.idButton}
+                      onClick={() => setViewing({ title: `National ID · ${label.toLowerCase()}`, document: file, isForm: false })}
+                    >
+                      <Icon name="image" size={18} strokeWidth={1.8} />
+                      <span>
+                        <b>View {label.toLowerCase()}</b>
+                        <small>{describeFile(file)}</small>
+                      </span>
+                    </button>
+                  ) : (
+                    <span key={side} className={styles.idMissing}>
+                      {label}: not uploaded
                     </span>
-                  </button>
-                ) : (
-                  <span key={side} className={styles.idMissing}>
-                    {label}: not uploaded
-                  </span>
-                );
-              })}
-            </div>
-          </Card>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
         </div>
 
         <div className={styles.column}>
@@ -217,7 +225,9 @@ function StatusBanner({ application: a }: { application: ApplicationDetail }) {
       <p className={`${styles.banner} ${styles.bannerWarning}`} role="note">
         <Icon name="warning" size={17} strokeWidth={1.9} />
         <span>
-          <b>Sent back by {a.returned.by}, {formatRelativeDay(a.returned.at)}: {a.returned.reason}.</b>
+          <b>
+            Sent back by {a.returned.by}, {formatRelativeDay(a.returned.at)}: {a.returned.reason}.
+          </b>
           {a.returned.note && <> {a.returned.note}</>}
         </span>
       </p>
@@ -228,7 +238,9 @@ function StatusBanner({ application: a }: { application: ApplicationDetail }) {
       <p className={`${styles.banner} ${styles.bannerDanger}`} role="note">
         <Icon name="warning" size={17} strokeWidth={1.9} />
         <span>
-          <b>Rejected by {a.returned.by}, {formatRelativeDay(a.returned.at)}: {a.returned.reason}.</b>
+          <b>
+            Rejected by {a.returned.by}, {formatRelativeDay(a.returned.at)}: {a.returned.reason}.
+          </b>
           {a.returned.note && <> {a.returned.note}</>}
         </span>
       </p>
@@ -239,7 +251,10 @@ function StatusBanner({ application: a }: { application: ApplicationDetail }) {
       <p className={`${styles.banner} ${styles.bannerSuccess}`} role="note">
         <Icon name="check" size={17} strokeWidth={2.2} />
         <span>
-          <b>Approved by {a.decided.by}, {formatRelativeDay(a.decided.at)}.</b> Ready to be paid out to {a.borrowerDetails?.phone ?? "the borrower's mobile money number"}.
+          <b>
+            Approved by {a.decided.by}, {formatRelativeDay(a.decided.at)}.
+          </b>{" "}
+          Ready to be paid out to {a.borrowerDetails?.phone ?? "the borrower's mobile money number"}.
         </span>
       </p>
     );

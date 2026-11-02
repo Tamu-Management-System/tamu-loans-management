@@ -92,7 +92,7 @@ export function PaymentsPage() {
       <div className={styles.header}>
         <div>
           <h1>Payments</h1>
-          <p className={styles.subtitle}>{branchWide ? "Repayments across the branch" : "Repayments from your borrowers"}</p>
+          <p className={styles.subtitle}>{branchWide ? "Repayments across the market" : "Repayments from your borrowers"}</p>
         </div>
         {can("payments.record") && <Button onClick={() => setRecording(true)}>Record payment</Button>}
       </div>

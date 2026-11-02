@@ -31,7 +31,7 @@ interface PortfolioSectionProps {
 }
 
 /**
- * "My portfolio" for loan officers, "Branch portfolio" for admins. Risk cards (PAR30, arrears,
+ * "My portfolio" for loan officers, "Market portfolio" for admins. Risk cards (PAR30, arrears,
  * early warnings) belong to the arrears engine (Module 3) and stay under "Coming soon" for the MVP.
  */
 export function PortfolioSection({ announce }: PortfolioSectionProps) {
@@ -46,12 +46,12 @@ export function PortfolioSection({ announce }: PortfolioSectionProps) {
   if (!isOfficer && !isAdmin) return null;
 
   const asOf = risk.data ? `Balances as of ${formatTime(risk.data.asOf)} today · ` : "";
-  const scopeNote = risk.data ? (isOfficer ? `your ${risk.data.loanCount} loans` : `all ${risk.data.loanCount} loans in the branch`) : "";
+  const scopeNote = risk.data ? (isOfficer ? `your ${risk.data.loanCount} loans` : `all ${risk.data.loanCount} loans in the market`) : "";
 
   return (
     <section id={PORTFOLIO_SECTION_ID} aria-labelledby="portfolio-heading">
       <div className={styles.sectionHeader}>
-        <h2 id="portfolio-heading">{isOfficer ? "My portfolio" : "Branch portfolio"}</h2>
+        <h2 id="portfolio-heading">{isOfficer ? "My portfolio" : "Market portfolio"}</h2>
         <span className={styles.sectionNote}>
           {asOf}
           {scopeNote}

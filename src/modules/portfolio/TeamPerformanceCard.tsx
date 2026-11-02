@@ -13,7 +13,7 @@ export function TeamPerformanceCard({ officers, targetPercent }: { officers: Off
   return (
     <div className={`${shared.card} ${styles.card}`}>
       <h3 className={shared.cardTitle}>Team performance</h3>
-      <p className={shared.cardSubtitle}>Whole branch, highest PAR30 first</p>
+      <p className={shared.cardSubtitle}>Whole market, highest PAR30 first</p>
       <table className={styles.table}>
         <thead>
           <tr>

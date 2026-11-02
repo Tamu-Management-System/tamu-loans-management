@@ -61,7 +61,7 @@ export function ProfilePage() {
                   </dd>
                 </div>
                 <div>
-                  <dt>Branch</dt>
+                  <dt>Market</dt>
                   <dd>{profile.branch}</dd>
                 </div>
               </dl>

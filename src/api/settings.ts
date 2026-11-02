@@ -45,6 +45,11 @@ export function useChangeStaffRole() {
   return useMutation({ mutationFn: ({ staffId, roleId }: { staffId: string; roleId: string }) => api.put<StaffMember>(staffPath(staffId, "/role"), { roleId }), onSuccess: refresh });
 }
 
+export function useChangeStaffBranch() {
+  const refresh = useRefreshSettings();
+  return useMutation({ mutationFn: ({ staffId, branch }: { staffId: string; branch: string }) => api.put<StaffMember>(staffPath(staffId, "/branch"), { branch }), onSuccess: refresh });
+}
+
 /** Switches an account off. Their borrowers may move to someone else, so every list is refreshed. */
 export function useDeactivateStaff() {
   const queryClient = useQueryClient();

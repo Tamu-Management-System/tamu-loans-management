@@ -91,7 +91,7 @@ export function HelpPage() {
           <div className={styles.cardHeader}>
             <h2 id="contact-heading">Contact</h2>
           </div>
-          <p className={styles.text}>For your account, roles or anything not working, ask an admin.</p>
+          <p className={styles.text}>For your account and roles, ask an admin. For technical problems, contact KadoshDev.</p>
           <ul className={styles.contacts}>
             {contacts?.admins.map((admin) => (
               <li key={admin.email}>
@@ -101,6 +101,18 @@ export function HelpPage() {
                 <a href={`mailto:${admin.email}`}>{admin.email}</a>
               </li>
             ))}
+            {contacts && (
+              <li>
+                <b>{contacts.technical.name}</b>
+                <span className={styles.hint}>If something in the system isn't working</span>
+                {contacts.technical.phones.map((number) => (
+                  <a key={number} href={`tel:${number.replace(/\s/g, "")}`}>
+                    {number}
+                  </a>
+                ))}
+                <a href={`mailto:${contacts.technical.email}`}>{contacts.technical.email}</a>
+              </li>
+            )}
             {contacts && (
               <li>
                 <b>{contacts.business.name}</b>

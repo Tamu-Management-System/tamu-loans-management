@@ -1,23 +1,26 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useParams } from "react-router";
 import { ApiError } from "../../api/client";
-import { useOnlineApplicationForm, useSubmitOnlineApplication } from "../../api/onlineApplication";
-import type { OnlineApplicationForm } from "../../api/types";
+import { useOnlineApplicationForm, useSubmitOnlineApplication, type OnlineApplicationUpload } from "../../api/onlineApplication";
+import type { GuarantorDetails, OnlineApplicationForm } from "../../api/types";
 import { Button } from "../../components/ui/Button";
 import { Icon, TamuLogoMark } from "../../components/ui/Icon";
 import { formatLongDate, formatUGX } from "../../lib/format";
 import { normalisePhone } from "../../lib/phone";
 import {
   borrowerErrors,
+  EMPTY_BORROWER,
+  EMPTY_GUARANTOR,
+  guarantorErrors,
   normaliseNationalId,
-  personErrors,
   sameAsError,
   type BorrowerDraft,
   type FieldErrors,
+  type GuarantorDraft,
   type PersonDraft,
 } from "../applications/applicationValidation";
 import { AgreementWording, ConsentWording } from "./FormWording";
-import { PersonFields, TextField } from "../applications/ApplicationFields";
+import { BorrowerExtraFields, GuarantorFields, PersonFields } from "../applications/ApplicationFields";
 import { IdPhotoInput, type IdPhoto } from "../applications/IdPhotoInput";
 import { SignaturePad, type DrawnSignature } from "./SignaturePad";
 import styles from "./OnlineApplication.module.css";
@@ -30,8 +33,8 @@ const NUMBERED_STEPS: { step: Step; label: string }[] = [
   { step: "sign", label: "Review and sign" },
 ];
 const FREQUENCY = { daily: "Daily", weekly: "Weekly", monthly: "Monthly" } as const;
-const EMPTY_PERSON: PersonDraft = { fullName: "", nationalId: "", phone: "" };
 type Signer = "borrower" | "guarantor1" | "guarantor2";
+type GuarantorIdPhotos = { front: IdPhoto | null; back: IdPhoto | null };
 
 const LINK_PROBLEMS: Record<string, { title: string; text: string }> = {
   invalid: { title: "This link isn't valid", text: "Check that you opened the whole link, or ask your loan officer to send it again." },
@@ -95,10 +98,12 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
   const submit = useSubmitOnlineApplication(token);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const [step, setStep] = useState<Step>("welcome");
-  const [borrower, setBorrower] = useState<BorrowerDraft>({ ...EMPTY_PERSON, premises: "", area: "" });
-  const [guarantors, setGuarantors] = useState<[PersonDraft, PersonDraft]>([{ ...EMPTY_PERSON }, { ...EMPTY_PERSON }]);
+  const [borrower, setBorrower] = useState<BorrowerDraft>(EMPTY_BORROWER);
+  const [guarantors, setGuarantors] = useState<[GuarantorDraft, GuarantorDraft]>([{ ...EMPTY_GUARANTOR }, { ...EMPTY_GUARANTOR }]);
   const [idFront, setIdFront] = useState<IdPhoto | null>(null);
   const [idBack, setIdBack] = useState<IdPhoto | null>(null);
+  // Each guarantor's National ID, front and back
+  const [guarantorIds, setGuarantorIds] = useState<[GuarantorIdPhotos, GuarantorIdPhotos]>([{ front: null, back: null }, { front: null, back: null }]);
   const [agreed, setAgreed] = useState<Record<Signer, boolean>>({ borrower: false, guarantor1: false, guarantor2: false });
   const [signatures, setSignatures] = useState<Record<Signer, DrawnSignature | null>>({ borrower: null, guarantor1: null, guarantor2: null });
   const [showErrors, setShowErrors] = useState(false);
@@ -106,7 +111,7 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
 
   // Free the ID photo previews when the form closes
   const photos = useRef<(IdPhoto | null)[]>([]);
-  photos.current = [idFront, idBack];
+  photos.current = [idFront, idBack, ...guarantorIds.flatMap((ids) => [ids.front, ids.back])];
   useEffect(() => () => photos.current.forEach((photo) => photo && URL.revokeObjectURL(photo.previewUrl)), []);
 
   // Warn before leaving with details filled in (nothing is saved until it's submitted)
@@ -133,16 +138,17 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
   // ----- Errors per step -----
   const borrowerFieldErrors: FieldErrors<BorrowerDraft> = borrowerErrors(borrower);
   const photoErrors = { front: idFront ? undefined : "Take a photo of the front of your National ID.", back: idBack ? undefined : "Take a photo of the back of your National ID." };
+  const guarantorPhotoErrors = guarantorIds.map((ids) => ({ front: ids.front ? undefined : "Take a photo of the front of their National ID.", back: ids.back ? undefined : "Take a photo of the back of their National ID." }));
   const guarantorFieldErrors = guarantors.map((guarantor, index) => {
-    const errors = personErrors(guarantor);
+    const errors = guarantorErrors(guarantor);
     const others = [{ nationalId: borrower.nationalId, who: "the borrower" }, ...(index === 1 ? [{ nationalId: guarantors[0].nationalId, who: "guarantor 1" }] : [])];
     const duplicate = sameAsError(guarantor.nationalId, others);
     return duplicate && !errors.nationalId ? { ...errors, nationalId: duplicate } : errors;
   });
   const stepValid = {
     borrower: Object.keys(borrowerFieldErrors).length === 0 && !photoErrors.front && !photoErrors.back,
-    guarantor1: Object.keys(guarantorFieldErrors[0]).length === 0,
-    guarantor2: Object.keys(guarantorFieldErrors[1]).length === 0,
+    guarantor1: Object.keys(guarantorFieldErrors[0]).length === 0 && !guarantorPhotoErrors[0].front && !guarantorPhotoErrors[0].back,
+    guarantor2: Object.keys(guarantorFieldErrors[1]).length === 0 && !guarantorPhotoErrors[1].front && !guarantorPhotoErrors[1].back,
     sign: (["borrower", "guarantor1", "guarantor2"] as Signer[]).every((signer) => agreed[signer] && signatures[signer]),
   };
 
@@ -156,16 +162,28 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
   };
 
   const send = () => {
-    if (!stepValid.sign || !idFront || !idBack) {
+    if (!stepValid.sign || !idFront || !idBack || guarantorIds.some((ids) => !ids.front || !ids.back)) {
       setShowErrors(true);
       return;
     }
     const clean = (person: PersonDraft): PersonDraft => ({ fullName: person.fullName.trim().replace(/\s+/g, " "), nationalId: normaliseNationalId(person.nationalId), phone: normalisePhone(person.phone)! });
+    const cleanGuarantor = (guarantor: GuarantorDraft): GuarantorDetails => ({ ...clean(guarantor), relationship: guarantor.relationship.trim() });
     submit.mutate(
       {
-        details: { borrower: { ...clean(borrower), premises: borrower.premises.trim(), area: borrower.area.trim() }, guarantors: [clean(guarantors[0]), clean(guarantors[1])] },
+        details: {
+          borrower: {
+            ...clean(borrower),
+            gender: borrower.gender || "female",
+            secondaryPhone: normalisePhone(borrower.secondaryPhone),
+            area: borrower.area.trim(),
+            premises: borrower.premises.trim(),
+            nextOfKin: { name: borrower.kinName.trim().replace(/\s+/g, " "), phone: normalisePhone(borrower.kinPhone)! },
+          },
+          guarantors: [cleanGuarantor(guarantors[0]), cleanGuarantor(guarantors[1])],
+        },
         idFront: idFront.blob,
         idBack: idBack.blob,
+        guarantorIds: guarantorIds.map((ids) => ({ front: ids.front!.blob, back: ids.back!.blob })) as OnlineApplicationUpload["guarantorIds"],
         signatures: { borrower: signatures.borrower!.blob, guarantor1: signatures.guarantor1!.blob, guarantor2: signatures.guarantor2!.blob },
       },
       {
@@ -227,7 +245,7 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
         <h2 className={styles.subheading}>You will need</h2>
         <ul className={styles.checklist}>
           <li>Your National ID card, to take photos of both sides</li>
-          <li>Your two guarantors with you, to give their details and sign</li>
+          <li>Your two guarantors with you, with their National ID cards, to give their details and sign</li>
           <li>About 10 minutes</li>
         </ul>
         <Button className={styles.primaryButton} onClick={() => goTo("borrower")}>
@@ -279,8 +297,7 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
         </h1>
         <p className={styles.lead}>As on your National ID. The loan is paid to your phone number.</p>
         <PersonFields person={borrower} onChange={(changes) => setBorrower((current) => ({ ...current, ...changes }))} errors={errors} phoneLabel="Phone number (mobile money)" />
-        <TextField label="Shop / premises / building / arcade" value={borrower.premises} onChange={(premises) => setBorrower((current) => ({ ...current, premises }))} error={errors.premises} hint="Where you work, e.g. Kikuubo Lane, Shop 14" />
-        <TextField label="Area" value={borrower.area} onChange={(area) => setBorrower((current) => ({ ...current, area }))} error={errors.area} />
+        <BorrowerExtraFields borrower={borrower} onChange={(changes) => setBorrower((current) => ({ ...current, ...changes }))} errors={errors} you />
         <h2 className={styles.subheading}>Photos of your National ID</h2>
         <p className={styles.hint}>Place the card on a flat surface in good light, with all four corners showing.</p>
         <div className={styles.photoPair}>
@@ -295,9 +312,15 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
   if (step === "guarantor1" || step === "guarantor2") {
     const index = step === "guarantor1" ? 0 : 1;
     const errors = showErrors ? guarantorFieldErrors[index] : {};
-    const update = (changes: Partial<PersonDraft>) =>
+    const setId = (side: "front" | "back", photo: IdPhoto | null) =>
+      setGuarantorIds((current) => {
+        const copy: [GuarantorIdPhotos, GuarantorIdPhotos] = [{ ...current[0] }, { ...current[1] }];
+        copy[index] = { ...copy[index], [side]: photo };
+        return copy;
+      });
+    const update = (changes: Partial<GuarantorDraft>) =>
       setGuarantors((current) => {
-        const copy: [PersonDraft, PersonDraft] = [{ ...current[0] }, { ...current[1] }];
+        const copy: [GuarantorDraft, GuarantorDraft] = [{ ...current[0] }, { ...current[1] }];
         copy[index] = { ...copy[index], ...changes };
         return copy;
       });
@@ -308,7 +331,12 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
           Guarantor {index + 1}
         </h1>
         <p className={styles.lead}>A guarantor agrees to pay the loan if you don't. They will sign on this phone at the end.</p>
-        <PersonFields person={guarantors[index]} onChange={update} errors={errors} phoneLabel="Phone number" />
+        <GuarantorFields guarantor={guarantors[index]} onChange={update} errors={errors} />
+        <h2 className={styles.subheading}>Photos of their National ID</h2>
+        <div className={styles.photoPair}>
+          <IdPhotoInput label="Front" value={guarantorIds[index].front} onChange={(photo) => setId("front", photo)} error={showErrors ? guarantorPhotoErrors[index].front : undefined} />
+          <IdPhotoInput label="Back" value={guarantorIds[index].back} onChange={(photo) => setId("back", photo)} error={showErrors ? guarantorPhotoErrors[index].back : undefined} />
+        </div>
         <StepActions onBack={() => goTo(index === 0 ? "borrower" : "guarantor1")} onNext={() => next(step, index === 0 ? "guarantor2" : "sign")} />
       </section>
     );
@@ -347,9 +375,9 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
       <p className={styles.lead}>Check the details. If something is wrong, go back and fix it before signing.</p>
 
       <dl className={styles.review}>
-        <ReviewPerson title="You" person={borrower} extra={`${borrower.premises} · ${borrower.area}`} onEdit={() => goTo("borrower")} />
-        <ReviewPerson title="Guarantor 1" person={guarantors[0]} onEdit={() => goTo("guarantor1")} />
-        <ReviewPerson title="Guarantor 2" person={guarantors[1]} onEdit={() => goTo("guarantor2")} />
+        <ReviewPerson title="You" person={borrower} extra={`${borrower.gender === "male" ? "Male" : "Female"} · ${borrower.area} · ${borrower.premises} · Next of kin ${borrower.kinName}`} onEdit={() => goTo("borrower")} />
+        <ReviewPerson title="Guarantor 1" person={guarantors[0]} extra={`${guarantors[0].relationship} · ID photos added`} onEdit={() => goTo("guarantor1")} />
+        <ReviewPerson title="Guarantor 2" person={guarantors[1]} extra={`${guarantors[1].relationship} · ID photos added`} onEdit={() => goTo("guarantor2")} />
       </dl>
 
       {signBlock("borrower", borrower.fullName, "Borrower", "I have read and agree to this payment agreement.", <AgreementWording form={form} borrower={borrower} guarantors={guarantors} />)}

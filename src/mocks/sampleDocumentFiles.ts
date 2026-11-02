@@ -158,10 +158,12 @@ interface FormLoan {
   amount: number;
   dateBorrowed: string;
   schedule: "daily" | "weekly" | "monthly";
-  guarantors: { name: string; nin: string; phone: string }[];
+  guarantors: { name: string; nin: string; phone: string; relationship?: string | null }[];
   /** Set when the officer chose the dates (new applications); otherwise worked out from the frequency */
   firstPaymentOn?: string;
   lastPaymentOn?: string;
+  /** The loan product's interest (older forms: 18% of the amount) */
+  pricing?: { interestRatePercent: number; interestPer: "loan" | "day" | "week" | "month" };
 }
 
 const TERM_DAYS = { daily: 120, weekly: 182, monthly: 182 };
@@ -185,7 +187,7 @@ function agreementPage({ borrower, forms, signedOn, signedOnline, signatures }: 
     ...paragraph(`I, ${borrower.name} ("Payee"), borrowed ${ugx(forms.amount)} (${amountInWords(forms.amount)}) from TAMU SERVICES UGANDA ("Promisor") on ${longDate(forms.dateBorrowed)}. By signing this agreement both Payee and Promisor acknowledge that Payee will pay back Promisor using the following payment schedule.`, 18),
     { text: `Payment Frequency: ${FREQUENCY[forms.schedule]}`, size: 10, gap: 20 },
     { text: "Payment deposit details: C/O TAMU SERVICES UGANDA (Promisor)", size: 10 },
-    ...paragraph(`The payee agrees to repay the Promisor an Interest of 18% Administration charge. The repayments will commence on ${longDate(firstPayment)}, till maturity. The last payment will be made on ${longDate(lastPayment)}, inclusive of Charge and Principal plus any other accrued charges, at which time the loan will be fully repaid. All payments to be made via TAMU SERVICES Merchant Codes as provided.`),
+    ...paragraph(`The payee agrees to repay the Promisor an Interest of ${forms.pricing ? `${forms.pricing.interestRatePercent}%${forms.pricing.interestPer === "loan" ? "" : ` per ${forms.pricing.interestPer}`}` : "18%"} Administration charge. The repayments will commence on ${longDate(firstPayment)}, till maturity. The last payment will be made on ${longDate(lastPayment)}, inclusive of Charge and Principal plus any other accrued charges, at which time the loan will be fully repaid. All payments to be made via TAMU SERVICES Merchant Codes as provided.`),
     ...paragraph("FAILURE TO MAKE PAYMENT ON AGREED TIMELINES OUR RECOVERY / LEGAL TEAM WILL BE NOTIFIED TO EFFECT RECOVERY MEASURES AS NECESSARY AND IMMEDIATELY."),
     ...paragraph("Recovery charges will be added as determined by the recovery team to help recover the defaulted amount and the same will be paid by the defaulter at time of recovery. Both the payee and promisor agree on the charges as stated above."),
     { text: `Signing Date: ${longDate(signedOn)}`, size: 10, gap: 24 },
@@ -193,7 +195,7 @@ function agreementPage({ borrower, forms, signedOn, signedOnline, signatures }: 
     ...(signatures ? [{ image: signatures.borrower, height: 40 }] : []),
     ...forms.guarantors.flatMap((g, index) => [
       { text: `Guarantor-${index + 1} Name: ${g.name}`, size: 10, gap: index === 0 ? 24 : 18 },
-      { text: `ID.No. ${g.nin}     Phone no. ${g.phone}     Sign: ${signedOnline ? "signed online (see consent)" : "signed on paper"}`, size: 10 },
+      { text: `ID.No. ${g.nin}     Phone no. ${g.phone}${g.relationship ? `     Relationship: ${g.relationship}` : ""}     Sign: ${signedOnline ? "signed online (see consent)" : "signed on paper"}`, size: 10 },
     ]),
   ];
 }

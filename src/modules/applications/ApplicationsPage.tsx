@@ -77,7 +77,7 @@ export function ApplicationsPage() {
       <div className={styles.header}>
         <div>
           <h1>Applications</h1>
-          <p className={styles.subtitle}>{branchWide ? "Every application in the branch" : "Your applications"}</p>
+          <p className={styles.subtitle}>{branchWide ? "Every application in the market" : "Your applications"}</p>
         </div>
         {can("applications.create") && (
           <Link to="/applications/new" className={styles.newApplication}>

@@ -239,7 +239,9 @@ export function BusinessSection() {
                 ? "Add at least one payout account."
                 : business!.payoutAccounts.some((account) => !normalisePhone(account.number) || !account.accountName.trim())
                   ? "Each payout account needs a valid mobile money number and name."
-                  : null
+                  : business!.branches.length === 0 || business!.branches.some((market) => market.trim().length < 2)
+                    ? "Add at least one market, each with a name."
+                    : null
       }
     >
       {business && (
@@ -289,6 +291,27 @@ export function BusinessSection() {
             ))}
             <button type="button" className={styles.addButton} onClick={() => draft.set("payoutAccounts", [...business.payoutAccounts, { method: "MTN MoMo", number: "", accountName: business.name }])}>
               + Add payout account
+            </button>
+          </SettingsGroup>
+
+          <SettingsGroup title="Markets" description="Where Tamu works, e.g. Kampala Central or Mbarara. Each user belongs to one; choose it when inviting them.">
+            {business.branches.map((market, index) => (
+              <div key={index} className={styles.marketRow}>
+                <input
+                  className={styles.textInput}
+                  aria-label={`Market ${index + 1}`}
+                  value={market}
+                  maxLength={40}
+                  onChange={(event) => draft.set("branches", business.branches.map((name, i) => (i === index ? event.target.value : name)))}
+                  placeholder="Market name"
+                />
+                <button type="button" className={styles.iconButton} aria-label={`Remove the ${market || "new"} market`} onClick={() => draft.set("branches", business.branches.filter((_, i) => i !== index))}>
+                  <Icon name="close" size={16} strokeWidth={2} />
+                </button>
+              </div>
+            ))}
+            <button type="button" className={styles.addButton} onClick={() => draft.set("branches", [...business.branches, ""])}>
+              + Add market
             </button>
           </SettingsGroup>
         </>

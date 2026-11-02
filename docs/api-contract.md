@@ -1,7 +1,7 @@
 # Tamu Loans — API contract
 
-This is the API the frontend expects. It grows as screens are built, so the backend
-developer can build exactly what the frontend needs. While the backend doesn't exist,
+This is the API the frontend expects, endpoint by endpoint. Start with [backend-plan.md](backend-plan.md): the
+data model, the rules and calculations, and the order to build in. This file is the detail behind it. While the backend doesn't exist,
 the mock API in `src/mocks/handlers.ts` answers these requests. Keep the two in step:
 when an endpoint here changes, change its mock handler too.
 
@@ -25,7 +25,7 @@ Each user has one role; a role is a set of permissions. Built-in roles (Admin, F
 Loan officer) are **read-only**. Admins create **custom roles** with any set of permissions.
 
 Each role also has a **data access level** (`dataScope`): `own` (only the borrowers its people look after) or
-`branch` (everyone in the branch). It applies to borrowers, documents, applications, loans, payments, recovery and
+`branch` (everyone in the branch; the screens call it "Whole market", since Tamu says "market", not "branch"). It applies to borrowers, documents, applications, loans, payments, recovery and
 reports. Roles with any `users.*`, `roles.*` or `settings.*` permission must be `branch`.
 
 | Permission | Meaning | Needs |
@@ -103,7 +103,8 @@ The signed-in user, with permissions already resolved from their role.
   "photoUrl": "https://…/photo.jpg",
   "branch": "Kampala Central",
   "role": { "id": "loan_officer", "name": "Loan officer" },
-  "permissions": ["borrowers.create", "applications.create", "documents.upload", "loans.view.own", "payments.record", "reports.view.own"]
+  "permissions": ["borrowers.view", "borrowers.create", "applications.view", "applications.create", "loans.view", "payments.view", "payments.record", "reports.view"],
+  "dataScope": "own"
 }
 ```
 
@@ -115,7 +116,7 @@ The signed-in user, with permissions already resolved from their role.
 Finds loans and applications by borrower name, ID or phone number, for the top-bar search.
 
 - Returns `[]` when `q` is shorter than 2 characters.
-- **Scope:** users with `loans.view.own` only get their own borrowers; `loans.view.all` gets the branch.
+- **Scope:** roles with `dataScope: "own"` get only their own borrowers; `"branch"` gets the branch.
 - At most 6 results, loans first.
 
 ```json
@@ -149,7 +150,7 @@ Counts shown next to menu items.
 { "applications": 2 }
 ```
 
-- `applications`: for users with `loans.approve` or `loans.view.all`, applications waiting for approval;
+- `applications`: for users with `applications.approve` or branch data access, applications waiting for approval;
   otherwise, the user's own drafts that still need documents.
 
 ### `GET /portfolio/risk-summary`
@@ -160,7 +161,7 @@ PAR30 for the sidebar risk card. Part of the arrears engine (Module 3, Phase 2),
 { "scope": "own", "par30Percent": 4.1, "targetPercent": 5, "loansOver30Days": 4 }
 ```
 
-- `scope`: `own` for users with `loans.view.own` only, `branch` for `loans.view.all`.
+- `scope`: the role's data access (`own` or `branch`). Calculated as in `GET /portfolio/risk`.
 
 ### `GET /dashboard/today`
 
@@ -169,15 +170,17 @@ the frontend shows one box per section. Shape: `DashboardToday` in `src/api/type
 
 ```json
 {
-  "collections": { "dueCount": 4, "collectedAmount": 0, "expectedAmount": 1240000 },
-  "followUps": { "overdueCount": 3, "over30DaysCount": 1 },
-  "applicationsToComplete": { "count": 2 },
-  "unmatchedPayments": { "count": 2, "amount": 660000 }
+  "activeLoans": { "count": 37, "outstanding": 35980200, "lateCount": 11 },
+  "collections": { "dueCount": 12, "collectedAmount": 0, "expectedAmount": 801200 },
+  "followUps": { "overdueCount": 8, "over30DaysCount": 2 },
+  "applicationsToComplete": { "count": 2 }
 }
 ```
 
-- Loan officers get `collections`, `followUps`, `applicationsToComplete`, `unmatchedPayments` (their own portfolio).
-- Users with `users.manage` get `paymentReversals`, `awaitingApproval`, `approvedNotDisbursed`, `accessRequests`.
+- Everyone with `loans.view` gets `activeLoans` first (open loans in their data scope, what's owed, how many late).
+- Loan officers also get `collections`, `followUps`, `applicationsToComplete` (their own portfolio).
+- Users with `users.manage` also get `awaitingApproval`, `approvedNotDisbursed`, `accessRequests`.
+- Payment matching and payment reversals are not in the MVP (`unmatchedPayments`, `paymentReversals` aren't sent).
 - Must stay consistent with `GET /worklist`: e.g. `collections.dueCount` = open instalment and promise tasks.
 
 ### `GET /worklist`
@@ -188,7 +191,7 @@ type (see `WorklistTask` in `src/api/types.ts`). Common fields:
 | Field | Meaning |
 |---|---|
 | `id` | Task id |
-| `type` | `instalment-due`, `promise-due`, `overdue`, `application-incomplete`, `payment-unmatched`, `reversal-request`, `awaiting-approval`, `awaiting-disbursement`, `access-request` |
+| `type` | `instalment-due`, `promise-due`, `overdue`, `application-incomplete`, `awaiting-approval`, `awaiting-disbursement`, `access-request` (`payment-unmatched` and `reversal-request` are Phase 2 / not used) |
 | `priority` | `do-first`, `do-today` or `routine` (decided by the backend) |
 | `status` | `open` or `done` |
 | `result` | What happened, for done tasks |
@@ -251,8 +254,9 @@ Logs a call on a loan task.
 { "action": "approve-reversal" }
 ```
 
-`action`: `approve-reversal`, `reject-reversal` (both need `payments.reverse`), `remind-finance` (adds a note;
-stays open), `send-reset-link`, `resend-invite` (need `users.manage`). Returns the updated task.
+`action`: `remind-finance` (adds a note; stays open), `send-reset-link`, `resend-invite` (need `users.manage`).
+Returns the updated task. (Payment reversals were removed at the client's request: `approve-reversal` and
+`reject-reversal` answer `403`.)
 
 ### `POST /worklist/{taskId}/undo`
 
@@ -263,8 +267,10 @@ request to an admin instead.
 
 ## Portfolio section ("My portfolio" / "Branch portfolio")
 
-**Scope:** `own` for users with only `loans.view.own`; `branch` for `loans.view.all`. Shapes are in `src/api/types.ts`.
-PAR, arrears and early warnings come from the arrears engine (Module 3, Phase 2); the frontend already shows them
+**Scope:** the role's data access (`own` or `branch`). Shapes are in `src/api/types.ts`. Every figure here is
+**calculated from the loans, their schedules and their payments** (never stored or typed in); the definitions are
+in [backend-plan.md](backend-plan.md#calculations) and the mock's `src/mocks/portfolioFigures.ts` does exactly that.
+PAR, arrears and early warnings belong to the arrears engine (Module 3, Phase 2); the frontend already shows them
 under a "Coming soon" overlay, so the endpoints can arrive with Phase 2.
 
 ### `GET /portfolio/risk` (Phase 2)
@@ -323,7 +329,7 @@ today's list; `422` if the loan isn't overdue. `POST /worklist/{taskId}/undo` re
 
 "Collected today" on this card comes from `GET /dashboard/today` (`collections`), so the two always agree.
 
-### `GET /activity?limit=5` (requires `users.manage`)
+### `GET /activity?limit=5` (requires `audit.view`)
 
 Audit log preview, newest first.
 
@@ -331,7 +337,7 @@ Audit log preview, newest first.
 { "total": 6, "items": [{ "id": "act-1", "actor": { "name": "Moses Okot", "role": "Finance", "photoUrl": null }, "description": "approved APP-309 · UGX 800,000", "at": "2026-10-31T06:42:00Z" }] }
 ```
 
-### `GET /team/performance` (requires `loans.view.all`)
+### `GET /team/performance` (branch data access)
 
 ```json
 [{ "officerId": "u-ruth", "name": "Ruth Atim", "photoUrl": null, "portfolioAmount": 67500000, "loanCount": 34, "par30Percent": 13.2, "collectedToday": 0, "expectedToday": 380000 }]
@@ -343,7 +349,7 @@ Sorted by PAR30, highest first. The frontend shows 5 and links to Reports for th
 
 ### `GET /borrowers`
 
-Borrower directory (user flow phase 8). Requires `loans.view.own` or `loans.view.all`.
+Borrower directory (user flow phase 8). Requires `borrowers.view`.
 
 | Query | Values | Notes |
 |---|---|---|
@@ -366,7 +372,7 @@ Borrower directory (user flow phase 8). Requires `loans.view.own` or `loans.view
 }
 ```
 
-- **Scope is enforced by the server:** with only `loans.view.own`, `officerId` is ignored and the results are
+- **Scope is enforced by the server:** with `dataScope: "own"`, `officerId` is ignored and the results are
   always the user's own borrowers. The frontend hiding the officer filter is not a control.
 - **The list never includes the National ID number**, not even masked. It is shown, masked, only on the borrower
   profile, and revealing it there is a separate, audit-logged request.
@@ -374,7 +380,7 @@ Borrower directory (user flow phase 8). Requires `loans.view.own` or `loans.view
 - `counts` respect `q` and `officerId` but not `status`, so the tabs show how many are in each.
 - A borrower in arrears is one whose current loan has `daysPastDue > 0`; `applicant` means no loan yet, only an application.
 
-### `GET /officers` (requires `loans.view.all`)
+### `GET /officers` (branch data access)
 
 Loan officers, for the officer filter. `403` without the permission.
 
@@ -503,7 +509,7 @@ outside the user's portfolio). No file contents, no full NINs, no link tokens.
   borrower who signed).
 - `required` + `file: null` = missing. `onlineRequest` = a link was sent and hasn't been used or expired yet.
 
-### `POST /borrowers/{id}/online-links` (requires `documents.upload`)
+### `POST /borrowers/{id}/online-links` (requires `applications.onlineLink`)
 
 `{ "slot": "APP-311:application" }` → `201 { "url": "https://…/forms/<token>", "expiresAt": "…" }`.
 
@@ -552,8 +558,8 @@ New application (user flow, phase 3). `multipart/form-data`: `application` (JSON
 ### `GET /applications?status=&q=&page=`
 
 The Applications list. `status`: `draft`, `awaiting-borrower` (online link sent), `submitted` (waiting for
-approval), `approved` or `rejected`. Officers get their own applications; users with `loans.approve` or
-`loans.view.all` get the branch. `counts` per status respect the search, for the tabs. Items: id, status, route,
+approval), `approved` or `rejected`. Officers get their own applications; users with `applications.approve` or
+branch data access get the branch. `counts` per status respect the search, for the tabs. Items: id, status, route,
 borrower `{ id | null, name }`, amount, terms (`repaymentSchedule`, `numberOfPayments`, `instalment`), `missing`
 (drafts), `returned` (`{ reason, note, by, at }` when sent back or rejected), officer, `createdAt`, `submittedAt`,
 `decided` (`{ by, at }`). Newest activity first.
@@ -566,7 +572,7 @@ Everything an approver checks: the list item plus `borrowerDetails` (masked NIN,
 (`signedApplication`, `idFront`, `idBack` as document files) and
 `decision: { allowed, reason }`. `404` when the application isn't visible to the user.
 
-### `POST /applications/{id}/approve` (requires `loans.approve`)
+### `POST /applications/{id}/approve` (requires `applications.approve`)
 
 `{ "checks": { "signedPdfMatchesDetails": true, "idCopyMatchesNin": true, "guarantorsSigned": true } }` → the
 updated application.
@@ -577,7 +583,7 @@ updated application.
 - The approved application waits to be paid out (Loans → To disburse); the disburser can't be the approver
   (Settings → Loan rules).
 
-### `POST /applications/{id}/reject` (requires `loans.approve`)
+### `POST /applications/{id}/reject` (requires `applications.approve`)
 
 `{ "reason": "signature-missing" | "details-mismatch" | "document-unclear" | "other" | "not-eligible", "note": "…" }`
 
@@ -607,7 +613,7 @@ optionally a new `signedApplication` PDF (a new version; the old one is kept). S
 
 ### `GET /loans/list?status=active|cleared|all&q=&officerId=&late=true&page=`
 
-The Loans tabs. Officers get their own loans; `loans.view.all` gets the branch (`officerId` filters by officer,
+The Loans tabs. Officers get their own loans; branch data access gets the branch (`officerId` filters by officer,
 ignored for officers). `q`: loan ID (exact), borrower name, or phone (3+ digits). `late=true`: only loans behind on
 payments.
 
@@ -657,7 +663,7 @@ says the recovery team adds them), and whether recovery staff need logins.
 
 ### `GET /payments/list?from=&to=&q=&officerId=&method=&page=`
 
-The Payments page: every repayment, newest first. Officers get their own borrowers' payments; `loans.view.all`
+The Payments page: every repayment, newest first. Officers get their own borrowers' payments; branch data access
 gets the branch. `from`/`to` are inclusive local dates; `q` matches borrower, loan ID (exact), phone (3+ digits)
 or transaction ID; `method`: `MTN MoMo`, `Airtel Money` or `Cash`.
 
@@ -765,7 +771,7 @@ Audit-logged like any other download.
 
 ## Editing a borrower and their timeline
 
-### `PATCH /borrowers/{id}` (requires `borrowers.create`)
+### `PATCH /borrowers/{id}` (requires `borrowers.edit`)
 
 ```json
 {
@@ -789,9 +795,9 @@ or `+2567…`), stored as `0772 418 230`.
 
 `{ "decision": "approve" | "reject" }`. `204` on success.
 
-- **approve:** requires `loans.approve` **and** must not be the person who asked (`403` "You asked for this change,
+- **approve:** requires `borrowers.phoneApprove` **and** must not be the person who asked (`403` "You asked for this change,
   so someone else must approve it."). Applies the number to the borrower and their open loan.
-- **reject:** someone with `loans.approve` rejects it, or the person who asked withdraws it.
+- **reject:** someone with `borrowers.phoneApprove` rejects it, or the person who asked withdraws it.
 - `409` if the change was already approved, rejected or replaced.
 
 ### `GET /borrowers/{id}/activity?category=&before=`
@@ -826,7 +832,7 @@ Every staff account, active first, then invited, then switched off.
 ```json
 [
   { "id": "u-joel", "name": "Joel Okello", "email": "joel@tamu.example", "phone": "0756 410 228", "photoUrl": null,
-    "role": { "id": "loan_officer", "name": "Loan officer" }, "status": "active",
+    "role": { "id": "loan_officer", "name": "Loan officer" }, "branch": "Kampala Central", "status": "active",
     "lastSignInAt": "2026-11-01T06:54:00Z", "invite": null, "deactivated": null,
     "portfolio": { "borrowers": 44, "activeLoans": 38, "openApplications": 3 } }
 ]
@@ -835,6 +841,7 @@ Every staff account, active first, then invited, then switched off.
 - `status`: `active`, `invited` (hasn't set a password yet) or `deactivated` (switched off).
 - `invite` (invited only): `{ "sentAt", "expiresAt", "expired" }`. `deactivated`: `{ "at", "by" }`.
 - `portfolio`: the borrowers this person looks after (they must move to someone else before deactivation).
+- `branch`: the market they work in (one of `settings.business.branches`; the screens say "Market").
 
 ### `GET /roles` (requires `users.manage` or `roles.manage`)
 
@@ -844,12 +851,13 @@ invited users.
 
 ### `POST /staff/invites` (requires `users.manage`)
 
-`{ "name", "email", "phone", "roleId" }`. `201` with the new `StaffMember` (status `invited`).
+`{ "name", "email", "phone", "roleId", "branch" }`. `201` with the new `StaffMember` (status `invited`).
 
 - Emails the person a link to set their own password. **The link works once and expires after 48 hours**; store
   only a hash of its token. Admins never see or set passwords.
 - `422` for a missing name, invalid email, non-Ugandan mobile number or unknown role. `409` if the email is already
-  used by any account (including switched-off ones: turn that account back on instead).
+  used by any account (including switched-off ones: turn that account back on instead). `422` if `branch` isn't one
+  of the markets in business settings.
 
 ### `POST /staff/{id}/invite` and `DELETE /staff/{id}/invite` (require `users.manage`)
 
@@ -864,12 +872,18 @@ invited users.
 - `409` if nobody active would be left with `users.manage` or `roles.manage` (a lockout), or if the person looks
   after borrowers and the new role can't see loans.
 
+### `PUT /staff/{id}/branch` (requires `users.manage`)
+
+`{ "branch": "Mbarara" }`. Moves the person to another market. `200` with the `StaffMember`. `422` for a market not
+in business settings. Audit-log before → after. (In the MVP the market is a label; data access is still `own` or
+the whole book.)
+
 ### `POST /staff/{id}/deactivate` (requires `users.manage`)
 
 `{ "reassignTo": "u-sarah" | null, "reason": "Left Tamu" }`. `200` with the `StaffMember` (status `deactivated`).
 
 - **Ends all their sessions immediately**; sign-in is refused from then on. Nothing they did is changed or deleted.
-- If they look after borrowers, `reassignTo` is required: an active user whose role has `loans.view.own`. Their
+- If they look after borrowers, `reassignTo` is required: an active user whose role has `loans.view` and `dataScope: "own"`. Their
   borrowers, open loans and applications move to that person in the same transaction (`422` otherwise).
 - `403` for your own account; `409` for a lockout (as above). `reason` is required and goes to the audit log.
 
@@ -902,7 +916,8 @@ Nothing an admin can change is hard-coded in the frontend: it reads these and fo
 ```json
 {
   "business": { "name": "Tamu Cleaning Services Ltd", "shortName": "Tamu", "address": "…", "phone": "0414 530 220", "email": "loans@tamu.example",
-                "payoutAccounts": [{ "method": "MTN MoMo", "number": "0772 900 410", "accountName": "Tamu Cleaning Services" }] },
+                "payoutAccounts": [{ "method": "MTN MoMo", "number": "0772 900 410", "accountName": "Tamu Cleaning Services" }],
+                "branches": ["Kampala Central", "Mbarara"] },
   "loanRules": { "approverCannotDisburse": true, "creatorCannotApprove": true, "phoneChangeNeedsApproval": true, "oneOpenLoanPerBorrower": true,
                  "recoveryAfterDaysLate": 60, "recoveryMode": "suggest", "seriouslyLateDays": 30 },
   "payments": { "repaymentMethods": ["Cash", "MTN MoMo", "Airtel Money"], "payoutMethods": ["MTN MoMo", "Airtel Money"],
@@ -916,7 +931,8 @@ Nothing an admin can change is hard-coded in the frontend: it reads these and fo
 
 The whole section. Requires `settings.business`, `settings.rules`, `settings.payments` or `settings.security`.
 `200` with the full settings. `422` when a value is out of range (limits in `src/lib/settingLimits.ts`), a
-payout method has no payout account, or no repayment/payout method is left. Audit-log which fields changed.
+payout method has no payout account, or no repayment/payout method is left. Business: `branches` (markets) needs at
+least one unique name, and a market can't be removed while active or invited staff work in it. Audit-log which fields changed.
 
 What each setting does on the server:
 - `recoveryMode: "auto"` with `recoveryAfterDaysLate`: a daily job sends loans that late to recovery (by
@@ -987,7 +1003,7 @@ spreadsheet can't run them as formulas. The export itself is logged ("exported t
 ## My account (any signed-in user, their own account only)
 
 - `GET /me/profile`: `{ id, name, email, phone, photoUrl, branch, role, recentSignIns: [{ at, device, success }] }`
-  (the last 8 sign-ins, including failed attempts).
+  (the last 4 sign-ins, including failed attempts).
 - `PATCH /me/profile` `{ phone }`: a Ugandan mobile number (`422` otherwise). Name, email and role are admin-only.
 - `POST /me/photo` (multipart `photo`): JPEG or PNG, up to 2 MB, checked from the file's bytes; `DELETE /me/photo`.
 - `POST /me/password` `{ currentPassword, newPassword }`: `403` if the current password is wrong (counts towards
@@ -999,3 +1015,27 @@ spreadsheet can't run them as formulas. The export itself is logged ("exported t
   Help page (active people with `users.manage`).
 
 All of these are audit-logged.
+
+## Client data list (Data Questionnaire, 2026-11-02)
+
+The client confirmed the fields below; the endpoints above already use them.
+
+- **New borrower** (`NewBorrowerDetails`, on `POST /applications` and the online form): `fullName`, `nationalId`,
+  `phone` (mobile money), `secondaryPhone` (optional), `gender` (`female` | `male`), `area` (shown as **Address**:
+  where they live), `premises` (shop / premises, as on the agreement), `nextOfKin: { name, phone }`. All required
+  except `secondaryPhone`.
+- **No ID photos on the paper route**: the ID copies are in the signed PDF. `POST /applications` no longer takes
+  `idFront` / `idBack`; drafts don't wait for them.
+- **Online form** (`POST /public/forms/{token}`): the borrower's `idFront` / `idBack`, plus `guarantor1IdFront`,
+  `guarantor1IdBack`, `guarantor2IdFront`, `guarantor2IdBack`. They're filed under the application's documents.
+- **Guarantors** (`GuarantorDetails`): `fullName`, `nationalId`, `phone`, `relationship` (e.g. "Sister"; required on the online form, sent empty on the paper route because it is on the signed consent).
+- **Removed**: work and income (occupation, income, workplace photo) and purpose of the loan.
+  `PATCH /borrowers/{id}` now takes `gender` and a required `nextOfKin` instead of `work`.
+- **Interest per period**: `interest.per` is `loan`, `day`, `week` or `month` (limits 100%, 5%, 20%, 30%). Interest =
+  amount × rate × the number of days, weeks or months the loan runs. Products: Daily 0.6% a day, Weekly 4.5% a
+  week, Monthly 18% a month.
+- **Payout consent**: the payout is confirmed in a second step in the app before `POST /applications/{id}/disburse`.
+- **Reports** for every role (own portfolio or branch): Today / This week / This month / Last month / This year /
+  custom; `GET /reports/{name}/export?format=pdf|csv` (`reports.export`, now on all built-in roles).
+- **Dashboard** (`GET /dashboard/today`): `activeLoans: { count, outstanding, lateCount }` comes first, then
+  `collections`; payment matching (`unmatchedPayments`) is no longer shown.

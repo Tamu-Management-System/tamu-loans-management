@@ -7,7 +7,7 @@ import { useAuth } from "../../auth/AuthContext";
 import { Icon } from "../../components/ui/Icon";
 import { Pagination } from "../../components/ui/Pagination";
 import { SEARCH_FROM, Select } from "../../components/ui/Select";
-import { formatDate, formatShortDate, formatUGX } from "../../lib/format";
+import { formatDate, formatShortDate, formatUGX, dayCount } from "../../lib/format";
 import { ToDisbursePage } from "./ToDisbursePage";
 import { useLatest } from "../../lib/useLatest";
 import { useSystemSettings } from "../../api/settings";
@@ -87,7 +87,7 @@ function LoanListPage({ tab }: { tab: LoanListTab }) {
     <>
       <div className={styles.header}>
         <h1>{TITLES[tab]}</h1>
-        <p className={styles.subtitle}>{tab === "recovery" ? "Loans handed to the recovery team" : branchWide ? "Every loan in the branch" : "Loans in your portfolio"}</p>
+        <p className={styles.subtitle}>{tab === "recovery" ? "Loans handed to the recovery team" : branchWide ? "Every loan in the market" : "Loans in your portfolio"}</p>
       </div>
 
       <div className={styles.card}>
@@ -224,7 +224,7 @@ function LoanStatus({ loan, recoveryList }: { loan: LoanListItem; recoveryList: 
       <>
         <span className={`${styles.chip} ${styles.chipRecovery}`}>In recovery</span>
         <span className={styles.secondary}>
-          {recoveryList ? `Since ${formatShortDate(loan.recovery.since)} · ${loan.recovery.reason}` : `${loan.daysPastDue} days late · ${formatUGX(loan.arrearsAmount)} overdue`}
+          {recoveryList ? `Since ${formatShortDate(loan.recovery.since)} · ${loan.recovery.reason}` : `${dayCount(loan.daysPastDue)} late · ${formatUGX(loan.arrearsAmount)} overdue`}
         </span>
       </>
     );
@@ -242,7 +242,7 @@ function LoanStatus({ loan, recoveryList }: { loan: LoanListItem; recoveryList: 
   if (loan.status === "in-arrears") {
     return (
       <>
-        <span className={`${styles.chip} ${loan.daysPastDue >= seriouslyLate ? styles.chipDanger : styles.chipWarning}`}>{loan.daysPastDue} days late</span>
+        <span className={`${styles.chip} ${loan.daysPastDue >= seriouslyLate ? styles.chipDanger : styles.chipWarning}`}>{dayCount(loan.daysPastDue)} late</span>
         {recoveryAfter !== null && loan.daysPastDue >= recoveryAfter && <span className={`${styles.chip} ${styles.chipRecovery} ${styles.chipStacked}`}>Ready for recovery</span>}
         <span className={styles.secondary}>{formatUGX(loan.arrearsAmount)} overdue</span>
       </>

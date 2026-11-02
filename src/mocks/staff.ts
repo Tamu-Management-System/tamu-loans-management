@@ -51,6 +51,19 @@ export const staff: MockStaff[] = [
       };
     }),
   {
+    id: "u-joan",
+    name: "Joan Nansubuga",
+    email: "joan@tamu.example",
+    phone: "0772 905 118",
+    photoUrl: null,
+    branch: "Kampala Central",
+    roleId: "finance",
+    status: "active",
+    lastSignInAt: hoursAgo(4),
+    invite: null,
+    deactivated: null,
+  },
+  {
     id: "u-grace",
     name: "Grace Namutebi",
     email: "grace@tamu.example",

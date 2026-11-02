@@ -9,7 +9,7 @@ import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { useToast } from "../../components/ui/Toast";
-import { formatDate, formatShortDate, formatTime, formatUGX } from "../../lib/format";
+import { formatDate, formatShortDate, formatTime, formatUGX, dayCount } from "../../lib/format";
 import { useAnnounce } from "../dashboard/useAnnounce";
 import { RecordPaymentDialog } from "../payments/RecordPaymentDialog";
 import { ReturnFromRecoveryDialog, SendToRecoveryDialog } from "./RecoveryDialogs";
@@ -139,7 +139,7 @@ export function LoanDetailsPage() {
           <p className={`${styles.alert} ${loan.daysPastDue >= seriouslyLate ? styles.alertDanger : ""}`} role="note">
             <Icon name="warning" size={16} strokeWidth={1.9} />
             <span>
-              <b>{loan.daysPastDue} days late.</b> {formatUGX(loan.arrearsAmount)} overdue since {formatDate(loan.nextPayment.dueOn)}.
+              <b>{dayCount(loan.daysPastDue)} late.</b> {formatUGX(loan.arrearsAmount)} overdue since {formatDate(loan.nextPayment.dueOn)}.
               {loan.lateFees.amount > 0 && <> Late fees so far: {formatUGX(loan.lateFees.amount)}.</>}
               {!loan.recovery && recoveryAfter !== null && loan.daysPastDue >= recoveryAfter && <> It's past the {recoveryAfter}-day mark: ready for recovery.</>}
             </span>
@@ -261,7 +261,7 @@ function StatusChip({ loan, seriouslyLate }: { loan: LoanDetail; seriouslyLate: 
   return (
     <>
       {loan.daysPastDue > 0 ? (
-        <span className={`${styles.chip} ${loan.daysPastDue >= seriouslyLate ? styles.chip_late : styles.chip_due}`}>{loan.daysPastDue} days late</span>
+        <span className={`${styles.chip} ${loan.daysPastDue >= seriouslyLate ? styles.chip_late : styles.chip_due}`}>{dayCount(loan.daysPastDue)} late</span>
       ) : (
         <span className={`${styles.chip} ${styles.chip_paid}`}>Active</span>
       )}

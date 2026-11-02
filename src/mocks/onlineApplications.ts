@@ -16,6 +16,8 @@ export interface OnlineSubmission {
   details: OnlineApplicationDetails;
   idFront: StoredImage;
   idBack: StoredImage;
+  /** Each guarantor's National ID (submissions made before this was asked for have none) */
+  guarantorIds?: [{ front: StoredImage; back: StoredImage }, { front: StoredImage; back: StoredImage }];
   signatures: { borrower: StoredImage; guarantor1: StoredImage; guarantor2: StoredImage };
 }
 
