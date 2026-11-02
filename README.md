@@ -14,6 +14,10 @@ npm run build:demo   # build WITH the mock API, for client presentations only
 npm run lint
 ```
 
+Hosting (Vercel): `vercel.json` runs `npm run build:demo`, so the hosted site is the demo with the mock API
+and sample data, until the backend exists. When it does, change `buildCommand` to `npm run build` and point
+`VITE_API_URL` at the backend. Every address is served `index.html` so links into the app work directly.
+
 Demo sign-in (dev and demo builds only): any demo account on the login page, password `tamu2026`.
 
 ## How it's organised
