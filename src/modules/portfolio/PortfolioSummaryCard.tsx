@@ -14,6 +14,8 @@ function SummaryRow({ label, children }: { label: string; children: ReactNode })
   );
 }
 
+const loanCount = (count: number) => `${count} loan${count === 1 ? "" : "s"}`;
+
 /** The officer's own portfolio at a glance (Module 2). */
 export function PortfolioSummaryCard({ summary }: { summary: PortfolioSummary }) {
   // "Collected today" comes from the same numbers as the Today boxes, so they always agree
@@ -27,9 +29,9 @@ export function PortfolioSummaryCard({ summary }: { summary: PortfolioSummary })
       <SummaryRow label="Outstanding balance">{formatUGXMillions(summary.outstandingBalance)}</SummaryRow>
       <SummaryRow label="Active loans">{summary.activeLoans}</SummaryRow>
       <SummaryRow label="Disbursed this month">
-        {formatUGXMillions(summary.disbursedThisMonth.amount)} <span className={styles.mutedText}>· {summary.disbursedThisMonth.count} loans</span>
+        {formatUGXMillions(summary.disbursedThisMonth.amount)} <span className={styles.mutedText}>· {loanCount(summary.disbursedThisMonth.count)}</span>
       </SummaryRow>
-      <SummaryRow label="Cleared this month">{summary.clearedThisMonth} loans</SummaryRow>
+      <SummaryRow label="Cleared this month">{loanCount(summary.clearedThisMonth)}</SummaryRow>
       <SummaryRow label="Due this week">{formatUGXMillions(summary.dueThisWeek)}</SummaryRow>
       {collections && (
         <SummaryRow label="Collected today">
@@ -37,7 +39,7 @@ export function PortfolioSummaryCard({ summary }: { summary: PortfolioSummary })
         </SummaryRow>
       )}
       <Link to="/loans/active" className={styles.showAll}>
-        Show all {summary.activeLoans} active loans →
+        {summary.activeLoans === 1 ? "Show the active loan →" : `Show all ${summary.activeLoans} active loans →`}
       </Link>
     </div>
   );

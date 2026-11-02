@@ -122,6 +122,7 @@ export function PaymentsSection() {
   const { can } = useAuth();
   const draft = useSettingsDraft("payments");
   const backdateId = useId();
+  const overId = useId();
   const payments = draft.values;
   const toggle = <T extends string>(list: T[], item: T, on: boolean) => (on ? [...list.filter((x) => x !== item), item] : list.filter((x) => x !== item));
   return (
@@ -137,7 +138,9 @@ export function PaymentsSection() {
             ? "Choose at least one way to pay out."
             : outside(payments!.backdateDays, SETTING_LIMITS.backdateDays)
               ? `Back-dating: ${rangeText(SETTING_LIMITS.backdateDays, "days")}.`
-              : null
+              : outside(payments!.maxOverpaymentPercent, SETTING_LIMITS.maxOverpaymentPercent)
+                ? `Most over the balance: ${rangeText(SETTING_LIMITS.maxOverpaymentPercent, "%")}.`
+                : null
       }
     >
       {payments && (
@@ -158,9 +161,14 @@ export function PaymentsSection() {
             <SettingRow label="Payments can be dated up to" htmlFor={backdateId} description="For money received while staff were away from the system. 0 means today only.">
               <NumberField id={backdateId} value={payments.backdateDays} onChange={(value) => draft.set("backdateDays", value)} min={SETTING_LIMITS.backdateDays[0]} max={SETTING_LIMITS.backdateDays[1]} unit="days back" />
             </SettingRow>
-            <SettingRow label="Accept overpayments" description="A payment bigger than the balance clears the loan and the extra is recorded. Off: the payment is refused.">
+            <SettingRow label="Accept overpayments" description="A payment bigger than the balance clears the loan and the extra is recorded, after the person confirms it. Off: the payment is refused.">
               <Switch label="Accept overpayments" checked={payments.allowOverpayment} onChange={(value) => draft.set("allowOverpayment", value)} />
             </SettingRow>
+            {payments.allowOverpayment && (
+              <SettingRow label="At most this much over the balance" htmlFor={overId} description="Anything above is refused, so a typing mistake like an extra zero can't go in.">
+                <NumberField id={overId} value={payments.maxOverpaymentPercent} onChange={(value) => draft.set("maxOverpaymentPercent", value)} min={SETTING_LIMITS.maxOverpaymentPercent[0]} max={SETTING_LIMITS.maxOverpaymentPercent[1]} unit="% of the balance" />
+              </SettingRow>
+            )}
           </SettingsGroup>
 
           <SettingsGroup title="Payouts" description="How approved loans are sent to borrowers. Each method needs a payout account in Business details.">

@@ -46,10 +46,10 @@ export function ArrearsInsightsCard({ arrears }: { arrears: ArrearsBreakdown }) 
 
       <div className={styles.collectionRate}>
         <div className={styles.collectionRateLine}>
-          <span>Collection rate this month</span>
+          <span>Collection rate, last 30 days</span>
           <b>{arrears.collectionRatePercent}%</b>
         </div>
-        <span className={styles.meter} role="progressbar" aria-valuenow={arrears.collectionRatePercent} aria-valuemin={0} aria-valuemax={100} aria-label="Collection rate this month">
+        <span className={styles.meter} role="progressbar" aria-valuenow={arrears.collectionRatePercent} aria-valuemin={0} aria-valuemax={100} aria-label="Collection rate, last 30 days">
           <span style={{ width: `${arrears.collectionRatePercent}%` }} />
         </span>
       </div>

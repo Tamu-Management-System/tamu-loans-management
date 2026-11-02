@@ -90,10 +90,20 @@ export function RequireSignIn({ children }: { children: ReactNode }) {
     return <Navigate to={loginPath({ next: returnToPage ? location.pathname + location.search : undefined, reason })} replace />;
   }
   if (value) return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  // The same outline index.html shows before the app starts, so the page doesn't flash blank while the account loads
   if (status === "loading")
     return (
-      <div className={styles.fullPage} role="status">
-        Loading…
+      <div className="boot-shell" role="status" aria-label="Loading your account">
+        <div className="boot-side">
+          <div className="boot-logo" />
+          {Array.from({ length: 7 }, (_, index) => (
+            <div key={index} className="boot-item" />
+          ))}
+        </div>
+        <div className="boot-main">
+          <div className="boot-top" />
+          <div className="boot-card" />
+        </div>
       </div>
     );
   return (

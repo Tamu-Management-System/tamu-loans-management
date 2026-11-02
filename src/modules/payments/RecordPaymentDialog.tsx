@@ -20,8 +20,8 @@ interface RecordPaymentDialogProps {
 
 /**
  * Records a repayment. Before confirming, the user sees the current balance, the amount
- * being paid and the new balance (user flow, phase 6). Overpayments are allowed: the loan
- * closes and the surplus is recorded (QA scenario 3).
+ * being paid and the new balance (user flow, phase 6). Overpayments (when Settings allow them) must
+ * be confirmed and stay within Settings → Payments' limit over the balance, so a typing mistake can't go in.
  */
 export function RecordPaymentDialog({ loanId: initialLoanId, onClose, onRecorded }: RecordPaymentDialogProps) {
   const ids = { loan: useId(), amount: useId(), method: useId(), reference: useId(), paidOn: useId() };
@@ -40,6 +40,7 @@ export function RecordPaymentDialog({ loanId: initialLoanId, onClose, onRecorded
   const method = chosenMethod && methods.includes(chosenMethod) ? chosenMethod : methods[0];
   const [reference, setReference] = useState("");
   const [paidOn, setPaidOn] = useState(today);
+  const [surplusConfirmed, setSurplusConfirmed] = useState(false);
   const referenceNeeded = !!rules?.referenceRequired && method !== "Cash";
 
   const loan = loans.find((l) => l.id === loanId);
@@ -49,13 +50,14 @@ export function RecordPaymentDialog({ loanId: initialLoanId, onClose, onRecorded
   const validAmount = amountText !== "" && Number.isFinite(amount) && amount > 0;
   const newBalance = loan ? Math.max(0, loan.outstandingBalance - amount) : 0;
   const surplus = loan && validAmount ? Math.max(0, amount - loan.outstandingBalance) : 0;
-  const overpaymentRefused = surplus > 0 && rules?.allowOverpayment === false;
-  const ready = !!loan && validAmount && !overpaymentRefused && (!referenceNeeded || !!reference.trim()) && paidOn >= earliest && paidOn <= today;
+  const mostAccepted = loan ? Math.floor(loan.outstandingBalance * (1 + (rules?.maxOverpaymentPercent ?? 10) / 100)) : 0;
+  const overpaymentRefused = surplus > 0 && (rules?.allowOverpayment === false || amount > mostAccepted);
+  const ready = !!loan && validAmount && !overpaymentRefused && (surplus === 0 || surplusConfirmed) && (!referenceNeeded || !!reference.trim()) && paidOn >= earliest && paidOn <= today;
 
   const submit = () => {
     if (!loan || !ready) return;
     recordPayment.mutate(
-      { loanId: loan.id, amount, method, reference: reference.trim() || undefined, paidOn: paidOn === today ? undefined : paidOn },
+      { loanId: loan.id, amount, method, reference: reference.trim() || undefined, paidOn: paidOn === today ? undefined : paidOn, surplusConfirmed: surplus > 0 ? true : undefined },
       {
         onSuccess: (result) => {
           const surplusNote = result.surplus > 0 ? ` Loan cleared; ${formatUGX(result.surplus)} surplus recorded.` : "";
@@ -87,6 +89,7 @@ export function RecordPaymentDialog({ loanId: initialLoanId, onClose, onRecorded
             onChange={(id) => {
               setLoanId(id);
               setAmountInput(null);
+              setSurplusConfirmed(false);
             }}
             options={loans.map((option) => ({ value: option.id, label: `${option.borrowerName} · ${option.id}`, keywords: option.phone }))}
             placeholder={loansLoading ? "Loading borrowers…" : "Choose a borrower"}
@@ -105,11 +108,14 @@ export function RecordPaymentDialog({ loanId: initialLoanId, onClose, onRecorded
       >
         <input
           id={ids.amount}
-          type="number"
           inputMode="numeric"
-          min={1}
+          autoComplete="off"
           value={amountText}
-          onChange={(event) => setAmountInput(event.target.value)}
+          // Whole shillings only: anything that isn't a digit (minus signs, letters, decimals) is dropped
+          onChange={(event) => {
+            setAmountInput(event.target.value.replace(/\D/g, "").replace(/^0+/, ""));
+            setSurplusConfirmed(false);
+          }}
           autoFocus={!!initialLoanId}
           required
         />
@@ -144,13 +150,21 @@ export function RecordPaymentDialog({ loanId: initialLoanId, onClose, onRecorded
           ]}
         />
       )}
-      {surplus > 0 && (
-        <p role="note" className={styles.overpaymentNote}>
-          {overpaymentRefused
-            ? `This is ${formatUGX(surplus)} more than the balance. Payments above the balance aren't accepted; enter ${formatUGX(loan!.outstandingBalance)} or less.`
-            : `This is ${formatUGX(surplus)} more than the balance. The loan will close and the surplus will be recorded.`}
-        </p>
-      )}
+      {surplus > 0 &&
+        (overpaymentRefused ? (
+          <p role="alert" className={styles.overpaymentRefused}>
+            {rules?.allowOverpayment === false
+              ? `This is ${formatUGX(surplus)} more than the balance. Payments above the balance aren't accepted; enter ${formatUGX(loan!.outstandingBalance)} or less.`
+              : `This is ${formatUGX(surplus)} more than the balance, which is too much to be right. Check the amount: the most accepted is ${formatUGX(mostAccepted)}.`}
+          </p>
+        ) : (
+          <label className={styles.surplusConfirm}>
+            <input type="checkbox" checked={surplusConfirmed} onChange={(event) => setSurplusConfirmed(event.target.checked)} />
+            <span>
+              <b>The borrower paid {formatUGX(surplus)} more than they owe.</b> The loan will close and the extra will be recorded.
+            </span>
+          </label>
+        ))}
     </Dialog>
   );
 }

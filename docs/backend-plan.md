@@ -83,7 +83,8 @@ what's owed.
 - PAR30 history: the same calculation at the start of each of the last 12 months, and weekly, using the payments
   made before that date.
 - Arrears bands: up to date, 1–30, 31–60, 61–90 and 90+ days late (amount and count).
-- Collection rate: payments received in the last 30 days ÷ instalments that fell due in those 30 days (max 100%).
+- Collection rate (last 30 days): of the instalments that fell due in the last 30 days (before today), the share
+  paid. Payments cover each loan's instalments oldest first, so catch-up payments on older arrears don't count.
 - Early warnings (loans `loanRules.earlyWarningDays`+ days late, default 7, not in recovery): "moves past 30 days late in N days" (25–30 days late),
   "no payment since payout", "no payment for N days" (14+), otherwise "N days behind; last paid …".
 - Officer summary: outstanding, active loans, paid out and cleared this month, still due in the next 7 days.

@@ -47,7 +47,8 @@ export interface DashboardToday {
   /** Instalments and promises due today in the user's portfolio */
   collections?: { dueCount: number; collectedAmount: number; expectedAmount: number };
   /** Overdue loans the user should follow up */
-  followUps?: { overdueCount: number; over30DaysCount: number };
+  /** `withRecoveryCount`: the user's late loans the recovery team has taken over (not on their follow-up list) */
+  followUps?: { overdueCount: number; over30DaysCount: number; withRecoveryCount: number };
   /** The user's draft applications missing documents or guarantor consent */
   applicationsToComplete?: { count: number };
   /** Mobile money received but not linked to a loan (Module 4, Phase 2) */
@@ -208,6 +209,8 @@ export interface RecordPaymentRequest {
   reference?: string;
   /** ISO date; omitted = today. How far back is allowed is in Settings → Payments */
   paidOn?: string;
+  /** Required (true) when the amount is more than the balance: the person confirmed the borrower really paid extra */
+  surplusConfirmed?: boolean;
 }
 
 /** POST /payments response */
@@ -1079,6 +1082,8 @@ export interface PaymentSettings {
   backdateDays: number;
   /** Payments bigger than the balance are accepted (the extra is recorded) */
   allowOverpayment: boolean;
+  /** The most a payment may go over the balance, as a % of the balance; stops typing mistakes like an extra zero */
+  maxOverpaymentPercent: number;
 }
 
 export interface SecuritySettings {

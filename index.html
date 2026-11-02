@@ -15,9 +15,28 @@
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
+    <!-- The app's outline, drawn before any JavaScript runs, so a direct link never shows a blank page.
+         React replaces it on first render; RequireSignIn reuses these classes while the account loads. -->
+    <style>
+      html, body, #root { height: 100%; margin: 0; }
+      body { background: #eceef0; font-family: "Plus Jakarta Sans", system-ui, sans-serif; }
+      .boot-shell { box-sizing: border-box; display: flex; gap: 28px; height: 100%; max-width: 1480px; margin: 0 auto; padding: 20px 24px 24px; }
+      .boot-side { display: flex; flex: none; flex-direction: column; gap: 22px; width: 206px; padding-top: 4px; }
+      .boot-logo { width: 150px; height: 38px; border-radius: 12px; background: #dfe3e8; margin-bottom: 18px; }
+      .boot-item { width: 160px; height: 18px; border-radius: 8px; background: #e2e5e9; }
+      .boot-main { display: flex; flex: 1; flex-direction: column; gap: 22px; min-width: 0; }
+      .boot-top { width: min(460px, 100%); height: 46px; border-radius: 999px; background: #fff; }
+      .boot-card { flex: 1; border-radius: 28px; background: #fff; }
+      @media (max-width: 900px) { .boot-side { display: none; } .boot-shell { padding: 12px; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot-shell" aria-busy="true" aria-label="Loading Tamu Loans">
+        <div class="boot-side"><div class="boot-logo"></div><div class="boot-item"></div><div class="boot-item"></div><div class="boot-item"></div><div class="boot-item"></div><div class="boot-item"></div><div class="boot-item"></div><div class="boot-item"></div></div>
+        <div class="boot-main"><div class="boot-top"></div><div class="boot-card"></div></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

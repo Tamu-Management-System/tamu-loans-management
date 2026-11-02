@@ -172,7 +172,7 @@ the frontend shows one box per section. Shape: `DashboardToday` in `src/api/type
 {
   "activeLoans": { "count": 37, "outstanding": 35980200, "lateCount": 11 },
   "collections": { "dueCount": 12, "collectedAmount": 0, "expectedAmount": 801200 },
-  "followUps": { "overdueCount": 8, "over30DaysCount": 2 },
+  "followUps": { "overdueCount": 8, "over30DaysCount": 2, "withRecoveryCount": 1 },
   "applicationsToComplete": { "count": 2 }
 }
 ```
@@ -937,7 +937,7 @@ Nothing an admin can change is hard-coded in the frontend: it reads these and fo
                  "recoveryAfterDaysLate": 60, "recoveryMode": "suggest", "seriouslyLateDays": 30,
                  "par30TargetPercent": 5, "earlyWarningDays": 7, "onlineLinkValidHours": 72 },
   "payments": { "repaymentMethods": ["Cash", "MTN MoMo", "Airtel Money"], "payoutMethods": ["MTN MoMo", "Airtel Money"],
-                "referenceRequired": true, "backdateDays": 3, "allowOverpayment": true },
+                "referenceRequired": true, "backdateDays": 3, "allowOverpayment": true, "maxOverpaymentPercent": 10 },
   "security": { "idleTimeoutMinutes": 15, "nationalIdVisibleSeconds": 30, "inviteValidHours": 48, "maxFailedSignIns": 5, "lockoutMinutes": 15, "minPasswordLength": 12 },
   "changed": { "business": { "at": "…", "by": "Martin Ssempa" }, "loanRules": null, "payments": null, "security": null }
 }
@@ -961,7 +961,10 @@ What each setting does on the server:
 - `phoneChangeNeedsApproval: false`: a new mobile money number applies straight away (still logged).
 - Payments: refuse methods not in `repaymentMethods`/`payoutMethods`; require `reference` for mobile money when
   `referenceRequired`; `paidOn` (new, optional on `POST /payments`) may be up to `backdateDays` in the past;
-  refuse amounts above the balance when `allowOverpayment` is false.
+  refuse amounts above the balance when `allowOverpayment` is false. When it's true, an amount above the balance
+  needs `"surplusConfirmed": true` in `POST /payments` (the person ticked "the borrower paid more than they owe"),
+  and anything above balance × (1 + `maxOverpaymentPercent`/100) is refused with `422` (stops an extra zero).
+  Amounts must be whole shillings.
 - Security: sign-in lockout, idle timeout, National ID display time and invite lifetime follow these values.
 
 ### Loan products

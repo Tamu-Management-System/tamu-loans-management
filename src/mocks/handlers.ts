@@ -595,7 +595,7 @@ function settingsProblem(section: SettingsSection, body: unknown): string | null
     if (!Array.isArray(p.repaymentMethods) || p.repaymentMethods.length === 0 || p.repaymentMethods.some((m) => !["Cash", "MTN MoMo", "Airtel Money"].includes(m))) return "Accept at least one way to repay.";
     if (!Array.isArray(p.payoutMethods) || p.payoutMethods.length === 0 || p.payoutMethods.some((m) => !["MTN MoMo", "Airtel Money"].includes(m))) return "Choose at least one way to pay out.";
     if (p.payoutMethods.some((m) => !systemSettings.business.payoutAccounts.some((a) => a.method === m))) return "Add a payout account for each payout method (Business details).";
-    return limit("backdateDays", "Days a payment can be back-dated", p.backdateDays);
+    return limit("backdateDays", "Days a payment can be back-dated", p.backdateDays) ?? limit("maxOverpaymentPercent", "Most over the balance", p.maxOverpaymentPercent);
   }
   const s = body as SystemSettings["security"];
   for (const [key, label] of [
@@ -1938,7 +1938,8 @@ export const handlers = [
     }
     if (ownBook) {
       const overdue = openOf("overdue");
-      today.followUps = { overdueCount: overdue.length, over30DaysCount: overdue.filter((task) => task.daysPastDue > 30).length };
+      const withRecovery = loans.filter((loan) => loan.officerId === user.id && loan.outstandingBalance > 0 && loan.recovery).length;
+      today.followUps = { overdueCount: overdue.length, over30DaysCount: overdue.filter((task) => task.daysPastDue > 30).length, withRecoveryCount: withRecovery };
     }
     if (can("applications.create")) today.applicationsToComplete = { count: openOf("application-incomplete").length };
     if (can("applications.approve") || can("users.manage")) {
@@ -1984,8 +1985,14 @@ export const handlers = [
     const rules = systemSettings.payments;
     if (!rules.repaymentMethods.includes(body.method)) return HttpResponse.json({ message: `${body.method} isn't accepted for repayments.` }, { status: 422 });
     if (rules.referenceRequired && body.method !== "Cash" && !body.reference?.trim()) return HttpResponse.json({ message: "Enter the mobile money transaction ID." }, { status: 422 });
-    if (!rules.allowOverpayment && body.amount > loan.outstandingBalance)
-      return HttpResponse.json({ message: `That's more than the balance of UGX ${loan.outstandingBalance.toLocaleString("en-US")}.` }, { status: 422 });
+    if (!Number.isInteger(body.amount)) return HttpResponse.json({ message: "Enter a whole number of shillings." }, { status: 422 });
+    if (body.amount > loan.outstandingBalance) {
+      const most = Math.floor(loan.outstandingBalance * (1 + rules.maxOverpaymentPercent / 100));
+      if (!rules.allowOverpayment) return HttpResponse.json({ message: `That's more than the balance of UGX ${loan.outstandingBalance.toLocaleString("en-US")}.` }, { status: 422 });
+      // A hard limit, so a typing mistake (an extra zero) can't go in even with the confirmation
+      if (body.amount > most) return HttpResponse.json({ message: `That's far more than the balance. The most accepted is UGX ${most.toLocaleString("en-US")} (${rules.maxOverpaymentPercent}% over). Check the amount.` }, { status: 422 });
+      if (body.surplusConfirmed !== true) return HttpResponse.json({ message: "Confirm that the borrower paid more than they owe." }, { status: 422 });
+    }
     const todayIso = new Date().toLocaleDateString("en-CA");
     const paidOn = body.paidOn ?? todayIso;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(paidOn) || paidOn > todayIso || paidOn < paymentDate(todayIso, "daily", -rules.backdateDays))

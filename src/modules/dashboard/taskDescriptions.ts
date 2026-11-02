@@ -44,7 +44,7 @@ export function describeStatus(task: WorklistTask): { tone: ChipTone; label: str
     case "instalment-due":
       return { tone: "info", label: "Due today", detail: "Installment" };
     case "promise-due":
-      return { tone: "warning", label: "Promised to pay today", detail: `Promise made ${formatShortDate(task.promiseMadeOn)} · ${dayCount(task.daysPastDue)} late` };
+      return { tone: "warning", label: "Promised to pay today", detail: `Behind by ${dayCount(task.daysPastDue)} · promised on ${formatShortDate(task.promiseMadeOn)}` };
     case "overdue":
       return { tone: task.daysPastDue > 30 ? "danger" : "warning", label: `${dayCount(task.daysPastDue)} overdue`, detail: "Arrears to collect" };
     case "application-incomplete":

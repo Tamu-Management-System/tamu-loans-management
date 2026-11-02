@@ -82,8 +82,10 @@
   color: var(--color-success);
 }
 
-.stepMore {
+.stepper .stepMore {
   padding-left: 8px;
+  font-size: 12.5px;
+  font-style: italic;
 }
 
 /* ---------- Layout ---------- */

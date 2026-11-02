@@ -134,17 +134,27 @@ export function arrears(filter: OfficerFilter) {
   };
 }
 
-/** Collected ÷ due over the last `days` days */
+/**
+ * Of the instalments that fell due in the last `days` days (before today), the share that has been paid.
+ * Payments cover each loan's instalments oldest first, so money that only catches up older arrears doesn't
+ * count towards this period, and a missed instalment always pulls the rate below 100%.
+ */
 export function collectionRate(filter: OfficerFilter, days: number) {
   const from = paymentDate(today(), "daily", -days);
   let due = 0;
   let collected = 0;
   for (const loan of ledger()) {
     if (!filter(loan.officerId)) continue;
-    due += loan.instalments.filter((i) => i.dueOn >= from && i.dueOn < today()).reduce((sum, i) => sum + i.amount, 0);
-    collected += loanPayments(loan.id).filter((p) => localDay(p.paidAt) >= from && localDay(p.paidAt) < today()).reduce((sum, p) => sum + p.amount, 0);
+    let covered = loanPayments(loan.id).filter((p) => localDay(p.paidAt) < today()).reduce((sum, p) => sum + p.amount, 0);
+    for (const instalment of loan.instalments) {
+      const paid = Math.min(instalment.amount, Math.max(0, covered));
+      covered -= instalment.amount;
+      if (instalment.dueOn < from || instalment.dueOn >= today()) continue;
+      due += instalment.amount;
+      collected += paid;
+    }
   }
-  return Math.min(100, percent(collected, due));
+  return percent(collected, due);
 }
 
 /** Instalments falling due on a day (or in a range), still to be paid */

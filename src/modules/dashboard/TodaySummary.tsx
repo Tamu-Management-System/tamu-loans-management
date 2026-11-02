@@ -41,7 +41,13 @@ function buildTiles(today: DashboardToday, { marketWide, canApprove }: { marketW
       label: "Overdue follow-ups",
       icon: "clock",
       value: followUps.overdueCount,
-      detail: `${followUps.over30DaysCount} ${plural(followUps.over30DaysCount, "is", "are")} over 30 days late`,
+      // Loans with the recovery team aren't on the list, so say so: otherwise they seem to be missing
+      detail: [
+        `${followUps.over30DaysCount} ${plural(followUps.over30DaysCount, "is", "are")} over 30 days late`,
+        followUps.withRecoveryCount > 0 && `${followUps.withRecoveryCount} more with the recovery team`,
+      ]
+        .filter(Boolean)
+        .join(" · "),
     });
   if (applicationsToComplete)
     tiles.push({

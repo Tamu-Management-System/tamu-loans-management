@@ -117,12 +117,22 @@ export function LoanDetailsPage() {
         <dl className={styles.figures}>
           <Figure label="Borrowed">{formatUGX(loan.principal)}</Figure>
           <Figure label="Interest">{formatUGX(loan.interest)}</Figure>
-          {loan.lateFees.amount > 0 && <Figure label="Late fees">{formatUGX(loan.lateFees.amount)}</Figure>}
           <Figure label="Total to repay">{formatUGX(loan.totalRepayable)}</Figure>
           <Figure label="Repaid">{formatUGX(loan.repaid)}</Figure>
-          <Figure label="Balance" strong>
-            {formatUGX(loan.balance)}
-          </Figure>
+          {loan.lateFees.amount > 0 ? (
+            <>
+              <Figure label="Late fees">{formatUGX(loan.lateFees.amount)}</Figure>
+              {/* What the borrower owes now includes the late fees; the loan balance alone is shown under it */}
+              <Figure label="Owed now" strong>
+                {formatUGX(loan.balance + loan.lateFees.amount)}
+                <span className={styles.figureHint}>Balance {formatUGX(loan.balance)} + late fees</span>
+              </Figure>
+            </>
+          ) : (
+            <Figure label="Balance" strong>
+              {formatUGX(loan.balance)}
+            </Figure>
+          )}
         </dl>
         <div className={styles.progress}>
           <div className={styles.progressLabels}>

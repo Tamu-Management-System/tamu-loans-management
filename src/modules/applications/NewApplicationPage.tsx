@@ -557,11 +557,8 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
             <span className={styles.stepLabel}>{STEP_LABELS[id]}</span>
           </li>
         ))}
-        {!route && (
-          <li className={styles.stepMore} aria-hidden="true">
-            …
-          </li>
-        )}
+        {/* The rest depends on the route, so say so instead of showing steps that may not apply */}
+        {!route && <li className={styles.stepMore}>More steps after you choose paper or online</li>}
       </ol>
 
       <div className={styles.layout}>

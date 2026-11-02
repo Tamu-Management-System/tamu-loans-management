@@ -2,9 +2,35 @@
   font-weight: 400;
 }
 
-.overpaymentNote {
+.overpaymentRefused {
   margin: 10px 0 0;
-  font-size: 12.5px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: 13px;
   line-height: 1.45;
-  color: var(--color-warning);
+}
+
+/* Overpayments need an explicit tick before Confirm works */
+.surplusConfirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-warning);
+  border-radius: 12px;
+  background: var(--color-warning-soft);
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.surplusConfirm input {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  accent-color: var(--color-primary);
 }
