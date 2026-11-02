@@ -1,0 +1,19 @@
+.fullPage {
+  height: 100%;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.fullPage p {
+  margin: 0;
+}
+
+.fullPage button {
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: underline;
+}

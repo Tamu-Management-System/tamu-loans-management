@@ -1,0 +1,367 @@
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.subtitle {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+.card {
+  padding: 20px 24px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+/* ---------- Dates ---------- */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.ranges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ranges button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.ranges button:hover {
+  background: var(--color-surface-subtle);
+}
+
+.ranges button[aria-pressed="true"] {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.custom {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.custom label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--color-text-muted);
+}
+
+.custom input {
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+/* ---------- Filters ---------- */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.search {
+  flex: 1;
+  min-width: 260px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 12px;
+  color: var(--color-text-muted);
+}
+
+.search:focus-within {
+  border-color: var(--color-primary);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.select {
+  width: auto;
+  min-width: 180px;
+}
+
+/* ---------- Totals ---------- */
+.totals {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0 0 6px;
+  padding: 14px 0;
+  border-radius: 14px;
+  background: var(--color-surface-subtle);
+}
+
+.totals > div {
+  padding: 0 22px;
+  border-left: 1px solid var(--color-border);
+}
+
+.totals > div:first-child {
+  border-left: 0;
+}
+
+.totals dt {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.totals dd {
+  margin: 3px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.totals .collected {
+  color: var(--color-success);
+}
+
+/* ---------- Table ---------- */
+/* Columns of equal width, all left-aligned, so the spacing is even whatever the values */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  transition: opacity 0.15s;
+}
+
+.refreshing {
+  opacity: 0.6;
+}
+
+.table th,
+.table td {
+  padding: 12px 8px;
+  border-top: 1px solid var(--color-border);
+  font-size: 13.5px;
+  text-align: left;
+}
+
+.table th {
+  padding: 10px 8px;
+  border-top: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+
+.when,
+.amount,
+.method,
+.recordedBy {
+  white-space: nowrap;
+}
+
+.amount {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.strongLink {
+  display: block;
+  color: var(--color-text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.strongLink:hover {
+  text-decoration: underline;
+}
+
+.secondaryLink {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.secondaryLink:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+.secondary {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+
+/* ---------- States ---------- */
+.message {
+  margin: 0;
+  padding: 32px 8px;
+  font-size: 14px;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.linkButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.loading {
+  min-height: 320px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, var(--color-surface) 0%, var(--color-surface-subtle) 50%, var(--color-surface) 100%);
+  background-size: 200% 100%;
+  animation: loading 1.2s ease-in-out infinite;
+}
+
+@keyframes loading {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading {
+    animation: none;
+  }
+}
+
+/* Narrower: who recorded it is on the loan page */
+@media (max-width: 1100px) {
+  .table th:nth-child(5),
+  .table td.recordedBy {
+    display: none;
+  }
+}
+
+/* Phones: each payment becomes a card */
+@media (max-width: 760px) {
+  .header h1 {
+    font-size: 23px;
+  }
+
+  .header > button {
+    width: 100%;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  .search {
+    min-width: 0;
+    flex-basis: 100%;
+  }
+
+  .select {
+    flex: 1;
+  }
+
+  .totals {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 0;
+  }
+
+  .totals > div {
+    padding: 0 16px;
+  }
+
+  .totals > div:nth-child(odd) {
+    border-left: 0;
+  }
+
+  .table thead {
+    display: none;
+  }
+
+  .table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 12px;
+    padding: 14px 4px;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .table td,
+  .table .method {
+    display: block;
+    width: auto;
+    padding: 0;
+    border: 0;
+    text-align: left;
+  }
+
+  .table td.amount {
+    grid-column: 2;
+    grid-row: 1;
+    text-align: right;
+  }
+
+  .table td.method {
+    grid-column: 1 / -1;
+  }
+}

@@ -1,0 +1,40 @@
+/* Aurora over a horizon sky: deep shades of the primary with a soft primary glow.
+   Used by Arrears Insights and the login brand panel via `composes: aurora from …`. */
+.aurora {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  color: #fff;
+  background:
+    radial-gradient(130% 45% at 50% 118%, rgba(255, 255, 255, 0.26), transparent 62%),
+    linear-gradient(180deg, var(--color-text) 0%, #123f7c 38%, var(--color-primary-strong) 72%, #1a72d6 100%);
+}
+
+.aurora::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -20% -30% 45%;
+  background:
+    radial-gradient(36% 46% at 26% 58%, rgba(255, 255, 255, 0.2), transparent 70%),
+    radial-gradient(32% 50% at 56% 42%, rgba(33, 133, 246, 0.4), transparent 70%),
+    radial-gradient(34% 44% at 84% 60%, rgba(255, 255, 255, 0.14), transparent 70%);
+  filter: blur(20px);
+  animation: aurora 22s ease-in-out infinite alternate;
+}
+
+@keyframes aurora {
+  from {
+    transform: translateX(-8%) skewX(-10deg);
+  }
+
+  to {
+    transform: translateX(8%) skewX(10deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora::before {
+    animation: none;
+  }
+}

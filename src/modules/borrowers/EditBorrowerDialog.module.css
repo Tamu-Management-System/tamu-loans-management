@@ -1,0 +1,63 @@
+.locked {
+  margin: 10px 0 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--color-surface-subtle);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.group {
+  margin: 14px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.group legend {
+  padding: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text);
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 14px;
+}
+
+.income {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px;
+  gap: 0 14px;
+}
+
+.legendNote {
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--color-text-muted);
+}
+
+.error {
+  color: var(--color-danger);
+}
+
+.approvalNote {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--color-warning-soft);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+@media (max-width: 560px) {
+  .pair,
+  .income {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

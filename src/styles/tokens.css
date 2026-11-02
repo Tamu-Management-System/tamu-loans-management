@@ -1,0 +1,35 @@
+/* Design tokens from the approved design (loan_dashboard_v2.html).
+   Change colours and sizes here, never in components. */
+:root {
+  /* Brand */
+  --color-primary: #2185f6;
+  --color-primary-strong: #166acb; /* hover and dark accents */
+  --color-primary-soft: #e4effe; /* selected backgrounds */
+
+  /* Surfaces and text */
+  --color-page: #eceef0;
+  --color-surface: #fff;
+  --color-surface-subtle: #f6f7f8;
+  --color-neutral-soft: #eef0f2;
+  --color-text: #1b2430;
+  --color-text-muted: #5b6470;
+  --color-border: #e8eaed;
+  --color-border-strong: #d9dce1;
+
+  /* Status */
+  --color-success: #17703e;
+  --color-success-soft: #e3f5ea;
+  --color-warning: #8f5304;
+  --color-warning-soft: #fdf1dc;
+  --color-danger: #b42323;
+  --color-danger-soft: #fde9e9;
+
+  /* Effects */
+  --shadow-card: 0 6px 20px rgba(16, 24, 40, 0.06);
+
+  /* Layout */
+  --sidebar-width: 206px;
+  --layout-gap: 28px;
+
+  color-scheme: light;
+}

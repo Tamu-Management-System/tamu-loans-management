@@ -1,0 +1,129 @@
+/* The table adapts to its card's width, not the screen's */
+.card {
+  container: team-performance / inline-size;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 14px 8px;
+  border-top: 1px solid var(--color-border);
+  font-size: 13.5px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.table th {
+  padding-top: 4px;
+  border-top: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  white-space: normal;
+}
+
+/* Officer names may wrap so the table fits a half-width card */
+.table td:first-child {
+  white-space: normal;
+}
+
+.table .numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.officer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500;
+}
+
+.portfolioUnderName {
+  display: none;
+}
+
+.chip {
+  display: inline-block;
+  padding: 4px 9px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.chipAbove {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.chipWithin {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+/* Narrow card: Portfolio folds under the officer's name */
+@container team-performance (max-width: 440px) {
+  .table .portfolioColumn {
+    display: none;
+  }
+
+  .portfolioUnderName {
+    display: block;
+    margin-top: 2px;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--color-text-muted);
+  }
+
+  .table th,
+  .table td {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+}
+
+/* Very narrow card (small phones): the table becomes a stacked list */
+@container team-performance (max-width: 340px) {
+  .table thead {
+    display: none;
+  }
+
+  .table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 4px 10px;
+    padding: 12px 6px;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .table td,
+  .table td.numeric {
+    display: block;
+    padding: 0;
+    border: 0;
+    text-align: left;
+  }
+
+  .table td.parCell {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .table td.collectedCell {
+    grid-column: 1 / -1;
+    padding-left: 44px;
+    font-size: 12px;
+    color: var(--color-text-muted);
+  }
+
+  .collectedCell::before {
+    content: "Collected today ";
+  }
+}

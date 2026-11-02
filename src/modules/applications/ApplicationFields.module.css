@@ -1,0 +1,123 @@
+/* Fields shared by New application (staff) and the online application (borrowers) */
+.hint {
+  display: block;
+  margin-top: 5px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.textButton {
+  justify-self: start;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+
+/* Fields */
+.field {
+  margin-top: 18px;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.field input {
+  width: 100%;
+  min-height: 50px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 12px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  /* 16px stops phones zooming in while typing */
+  font-size: 16px;
+}
+
+.field input:focus {
+  border-color: var(--color-primary);
+  outline: 2px solid var(--color-primary-soft);
+}
+
+.field input[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
+.fieldError {
+  display: block;
+  margin-top: 5px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-danger);
+}
+
+/* ID photos */
+.photoPair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.photoField {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.photoLabel {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.photoBox {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1.58;
+  overflow: hidden;
+  border: 1.5px dashed var(--color-border-strong);
+  border-radius: 12px;
+  background: var(--color-surface-subtle);
+  cursor: pointer;
+}
+
+.photoBox:focus-within {
+  border-color: var(--color-primary);
+}
+
+.photoBoxInvalid {
+  border-color: var(--color-danger);
+}
+
+.photoEmpty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.photoPreview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+

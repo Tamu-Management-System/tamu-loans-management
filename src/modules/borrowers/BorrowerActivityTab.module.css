@@ -1,0 +1,193 @@
+.card {
+  padding: 22px 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.filters button {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.filters button:hover {
+  background: var(--color-surface-subtle);
+}
+
+.filters button[aria-pressed="true"] {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* Timeline */
+.day {
+  margin-top: 18px;
+}
+
+.dayHeading {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.events {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.event {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 0;
+}
+
+/* Line joining the icons */
+.event:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: 42px;
+  bottom: -8px;
+  left: 15px;
+  width: 1px;
+  background: var(--color-border);
+}
+
+.eventIcon {
+  display: grid;
+  place-items: center;
+  width: 31px;
+  height: 31px;
+  border-radius: 50%;
+}
+
+.money {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+.contact {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.changes {
+  background: var(--color-neutral-soft);
+  color: var(--color-text-muted);
+}
+
+.access {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+
+.eventText {
+  display: grid;
+  gap: 2px;
+  padding-top: 5px;
+}
+
+.eventDescription {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.eventMeta {
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+
+.showOlder {
+  display: block;
+  width: 100%;
+  min-height: 42px;
+  margin-top: 14px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 12px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.showOlder:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+/* States */
+.message {
+  margin: 0;
+  padding: 24px 8px;
+  font-size: 14px;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.linkButton {
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.loading {
+  min-height: 280px;
+  margin-top: 16px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, var(--color-surface) 0%, var(--color-surface-subtle) 50%, var(--color-surface) 100%);
+  background-size: 200% 100%;
+  animation: loading 1.2s ease-in-out infinite;
+}
+
+@keyframes loading {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading {
+    animation: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .card {
+    padding: 18px 16px;
+  }
+}

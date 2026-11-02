@@ -1,0 +1,190 @@
+/* Portfolio section ("My portfolio" / "Branch portfolio"), matching the approved design. */
+
+.sectionHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 6px 0 14px;
+}
+
+.sectionHeader h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.sectionNote {
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+
+/* Two cards per row on laptops and desktops; one per row below 1200px */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 1200px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Slot for a card under a "Coming soon" overlay: takes the card's rounded shape */
+.cardSlot {
+  border-radius: 20px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.cardSubtitle {
+  margin: 3px 0 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+/* Column labels styled like table headers, so list rows line up with the table beside them */
+.listHeader {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 8px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.listRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 4px;
+  border-top: 1px solid var(--color-border);
+  font-size: 13.5px;
+}
+
+.listRowText {
+  flex: 1;
+  min-width: 0;
+}
+
+.mutedText {
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+
+.noWrap {
+  white-space: nowrap;
+}
+
+.secondaryLine {
+  margin-top: 3px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.warningLine {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 3px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--color-warning);
+}
+
+.warningLine svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+/* "Show all …" link, pinned to the bottom so it lines up across cards in a row */
+.showAll {
+  display: block;
+  margin-top: auto;
+  padding: 12px 18px;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-primary);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.showAll:hover {
+  text-decoration: underline;
+}
+
+.listButton {
+  flex: none;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 12px;
+  background: var(--color-surface);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.listButton:hover:not(:disabled) {
+  border-color: #b8bec6;
+}
+
+.empty {
+  margin: 0;
+  padding: 24px 8px;
+  font-size: 14px;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.loading {
+  min-height: 280px;
+  background: linear-gradient(90deg, var(--color-surface) 0%, var(--color-surface-subtle) 50%, var(--color-surface) 100%);
+  background-size: 200% 100%;
+  animation: loading 1.2s ease-in-out infinite;
+}
+
+@keyframes loading {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading {
+    animation: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .card {
+    padding: 18px 16px;
+  }
+}

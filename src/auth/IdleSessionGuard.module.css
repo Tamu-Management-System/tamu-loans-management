@@ -1,0 +1,16 @@
+.countdown {
+  margin: 14px 0 0;
+  font-size: 15px;
+}
+
+.countdown b {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.explanation {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}

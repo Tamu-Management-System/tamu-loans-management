@@ -1,0 +1,170 @@
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+.periods {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface-subtle);
+}
+
+.periods button {
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.periods button[aria-pressed="true"] {
+  background: var(--color-surface);
+  color: var(--color-primary);
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.1);
+}
+
+.headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 12px;
+  margin: 12px 0 6px;
+}
+
+.value {
+  font-size: 42px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.change {
+  padding: 4px 9px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.changeWorse {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.changeBetter {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+.summary {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.aboveTarget {
+  color: var(--color-danger);
+}
+
+.withinTarget {
+  color: var(--color-success);
+}
+
+/* The chart grows to fill spare height, so this card balances the card beside it */
+.chartArea {
+  position: relative;
+  flex: 1;
+  min-height: 90px;
+  margin-top: 18px;
+}
+
+.chart {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.targetLine {
+  stroke: var(--color-danger);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+}
+
+.trendLine {
+  fill: none;
+  stroke: var(--color-primary);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.months {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.key {
+  display: flex;
+  gap: 16px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.key i {
+  display: inline-block;
+  width: 16px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.keyTrend {
+  border-top: 2.5px solid var(--color-primary);
+}
+
+.keyTarget {
+  border-top: 1.5px dashed var(--color-danger);
+}
+
+.miniStats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.miniStats div {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--color-surface-subtle);
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--color-text-muted);
+}
+
+.miniStats b {
+  display: block;
+  margin: 2px 0;
+  font-size: 17px;
+  color: var(--color-text);
+}
+
+/* 12 month labels get crowded on phones: keep every other one */
+@media (max-width: 760px) {
+  .manyMonths span:nth-child(even) {
+    visibility: hidden;
+  }
+}
