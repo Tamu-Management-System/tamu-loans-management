@@ -19,12 +19,11 @@ export interface OnlineApplicationUpload {
   idBack: Blob;
   /** Each guarantor's National ID, front and back */
   guarantorIds: [{ front: Blob; back: Blob }, { front: Blob; back: Blob }];
-  signatures: { borrower: Blob; guarantor1: Blob; guarantor2: Blob };
 }
 
 export function useSubmitOnlineApplication(token: string) {
   return useMutation({
-    mutationFn: ({ details, idFront, idBack, guarantorIds, signatures }: OnlineApplicationUpload) => {
+    mutationFn: ({ details, idFront, idBack, guarantorIds }: OnlineApplicationUpload) => {
       const form = new FormData();
       form.append("details", JSON.stringify(details));
       form.append("idFront", idFront, "id-front.jpg");
@@ -33,9 +32,6 @@ export function useSubmitOnlineApplication(token: string) {
         form.append(`guarantor${index + 1}IdFront`, ids.front, `guarantor-${index + 1}-id-front.jpg`);
         form.append(`guarantor${index + 1}IdBack`, ids.back, `guarantor-${index + 1}-id-back.jpg`);
       });
-      form.append("borrowerSignature", signatures.borrower, "borrower-signature.jpg");
-      form.append("guarantor1Signature", signatures.guarantor1, "guarantor-1-signature.jpg");
-      form.append("guarantor2Signature", signatures.guarantor2, "guarantor-2-signature.jpg");
       return api.upload<{ reference: string }>(`/public/forms/${encodeURIComponent(token)}`, form);
     },
   });

@@ -20,6 +20,11 @@ and sample data, until the backend exists. When it does, change `buildCommand` t
 
 Demo sign-in (dev and demo builds only): any demo account on the login page, password `tamu2026`.
 
+Demo limits (there is no server, so the "server" lives in each browser): data you add stays in that browser and resets on
+reload. An online application link is a plain random token, like the real one, so it only opens in the browser (and
+profile) that made it: not in incognito, another browser or on a phone. The real backend fixes this, and nothing about
+the link changes when it arrives.
+
 ## How it's organised
 
 ```

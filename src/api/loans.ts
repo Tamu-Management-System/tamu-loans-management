@@ -15,7 +15,8 @@ export function useLoansToDisburse() {
 export function useDisburse(applicationId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payout: DisburseRequest) => api.post<DisburseResult>(`/applications/${encodeURIComponent(applicationId)}/disburse`, payout),
+    mutationFn: ({ idempotencyKey, ...payout }: DisburseRequest & { idempotencyKey?: string }) =>
+      api.post<DisburseResult>(`/applications/${encodeURIComponent(applicationId)}/disburse`, payout, { idempotencyKey }),
     onSuccess: () =>
       Promise.all(
         [["loans"], ["applications"], ["borrowers"], ["dashboard"], ["worklist"], ["navigation-badges"], ["notifications"], ["activity"], ["portfolio"]].map((queryKey) =>

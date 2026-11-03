@@ -17,6 +17,7 @@
     />
     <!-- The app's outline, drawn before any JavaScript runs, so a direct link never shows a blank page.
          React replaces it on first render; RequireSignIn reuses these classes while the account loads. -->
+    <script src="/boot.js"></script>
     <style>
       html, body, #root { height: 100%; margin: 0; }
       body { background: #eceef0; font-family: "Plus Jakarta Sans", system-ui, sans-serif; }
@@ -27,6 +28,27 @@
       .boot-main { display: flex; flex: 1; flex-direction: column; gap: 22px; min-width: 0; }
       .boot-top { width: min(460px, 100%); height: 46px; border-radius: 999px; background: #fff; }
       .boot-card { flex: 1; border-radius: 28px; background: #fff; }
+      /* Public pages (online form, sign-in): placeholders shaped like the page's own content, no sidebar */
+      .sk { background: linear-gradient(90deg, #e6e9ed 0%, #f2f4f6 50%, #e6e9ed 100%); background-size: 200% 100%; animation: sk 1.2s ease-in-out infinite; border-radius: 8px; }
+      @keyframes sk { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+      @media (prefers-reduced-motion: reduce) { .sk { animation: none; } }
+      /* Same box as the real page (.main + .card): 568px wide card, 24px 22px padding, 1px border; phones tighter */
+      .boot-form, .boot-login { display: none; box-sizing: border-box; align-items: center; justify-content: center; height: 100%; padding: 20px 16px 40px; }
+      [data-boot] .boot-shell { display: none; }
+      [data-boot="form"] .boot-form, [data-boot="login"] .boot-login { display: flex; }
+      .boot-panel { display: block; box-sizing: border-box; width: 100%; max-width: 568px; padding: 24px 22px; border: 1px solid #e8eaed; border-radius: 20px; background: #fff; box-shadow: 0 6px 20px rgba(16, 24, 40, 0.06); }
+      .boot-panel.narrow { max-width: 400px; display: grid; gap: 14px; }
+      .bk { display: flex; align-items: center; }
+      .bk .sk { flex: none; }
+      .boot-terms { margin-top: 20px; padding: 6px 16px; border-radius: 16px; background: #f6f7f8; }
+      .boot-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+      .xs { display: none; }
+      @media (max-width: 520px) { .xs { display: flex; } }
+      @media (max-width: 420px) {
+        .boot-form, .boot-login { padding: 12px 10px 32px; }
+        .boot-panel { padding: 20px 16px; }
+        .bk-title { height: 28px !important; }
+      }
       @media (max-width: 900px) { .boot-side { display: none; } .boot-shell { padding: 12px; } }
     </style>
   </head>
@@ -35,6 +57,51 @@
       <div class="boot-shell" aria-busy="true" aria-label="Loading Tamu Loans">
         <div class="boot-side"><div class="boot-logo"></div><div class="boot-item"></div><div class="boot-item"></div><div class="boot-item"></div><div class="boot-item"></div><div class="boot-item"></div><div class="boot-item"></div><div class="boot-item"></div></div>
         <div class="boot-main"><div class="boot-top"></div><div class="boot-card"></div></div>
+      </div>
+      <div class="boot-form" aria-busy="true" aria-label="Loading your application">
+        <div class="boot-panel">
+          <div class="bk" style="height:16px"><div class="sk" style="width:64px;height:12px"></div></div>
+          <div class="bk bk-title" style="height:30px;margin-top:6px"><div class="sk" style="width:62%;height:24px"></div></div>
+          <div style="margin-top:8px">
+            <div class="bk" style="height:23.3px"><div class="sk" style="width:100%;height:14px"></div></div>
+            <div class="bk" style="height:23.3px"><div class="sk" style="width:94%;height:14px"></div></div>
+            <div class="bk xs" style="height:23.3px"><div class="sk" style="width:100%;height:14px"></div></div>
+            <div class="bk" style="height:23.3px"><div class="sk" style="width:55%;height:14px"></div></div>
+          </div>
+          <div class="boot-terms">
+            <div class="boot-row" style="height:38px"><div class="sk" style="width:34%;height:13px"></div><div class="sk" style="width:24%;height:15px"></div></div>
+            <div class="boot-row" style="height:39px"><div class="sk" style="width:40%;height:13px"></div><div class="sk" style="width:20%;height:15px"></div></div>
+            <div class="boot-row" style="height:42px"><div class="sk" style="width:30%;height:13px"></div><div class="sk" style="width:28%;height:17px"></div></div>
+            <div class="boot-row" style="height:39px"><div class="sk" style="width:22%;height:13px"></div><div class="sk" style="width:32%;height:15px"></div></div>
+            <div class="boot-row" style="height:39px"><div class="sk" style="width:28%;height:13px"></div><div class="sk" style="width:26%;height:15px"></div></div>
+            <div class="boot-row" style="height:39px"><div class="sk" style="width:26%;height:13px"></div><div class="sk" style="width:30%;height:15px"></div></div>
+          </div>
+          <div class="bk" style="height:21px;margin-top:26px"><div class="sk" style="width:36%;height:17px"></div></div>
+          <div style="margin-top:8px">
+            <div class="bk" style="height:26px"><div class="sk" style="width:88%;height:14px"></div></div>
+            <div class="bk" style="height:26px"><div class="sk" style="width:96%;height:14px"></div></div>
+            <div class="bk" style="height:26px"><div class="sk" style="width:40%;height:14px"></div></div>
+            <div class="bk" style="height:26px"><div class="sk" style="width:72%;height:14px"></div></div>
+            <div class="bk xs" style="height:26px"><div class="sk" style="width:84%;height:14px"></div></div>
+            <div class="bk xs" style="height:26px"><div class="sk" style="width:46%;height:14px"></div></div>
+          </div>
+          <div class="sk" style="height:50px;margin-top:24px;border-radius:14px"></div>
+          <div style="margin-top:16px">
+            <div class="bk" style="height:19px"><div class="sk" style="width:100%;height:12px"></div></div>
+            <div class="bk xs" style="height:19px"><div class="sk" style="width:52%;height:12px"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="boot-login" aria-busy="true" aria-label="Loading">
+        <div class="boot-panel narrow">
+          <div class="sk" style="width:46%;height:28px"></div>
+          <div class="sk" style="width:62%;height:14px"></div>
+          <div class="sk" style="width:28%;height:13px;margin-top:10px"></div>
+          <div class="sk" style="height:46px;border-radius:12px"></div>
+          <div class="sk" style="width:28%;height:13px;margin-top:6px"></div>
+          <div class="sk" style="height:46px;border-radius:12px"></div>
+          <div class="sk" style="height:48px;margin-top:10px;border-radius:14px"></div>
+        </div>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>

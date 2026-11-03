@@ -13,6 +13,10 @@ when an endpoint here changes, change its mock handler too.
 - **Auth:** session cookie (`credentials: "include"`). An unauthenticated request returns `401`.
 - **CSRF:** the backend sets a readable `XSRF-TOKEN` cookie; every `POST`/`PATCH`/`PUT`/`DELETE` carries the same
   value in the `X-XSRF-TOKEN` header, which the backend must check (`403` if missing or wrong).
+- **Idempotency:** `POST /payments` and `POST /applications/{id}/disburse` carry an `Idempotency-Key` header (a UUID,
+  new for each dialog the person opens). If the same key arrives again (a retry, a double click, a dropped
+  connection), do not record a second payment or payout: return the first result again with `200`. Store the key
+  only for requests that succeeded; allow the header in CORS. It fills `Payment.idempotencyKey`.
 - **Security requirements** (session flags, timeouts, lockout, audit log): see [security.md](security.md).
 - **Errors:** non-2xx status with a body of `{ "message": "Readable explanation" }`.
   The frontend shows `message` to the user, so write it for them.
@@ -234,10 +238,12 @@ Loans the user can see that still have a balance, for pickers such as Record pay
 Records a repayment. Requires `payments.record`.
 
 ```json
-{ "loanId": "TL-1042", "amount": 450000, "method": "MTN MoMo", "reference": "MP261031.1042" }
+{ "loanId": "TL-1042", "amount": 450000, "method": "MTN MoMo", "reference": "MP261031.1042", "paidOn": "2026-10-31", "surplusConfirmed": true }
 ```
 
-- `method`: `Cash`, `MTN MoMo` or `Airtel Money`. `reference` is optional.
+- `method`: `Cash`, `MTN MoMo` or `Airtel Money`. `reference` is the transaction ID (required for mobile money when
+  Settings say so; for cash it is an optional receipt number). `paidOn` is optional (default today; back-dating is
+  limited in Settings). `surplusConfirmed` is sent only when `amount` is more than the balance.
 - Response `201`:
 
 ```json
@@ -430,8 +436,8 @@ The borrower profile. Same scope rule as the list: an officer asking for another
 
 - `nationalIdMasked` keeps the first two and last two characters. The full number is never in this response.
 - `premises` (shop / premises / building / arcade) is on Tamu's payment agreement and required.
-- **Optional, not on Tamu's forms yet** (waiting for the client to confirm): `secondaryPhone`, `nextOfKin`
-  (may be `null`), `work.occupation` and `work.income` (may be `null`).
+- **Optional:** `secondaryPhone`, and `nextOfKin`. Next of kin is `{ name, phone, relationship }`, each part
+  `null` when not given, or the whole `nextOfKin` `null` on older records.
 - `repaymentSchedule` is `daily`, `weekly` or `monthly` (the agreement's payment frequency); `totalRepayable`
   includes the interest (18% for now; it will come from the loan product).
 - `currentLoan` is `null` when there's no loan being repaid; `application` is the open application, if any.
@@ -488,8 +494,8 @@ terms as data. The proof is **one signed loan application PDF per loan**: the ag
 signed and merged into one document. It comes in one of two ways:
 
 - **Paper:** the forms are filled in and signed, scanned into one PDF, and uploaded by the officer.
-- **Online:** the officer sends a one-time link (copied into WhatsApp); the borrower completes and signs
-  online, and the server generates the merged PDF. Paper stays for people without a smartphone.
+- **Online:** the officer sends a one-time link (copied into WhatsApp); the borrower completes it
+  online (each of the three people ticks a consent box; no drawn signatures), and the server generates the merged PDF. Paper stays for people without a smartphone.
 
 ### `GET /borrowers/{id}/documents`
 
@@ -532,8 +538,8 @@ outside the user's portfolio). No file contents, no full NINs, no link tokens.
 - The token is random (at least 256 bits), **works once** and expires after **72 hours**. Creating a new link
   revokes the previous one. Store only a hash of the token.
 - The page behind the link shows the application pre-filled with what the officer entered; the borrower checks
-  it and signs (typed name confirmed with a one-time SMS code once the SMS gateway exists). **Open question for
-  the client:** how guarantors sign online (on the same link, or a link each).
+  it, and the borrower and both guarantors each tick an "I agree" box on the same phone. Their National ID photos
+  are the proof of who they are, so there are no signatures. The consent is recorded, not a picture.
 - On completion the server generates the merged PDF as a new version with `method: "online"`. Log who created
   each link, when it was opened and when it was completed.
 
@@ -556,7 +562,7 @@ New application (user flow, phase 3). `multipart/form-data`: `application` (JSON
 
 → `201 { "id": "APP-322", "borrowerId": "B-0207", "status": "submitted", "onlineLink": null }`
 
-- **Terms:** whole shillings > 0; `daily` / `weekly` / `monthly`; first payment from tomorrow; 1–365 payments.
+- **Terms:** whole shillings > 0; `daily` / `weekly` / `monthly`; first payment from today (the day the application is made) on, within the product window; 1–365 payments.
   The server works out (and stores) the interest (18% for now; later from the loan product), total, instalments (rounded down to UGX 100;
   the last payment takes the difference) and the last payment date: same rules as `src/lib/repaymentSchedule.ts`.
 - **Borrower:** an existing one in the user's scope (`404` otherwise), who has **no loan still being repaid and no
@@ -697,13 +703,17 @@ all. Each: `applicationId`, `borrower`, `payTo` (the mobile money number), `amou
 In the MVP the money is sent by hand by mobile money and recorded here (automatic payouts are Phase 2):
 
 ```json
-{ "method": "MTN MoMo", "reference": "MP261101.1043.A12", "amount": 1500000, "paidOn": "2026-11-01" }
+{ "method": "MTN MoMo", "reference": "MP261101.1043.A12", "amount": 1500000, "paidOn": "2026-11-01",
+  "payoutAccount": "0772 900 410", "consentConfirmed": true }
 ```
 
 → `201 { "loanId": "TL-2163", "firstPaymentOn": "2026-11-12", "lastPaymentOn": "2027-03-25" }`
 
 - `method`: `MTN MoMo` or `Airtel Money` (no cash for now). `reference` (the transaction ID) is required and
   **can't have been used for another payout** (`409`).
+- `payoutAccount` must be one of Tamu's accounts for that `method` (Settings → Business details); it fills
+  `Disbursement.payoutAccount`. `consentConfirmed` must be `true` (`422` otherwise): the person paying out ticked
+  the confirmation step. The server stamps `consentConfirmedAt`.
 - `amount` must equal the approved amount exactly; `paidOn` between the approval date and today (Uganda dates,
   not UTC).
 - **Settings → Loan rules, on by default:** whoever approved the loan can't pay it out (`403`).
@@ -737,17 +747,19 @@ and all three people tick to agree and sign with a finger.
 
 | Part | Content |
 |---|---|
-| `details` | JSON `{ "borrower": { "fullName", "nationalId", "phone", "premises", "area" }, "guarantors": [{ "fullName", "nationalId", "phone" }, { … }] }` |
+| `details` | JSON `{ "borrower": { "fullName", "nationalId", "phone", "premises", "area", … }, "guarantors": [{ "fullName", "nationalId", "phone", "relationship" }, { … }], "consent": { "borrower": true, "guarantor1": true, "guarantor2": true } }` |
 | `idFront`, `idBack` | Photos of the borrower's National ID (JPEG or PNG, ≤ 5 MB; the app shrinks them to ≤ 1600 px and strips photo data) |
-| `borrowerSignature`, `guarantor1Signature`, `guarantor2Signature` | Drawn signatures (JPEG, ≤ 512 KB) |
+| `guarantor1IdFront`, `guarantor1IdBack`, `guarantor2IdFront`, `guarantor2IdBack` | Photos of each guarantor's National ID (same rules) |
 
 `201 { "reference": "APP-311" }`. Then, **in one transaction**:
 
 1. Mark the token used: **it never works again** (`410 used` on any later GET or POST).
 2. Validate everything again: full names, NINs (`C[MF]` + 12 characters, three different people), Ugandan mobile
-   numbers, premises and area, real image types from the bytes.
-3. Generate the signed loan application PDF (agreement + both consents, with the three signatures) as a new
-   version of `{reference}:application` with `method: "online"`, and store the ID photos.
+   numbers, premises and area, real image types from the bytes, and that all three `consent` values are `true`
+   (`422` otherwise).
+3. Generate the loan application PDF (agreement + both consents, saying who agreed online and when) as a new
+   version of `{reference}:application` with `method: "online"`, and store the ID photos. Set each guarantor's
+   `consentSignedAt` to the server time; record the borrower's consent time in the audit log.
 4. Record it on the borrower's timeline and in the audit log, with the IP address and user agent.
 
 Also: rate-limit both endpoints per IP; never log the token or the request body; serve with
@@ -798,8 +810,9 @@ Audit-logged like any other download.
 ```
 
 `204` on success; `422` with a message for an invalid field. `phone`, `area` and `premises` are required;
-`secondaryPhone`, `nextOfKin` and `work` are optional (send `null` to clear; next of kin needs a name and phone). Phones must be Ugandan mobile numbers (`07XXXXXXXX`
-or `+2567…`), stored as `0772 418 230`.
+`secondaryPhone` and `nextOfKin` are optional (send `null` to clear; each part of next of kin may be `null`, but a phone that is
+given must be valid). Phones must be Ugandan mobile numbers (`07XXXXXXXX`
+or `+2567…`). The backend stores them as E.164 (`+256772418230`) and **returns them as `0772 418 230`** so the screens show them unchanged.
 
 - **Name and National ID can't be changed here** (they must match the ID card; corrections are an admin task).
 - **The main phone is the mobile money payout number, so a new one isn't applied.** It becomes
@@ -856,7 +869,8 @@ Every staff account, active first, then invited, then switched off.
 - `status`: `active`, `invited` (hasn't set a password yet) or `deactivated` (switched off).
 - `invite` (invited only): `{ "sentAt", "expiresAt", "expired" }`. `deactivated`: `{ "at", "by" }`.
 - `portfolio`: the borrowers this person looks after (they must move to someone else before deactivation).
-- `branch`: the market they work in (one of `settings.business.branches`; the screens say "Market").
+- `branch` / `branchId`: the market they work in, by name and by id (the id of a `Region`; one of
+  `settings.business.branches`; the screens say "Market").
 
 ### `GET /roles` (requires `users.manage` or `roles.manage`)
 
@@ -866,12 +880,13 @@ invited users.
 
 ### `POST /staff/invites` (requires `users.manage`)
 
-`{ "name", "email", "phone", "roleId", "branch" }`. `201` with the new `StaffMember` (status `invited`).
+`{ "name", "email", "phone", "roleId", "branchId" }`. `201` with the new `StaffMember` (status `invited`). Staff have
+no gender or address: the Person model allows them to be empty.
 
 - Emails the person a link to set their own password. **The link works once and expires after 48 hours**; store
   only a hash of its token. Admins never see or set passwords.
 - `422` for a missing name, invalid email, non-Ugandan mobile number or unknown role. `409` if the email is already
-  used by any account (including switched-off ones: turn that account back on instead). `422` if `branch` isn't one
+  used by any account (including switched-off ones: turn that account back on instead). `422` if `branchId` isn't one
   of the markets in business settings.
 
 ### `POST /staff/{id}/invite` and `DELETE /staff/{id}/invite` (require `users.manage`)
@@ -889,7 +904,7 @@ invited users.
 
 ### `PUT /staff/{id}/branch` (requires `users.manage`)
 
-`{ "branch": "Mbarara" }`. Moves the person to another market. `200` with the `StaffMember`. `422` for a market not
+`{ "branchId": "mkt-mbarara" }`. Moves the person to another market. `200` with the `StaffMember`. `422` for a market not
 in business settings. Audit-log before → after. (In the MVP the market is a label; data access is still `own` or
 the whole book.)
 
@@ -932,10 +947,11 @@ Nothing an admin can change is hard-coded in the frontend: it reads these and fo
 {
   "business": { "name": "Tamu Cleaning Services Ltd", "shortName": "Tamu", "address": "…", "phone": "0414 530 220", "email": "loans@tamu.example",
                 "payoutAccounts": [{ "method": "MTN MoMo", "number": "0772 900 410", "accountName": "Tamu Cleaning Services" }],
-                "branches": ["Kampala Central", "Mbarara"] },
+                "branches": [{ "id": "mkt-kampala", "name": "Kampala Central" }, { "id": "mkt-mbarara", "name": "Mbarara" }] },
   "loanRules": { "approverCannotDisburse": true, "creatorCannotApprove": true, "phoneChangeNeedsApproval": true, "oneOpenLoanPerBorrower": true,
                  "recoveryAfterDaysLate": 60, "recoveryMode": "suggest", "seriouslyLateDays": 30,
-                 "par30TargetPercent": 5, "earlyWarningDays": 7, "onlineLinkValidHours": 72 },
+                 "par30TargetPercent": 5, "earlyWarningDays": 7, "onlineLinkValidHours": 72,
+                 "paymentAllocationOrder": ["charges", "fees", "interest", "principal"] },
   "payments": { "repaymentMethods": ["Cash", "MTN MoMo", "Airtel Money"], "payoutMethods": ["MTN MoMo", "Airtel Money"],
                 "referenceRequired": true, "backdateDays": 3, "allowOverpayment": true, "maxOverpaymentPercent": 10 },
   "security": { "idleTimeoutMinutes": 15, "nationalIdVisibleSeconds": 30, "inviteValidHours": 48, "maxFailedSignIns": 5, "lockoutMinutes": 15, "minPasswordLength": 12 },
@@ -947,8 +963,10 @@ Nothing an admin can change is hard-coded in the frontend: it reads these and fo
 
 The whole section. Requires `settings.business`, `settings.rules`, `settings.payments` or `settings.security`.
 `200` with the full settings. `422` when a value is out of range (limits in `src/lib/settingLimits.ts`), a
-payout method has no payout account, or no repayment/payout method is left. Business: `branches` (markets) needs at
-least one unique name, and a market can't be removed while active or invited staff work in it. Audit-log which fields changed.
+payout method has no payout account, or no repayment/payout method is left. Business: `branches` (markets, each `{ id, name }`; send `id: null` for a new one) needs at
+least one unique name. A market keeps its `id` when renamed, so the people in it follow the new name; it can't be removed
+while active or invited staff work in it. Loan rules: `paymentAllocationOrder` must list `charges`, `fees`, `interest`
+and `principal` once each (the order a payment clears them; used when building `PaymentAllocation` rows). Audit-log which fields changed.
 
 What each setting does on the server:
 - `recoveryMode: "auto"` with `recoveryAfterDaysLate`: a daily job sends loans that late to recovery (by
@@ -1045,15 +1063,17 @@ The client confirmed the fields below; the endpoints above already use them.
 
 - **New borrower** (`NewBorrowerDetails`, on `POST /applications` and the online form): `fullName`, `nationalId`,
   `phone` (mobile money), `secondaryPhone` (optional), `gender` (`female` | `male`), `area` (shown as **Address**:
-  where they live), `premises` (shop / premises, as on the agreement), `nextOfKin: { name, phone }`. All required
-  except `secondaryPhone`.
+  where they live), `premises` (shop / premises, as on the agreement), `nextOfKin: { name, phone }` (optional; each `null` when not given).
+  All required except `secondaryPhone` and `nextOfKin`.
 - **No ID photos on the paper route**: the ID copies are in the signed PDF. `POST /applications` no longer takes
   `idFront` / `idBack`; drafts don't wait for them.
 - **Online form** (`POST /public/forms/{token}`): the borrower's `idFront` / `idBack`, plus `guarantor1IdFront`,
   `guarantor1IdBack`, `guarantor2IdFront`, `guarantor2IdBack`. They're filed under the application's documents.
-- **Guarantors** (`GuarantorDetails`): `fullName`, `nationalId`, `phone`, `relationship` (e.g. "Sister"; required on the online form, sent empty on the paper route because it is on the signed consent).
+- **Guarantors** (`GuarantorDetails`): `fullName`, `nationalId`, `phone`, and `relationship` (e.g. "Sister"; required
+  on the online form, sent empty on the paper route because it is on the signed consent). Guarantors have no gender
+  or address: the Person model allows them to be empty and the screens don't ask.
 - **Removed**: work and income (occupation, income, workplace photo) and purpose of the loan.
-  `PATCH /borrowers/{id}` now takes `gender` and a required `nextOfKin` instead of `work`.
+  `PATCH /borrowers/{id}` now takes `gender` and an optional `nextOfKin` instead of `work`.
 - **Interest per period**: `interest.per` is `loan`, `day`, `week` or `month` (limits 100%, 5%, 20%, 30%). Interest =
   amount × rate × the number of days, weeks or months the loan runs. Products: Daily 0.6% a day, Weekly 4.5% a
   week, Monthly 18% a month.

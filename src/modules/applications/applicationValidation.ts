@@ -51,12 +51,13 @@ export function borrowerErrors(borrower: BorrowerDraft): FieldErrors<BorrowerDra
   else if (borrower.secondaryPhone.trim() && normalisePhone(borrower.secondaryPhone) === normalisePhone(borrower.phone)) errors.secondaryPhone = "Use a different number from the main one, or leave it empty.";
   if (!borrower.premises.trim()) errors.premises = "Enter the shop, premises, building or arcade.";
   if (!borrower.area.trim()) errors.area = "Enter the address.";
-  if (borrower.kinName.trim().split(/\s+/).filter(Boolean).length < 2) errors.kinName = "Enter the next of kin's full name.";
-  if (!normalisePhone(borrower.kinPhone)) errors.kinPhone = "Enter the next of kin's mobile number.";
-  else if (normalisePhone(borrower.kinPhone) === normalisePhone(borrower.phone)) errors.kinPhone = "Use the next of kin's own number, not the borrower's.";
+  // Next of kin is optional; a number, if given, must be valid and not the borrower's own
+  if (borrower.kinPhone.trim() && !normalisePhone(borrower.kinPhone)) errors.kinPhone = "Enter a mobile number, or leave it empty.";
+  else if (borrower.kinPhone.trim() && normalisePhone(borrower.kinPhone) === normalisePhone(borrower.phone)) errors.kinPhone = "Use the next of kin's own number, not the borrower's.";
   return errors;
 }
 
+/** Online form: the person's details plus how they know the borrower */
 export function guarantorErrors(guarantor: GuarantorDraft): FieldErrors<GuarantorDraft> {
   const errors: FieldErrors<GuarantorDraft> = personErrors(guarantor);
   if (!guarantor.relationship.trim()) errors.relationship = "Say how they know the borrower, e.g. sister, friend, landlord.";

@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { ApiError } from "../../api/client";
+import { ApiError, newIdempotencyKey } from "../../api/client";
 import type { PaymentMethod } from "../../api/types";
 import { usePayableLoans, useRecordPayment } from "../../api/worklist";
 import { Dialog, Field, SummaryBox } from "../../components/ui/Dialog";
@@ -33,6 +33,8 @@ export function RecordPaymentDialog({ loanId: initialLoanId, onClose, onRecorded
   const earliest = toDateInputValue(new Date(Date.now() - (rules?.backdateDays ?? 0) * 86_400_000));
   const { data: loans = [], isPending: loansLoading } = usePayableLoans();
   const recordPayment = useRecordPayment();
+  // One key for this dialog: if the same payment is sent twice (retry, double click), the server records it once
+  const [idempotencyKey] = useState(newIdempotencyKey);
 
   const [loanId, setLoanId] = useState(initialLoanId ?? "");
   const [amountInput, setAmountInput] = useState<string | null>(null); // null = not edited yet
@@ -57,7 +59,7 @@ export function RecordPaymentDialog({ loanId: initialLoanId, onClose, onRecorded
   const submit = () => {
     if (!loan || !ready) return;
     recordPayment.mutate(
-      { loanId: loan.id, amount, method, reference: reference.trim() || undefined, paidOn: paidOn === today ? undefined : paidOn, surplusConfirmed: surplus > 0 ? true : undefined },
+      { loanId: loan.id, amount, method, reference: reference.trim() || undefined, paidOn: paidOn === today ? undefined : paidOn, surplusConfirmed: surplus > 0 ? true : undefined, idempotencyKey },
       {
         onSuccess: (result) => {
           const surplusNote = result.surplus > 0 ? ` Loan cleared; ${formatUGX(result.surplus)} surplus recorded.` : "";

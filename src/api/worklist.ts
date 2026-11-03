@@ -31,7 +31,7 @@ function useRefreshWork() {
 export function useRecordPayment() {
   const refresh = useRefreshWork();
   return useMutation({
-    mutationFn: (payment: RecordPaymentRequest) => api.post<RecordPaymentResponse>("/payments", payment),
+    mutationFn: ({ idempotencyKey, ...payment }: RecordPaymentRequest & { idempotencyKey?: string }) => api.post<RecordPaymentResponse>("/payments", payment, { idempotencyKey }),
     onSuccess: refresh,
   });
 }

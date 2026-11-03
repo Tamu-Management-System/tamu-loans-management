@@ -8,7 +8,7 @@ export interface MockBorrowerDetails {
   premises: string;
   /** Optional alternative contact */
   secondaryPhone: string | null;
-  nextOfKin: { name: string; phone: string; relationship: string } | null;
+  nextOfKin: { name: string | null; phone: string | null; relationship: string | null } | null;
   gender: "female" | "male" | null;
   /** Terms of the current loan, fixed when it was paid out */
   loanTerms: {

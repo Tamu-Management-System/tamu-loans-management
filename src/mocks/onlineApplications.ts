@@ -1,6 +1,7 @@
 // Online loan applications sent as links (demo). Kept in localStorage so a link copied in one tab
-// still works when it's opened in another tab, or on a phone pointed at the demo. The real
-// backend stores only a hash of each token; this demo store never runs in production builds.
+// still works when it's opened in another tab of the same browser. The token is a plain random string,
+// exactly like the real backend's (which stores only a hash of it and looks it up). There is no server
+// here to share links between browsers, so a link only opens in the browser that made it.
 import type { OnlineApplicationDetails, OnlineApplicationForm } from "../api/types";
 
 const STORAGE_KEY = "tamu-demo-online-applications";
@@ -18,7 +19,8 @@ export interface OnlineSubmission {
   idBack: StoredImage;
   /** Each guarantor's National ID (submissions made before this was asked for have none) */
   guarantorIds?: [{ front: StoredImage; back: StoredImage }, { front: StoredImage; back: StoredImage }];
-  signatures: { borrower: StoredImage; guarantor1: StoredImage; guarantor2: StoredImage };
+  /** When the three people ticked the consent box (there are no drawn signatures) */
+  consentAt: string;
 }
 
 export interface MockOnlineApplication {

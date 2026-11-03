@@ -4,7 +4,8 @@ import { ApiError } from "../../api/client";
 import { useOnlineApplicationForm, useSubmitOnlineApplication, type OnlineApplicationUpload } from "../../api/onlineApplication";
 import type { GuarantorDetails, OnlineApplicationForm } from "../../api/types";
 import { Button } from "../../components/ui/Button";
-import { Icon, TamuLogoMark } from "../../components/ui/Icon";
+import { Icon } from "../../components/ui/Icon";
+import { FormSkeleton } from "./FormSkeleton";
 import { formatLongDate, formatUGX } from "../../lib/format";
 import { normalisePhone } from "../../lib/phone";
 import {
@@ -22,7 +23,6 @@ import {
 import { AgreementWording, ConsentWording } from "./FormWording";
 import { BorrowerExtraFields, GuarantorFields, PersonFields } from "../applications/ApplicationFields";
 import { IdPhotoInput, type IdPhoto } from "../applications/IdPhotoInput";
-import { SignaturePad, type DrawnSignature } from "./SignaturePad";
 import styles from "./OnlineApplication.module.css";
 
 type Step = "welcome" | "borrower" | "guarantor1" | "guarantor2" | "sign" | "done";
@@ -30,7 +30,7 @@ const NUMBERED_STEPS: { step: Step; label: string }[] = [
   { step: "borrower", label: "Your details" },
   { step: "guarantor1", label: "Guarantor 1" },
   { step: "guarantor2", label: "Guarantor 2" },
-  { step: "sign", label: "Review and sign" },
+  { step: "sign", label: "Review and agree" },
 ];
 const FREQUENCY = { daily: "Daily", weekly: "Weekly", monthly: "Monthly" } as const;
 type Signer = "borrower" | "guarantor1" | "guarantor2";
@@ -46,7 +46,8 @@ const LINK_PROBLEMS: Record<string, { title: string; text: string }> = {
 /**
  * The online loan application (Tamu's digital alternative to the paper forms). The loan officer
  * sends this link to the borrower, e.g. on WhatsApp. The borrower fills in their own details and
- * both guarantors' details, adds photos of their National ID, and all three sign on the phone.
+ * both guarantors' details, adds photos of their National ID, and all three tick a box to agree
+ * (their ID photos are the proof of who they are, so nobody has to draw a signature).
  * The link works once: it stops working as soon as the form is submitted, or when it expires.
  */
 export function OnlineApplicationPage() {
@@ -60,7 +61,7 @@ export function OnlineApplicationPage() {
   }, [lender]);
 
   let content: ReactNode;
-  if (isPending) content = <div className={styles.loading} aria-busy="true" aria-label="Opening your application" />;
+  if (isPending) content = <FormSkeleton />;
   else if (error) {
     const reason = error instanceof ApiError ? ((error.body as { reason?: string } | undefined)?.reason ?? "invalid") : "unknown";
     content = reason === "unknown" ? <Problem title="Something went wrong" text="The application couldn't open. Check your internet connection and open the link again." /> : <Problem {...(LINK_PROBLEMS[reason] ?? LINK_PROBLEMS.invalid)} />;
@@ -68,15 +69,6 @@ export function OnlineApplicationPage() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <span className={styles.brandMark}>
-          <TamuLogoMark size={20} />
-        </span>
-        <span>
-          <b>{lender}</b>
-          <small>Loan application</small>
-        </span>
-      </header>
       <main className={styles.main}>{content}</main>
     </div>
   );
@@ -105,7 +97,6 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
   // Each guarantor's National ID, front and back
   const [guarantorIds, setGuarantorIds] = useState<[GuarantorIdPhotos, GuarantorIdPhotos]>([{ front: null, back: null }, { front: null, back: null }]);
   const [agreed, setAgreed] = useState<Record<Signer, boolean>>({ borrower: false, guarantor1: false, guarantor2: false });
-  const [signatures, setSignatures] = useState<Record<Signer, DrawnSignature | null>>({ borrower: null, guarantor1: null, guarantor2: null });
   const [showErrors, setShowErrors] = useState(false);
   const [linkProblem, setLinkProblem] = useState<string | null>(null);
 
@@ -124,9 +115,8 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
   }, [started]);
 
   const goTo = (next: Step) => {
-    // Changing details after signing means signing again
+    // Changing details after agreeing means agreeing again
     if (step === "sign" && next !== "done") {
-      setSignatures({ borrower: null, guarantor1: null, guarantor2: null });
       setAgreed({ borrower: false, guarantor1: false, guarantor2: false });
     }
     setShowErrors(false);
@@ -149,7 +139,7 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
     borrower: Object.keys(borrowerFieldErrors).length === 0 && !photoErrors.front && !photoErrors.back,
     guarantor1: Object.keys(guarantorFieldErrors[0]).length === 0 && !guarantorPhotoErrors[0].front && !guarantorPhotoErrors[0].back,
     guarantor2: Object.keys(guarantorFieldErrors[1]).length === 0 && !guarantorPhotoErrors[1].front && !guarantorPhotoErrors[1].back,
-    sign: (["borrower", "guarantor1", "guarantor2"] as Signer[]).every((signer) => agreed[signer] && signatures[signer]),
+    sign: (["borrower", "guarantor1", "guarantor2"] as Signer[]).every((signer) => agreed[signer]),
   };
 
   const next = (current: "borrower" | "guarantor1" | "guarantor2", to: Step) => {
@@ -177,14 +167,15 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
             secondaryPhone: normalisePhone(borrower.secondaryPhone),
             area: borrower.area.trim(),
             premises: borrower.premises.trim(),
-            nextOfKin: { name: borrower.kinName.trim().replace(/\s+/g, " "), phone: normalisePhone(borrower.kinPhone)! },
+            nextOfKin: { name: borrower.kinName.trim().replace(/\s+/g, " ") || null, phone: normalisePhone(borrower.kinPhone) },
           },
           guarantors: [cleanGuarantor(guarantors[0]), cleanGuarantor(guarantors[1])],
+          // Each person ticked the box; the server records when
+          consent: { borrower: true, guarantor1: true, guarantor2: true },
         },
         idFront: idFront.blob,
         idBack: idBack.blob,
         guarantorIds: guarantorIds.map((ids) => ({ front: ids.front!.blob, back: ids.back!.blob })) as OnlineApplicationUpload["guarantorIds"],
-        signatures: { borrower: signatures.borrower!.blob, guarantor1: signatures.guarantor1!.blob, guarantor2: signatures.guarantor2!.blob },
       },
       {
         onSuccess: () => goTo("done"),
@@ -205,7 +196,7 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
         <h1 id="welcome-heading" ref={headingRef} tabIndex={-1}>
           Your loan application
         </h1>
-        <p className={styles.lead}>Your loan officer has prepared this loan for you. Fill in your details and your two guarantors' details, then all three of you sign on this phone.</p>
+        <p className={styles.lead}>Your loan officer has prepared this loan for you. Fill in your details and your two guarantors' details, then all three of you tick a box on this phone to agree.</p>
         <dl className={styles.terms}>
           <div>
             <dt>Loan amount</dt>
@@ -245,7 +236,7 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
         <h2 className={styles.subheading}>You will need</h2>
         <ul className={styles.checklist}>
           <li>Your National ID card, to take photos of both sides</li>
-          <li>Your two guarantors with you, with their National ID cards, to give their details and sign</li>
+          <li>Your two guarantors with you, with their National ID cards, to give their details and agree</li>
           <li>About 10 minutes</li>
         </ul>
         <Button className={styles.primaryButton} onClick={() => goTo("borrower")}>
@@ -330,7 +321,7 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
         <h1 id="step-heading" ref={headingRef} tabIndex={-1}>
           Guarantor {index + 1}
         </h1>
-        <p className={styles.lead}>A guarantor agrees to pay the loan if you don't. They will sign on this phone at the end.</p>
+        <p className={styles.lead}>A guarantor agrees to pay the loan if you don't. They will tick a box to agree on this phone at the end.</p>
         <GuarantorFields guarantor={guarantors[index]} onChange={update} errors={errors} />
         <h2 className={styles.subheading}>Photos of their National ID</h2>
         <div className={styles.photoPair}>
@@ -342,9 +333,9 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
     );
   }
 
-  // Review and sign
+  // Review and agree: each person ticks a box (their National ID photos are on file as proof of who they are)
   const signBlock = (signer: Signer, name: string, title: string, agreement: string, wording: ReactNode) => {
-    const missing = showErrors && (!agreed[signer] || !signatures[signer]);
+    const missing = showErrors && !agreed[signer];
     return (
       <section className={styles.signBlock} aria-labelledby={`sign-${signer}`} data-invalid={missing}>
         <h2 id={`sign-${signer}`} className={styles.subheading}>
@@ -356,8 +347,7 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
           <input type="checkbox" checked={agreed[signer]} onChange={(event) => setAgreed((current) => ({ ...current, [signer]: event.target.checked }))} />
           <span>{agreement}</span>
         </label>
-        <SignaturePad label={`Signature of ${name}`} invalid={missing && !signatures[signer]} onChange={(signature) => setSignatures((current) => ({ ...current, [signer]: signature }))} />
-        {missing && <span className={styles.fieldError}>{!agreed[signer] ? "Tick the box to agree, then sign." : "Sign in the box above."}</span>}
+        {missing && <span className={styles.fieldError}>Tick the box to agree.</span>}
       </section>
     );
   };
@@ -370,12 +360,12 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
     <section className={styles.card} aria-labelledby="step-heading">
       {progress}
       <h1 id="step-heading" ref={headingRef} tabIndex={-1}>
-        Review and sign
+        Review and agree
       </h1>
-      <p className={styles.lead}>Check the details. If something is wrong, go back and fix it before signing.</p>
+      <p className={styles.lead}>Check the details. If something is wrong, go back and fix it before you agree. Each person ticks their own box; no signature is needed.</p>
 
       <dl className={styles.review}>
-        <ReviewPerson title="You" person={borrower} extra={`${borrower.gender === "male" ? "Male" : "Female"} · ${borrower.area} · ${borrower.premises} · Next of kin ${borrower.kinName}`} onEdit={() => goTo("borrower")} />
+        <ReviewPerson title="You" person={borrower} extra={`${borrower.gender === "male" ? "Male" : "Female"} · ${borrower.area} · ${borrower.premises}${borrower.kinName.trim() ? ` · Next of kin ${borrower.kinName}` : ""}`} onEdit={() => goTo("borrower")} />
         <ReviewPerson title="Guarantor 1" person={guarantors[0]} extra={`${guarantors[0].relationship} · ID photos added`} onEdit={() => goTo("guarantor1")} />
         <ReviewPerson title="Guarantor 2" person={guarantors[1]} extra={`${guarantors[1].relationship} · ID photos added`} onEdit={() => goTo("guarantor2")} />
       </dl>
@@ -391,7 +381,7 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
       )}
       {showErrors && !stepValid.sign && (
         <p className={styles.submitError} role="alert">
-          All three people need to tick the box and sign.
+          All three people need to tick their box.
         </p>
       )}
       <div className={styles.actions}>

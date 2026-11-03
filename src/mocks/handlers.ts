@@ -204,10 +204,9 @@ function checkTerms(terms: ApplicationTerms | undefined, keepProductId: string |
     return `${product.name}: borrow between ${ugx(product.amount.min)} and ${ugx(product.amount.max)}.`;
   if (terms.repaymentSchedule !== product.repaymentSchedule) return `${product.name} is repaid ${product.repaymentSchedule}.`;
   const today = new Date().toLocaleDateString("en-CA");
-  const tomorrow = paymentDate(today, "daily", 1);
   const latest = paymentDate(today, "daily", FIRST_PAYMENT_WITHIN_DAYS[product.repaymentSchedule]);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(terms.firstPaymentOn ?? "") || terms.firstPaymentOn < tomorrow || terms.firstPaymentOn > latest)
-    return `The first payment must be within ${FIRST_PAYMENT_WITHIN_DAYS[product.repaymentSchedule]} days, from tomorrow on.`;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(terms.firstPaymentOn ?? "") || terms.firstPaymentOn < today || terms.firstPaymentOn > latest)
+    return `The first payment must be within ${FIRST_PAYMENT_WITHIN_DAYS[product.repaymentSchedule]} days, from today on.`;
   // The product sets the loan's length
   if (terms.numberOfPayments !== product.numberOfPayments) return `${product.name} runs ${describeLength(product.repaymentSchedule, product.numberOfPayments)}.`;
   terms.pricing = pricingOf(product);
@@ -506,6 +505,7 @@ function staffMember(member: MockStaff): StaffMember {
     photoUrl: member.photoUrl,
     role: { id: member.roleId, name: role?.name ?? "Deleted role" },
     branch: member.branch,
+    branchId: systemSettings.business.branches.find((market) => market.name === member.branch)?.id ?? "",
     status: member.status,
     lastSignInAt: member.lastSignInAt,
     invite: member.invite && member.status === "invited" ? { ...member.invite, expired: inviteExpired(member) } : null,
@@ -569,10 +569,15 @@ function settingsProblem(section: SettingsSection, body: unknown): string | null
     if (!Array.isArray(b.payoutAccounts) || b.payoutAccounts.length === 0) return "Add at least one payout account.";
     for (const account of b.payoutAccounts)
       if (!["MTN MoMo", "Airtel Money"].includes(account.method) || !normalisePhone(account.number ?? "") || !account.accountName?.trim()) return "Check the payout accounts: method, number and name.";
-    const markets = Array.isArray(b.branches) ? b.branches.map((name) => (typeof name === "string" ? name.trim() : "")) : [];
-    if (markets.length === 0 || markets.some((name) => name.length < 2 || name.length > 40)) return "Add at least one market, each with a name.";
-    if (new Set(markets.map((name) => name.toLowerCase())).size !== markets.length) return "Each market needs a different name.";
-    const stranded = staff.find((member) => member.status !== "deactivated" && !markets.includes(member.branch));
+    const submitted = Array.isArray(b.branches) ? b.branches : [];
+    const names = submitted.map((market) => (typeof market?.name === "string" ? market.name.trim() : ""));
+    if (names.length === 0 || names.some((name) => name.length < 2 || name.length > 40)) return "Add at least one market, each with a name.";
+    if (new Set(names.map((name) => name.toLowerCase())).size !== names.length) return "Each market needs a different name.";
+    const current = systemSettings.business.branches;
+    if (submitted.some((market) => market.id !== null && !current.some((existing) => existing.id === market.id))) return "One of those markets no longer exists. Reload the page and try again.";
+    // A market can be renamed (its id stays) but not removed while people work in it
+    const kept = new Set(submitted.map((market) => market.id));
+    const stranded = staff.find((member) => member.status !== "deactivated" && !kept.has(current.find((market) => market.name === member.branch)?.id ?? null));
     if (stranded) return `${stranded.name} works in ${stranded.branch}. Move them to another market before removing it.`;
     return null;
   }
@@ -583,6 +588,8 @@ function settingsProblem(section: SettingsSection, body: unknown): string | null
       const problem = limit("recoveryAfterDaysLate", "Days late before recovery", r.recoveryAfterDaysLate);
       if (problem) return problem;
     }
+    const order = r.paymentAllocationOrder;
+    if (!Array.isArray(order) || order.length !== 4 || new Set(order).size !== 4 || order.some((part) => !["charges", "fees", "interest", "principal"].includes(part))) return "Choose where a payment goes first.";
     return (
       limit("seriouslyLateDays", "Days late shown in red", r.seriouslyLateDays) ??
       limit("par30TargetPercent", "PAR30 target", r.par30TargetPercent) ??
@@ -1040,7 +1047,8 @@ function newBorrowerProblem(person: Partial<NewBorrowerDetails> | undefined) {
   if (person.secondaryPhone && !normalisePhone(person.secondaryPhone)) return "Check the other phone number, or leave it empty.";
   if (!person.area?.trim()) return "Enter the borrower's address.";
   if (!person.premises?.trim()) return "Enter the borrower's shop or premises.";
-  if (!person.nextOfKin?.name?.trim() || !normalisePhone(person.nextOfKin.phone ?? "")) return "Enter the next of kin's name and mobile number.";
+  // Next of kin is optional; a number, if given, must be valid
+  if (person.nextOfKin?.phone?.trim() && !normalisePhone(person.nextOfKin.phone)) return "Check the next of kin's phone number, or leave it empty.";
   return null;
 }
 
@@ -1052,6 +1060,17 @@ function audit(user: MockUser, description: string, details?: { label: string; v
 const scopeOf = (user: MockUser) => (seesBranch(user) ? "branch" : "own");
 /** The loans a user may see, for the portfolio figures */
 const visibleTo = (user: MockUser): OfficerFilter => (officerId) => canSeeRecord(user, officerId);
+/** Results of money requests by Idempotency-Key: a repeat of the same key gets the first result back instead of running again */
+const idempotentResults = new Map<string, Record<string, unknown>>();
+const replayOf = (request: Request) => {
+  const key = request.headers.get("Idempotency-Key");
+  return key && idempotentResults.has(key) ? HttpResponse.json(idempotentResults.get(key), { status: 200 }) : null;
+};
+const rememberResult = (request: Request, result: object) => {
+  const key = request.headers.get("Idempotency-Key");
+  if (key) idempotentResults.set(key, result as Record<string, unknown>);
+};
+
 const limitParam = (request: Request, fallback: number) => Number(new URL(request.url).searchParams.get("limit")) || fallback;
 
 /** Balances are calculated each morning at 8:00. */
@@ -1262,7 +1281,7 @@ export const handlers = [
           terms: { ...item.terms, pricing: termsOf(app).pricing },
           officer: item.officer,
           approved: { by: app.decided!.by, at: app.decided!.at },
-          firstPaymentGapDays: Math.max(1, daysBetween(app.createdAt ?? new Date().toISOString(), termsOf(app).firstPaymentOn)),
+          firstPaymentGapDays: Math.max(0, daysBetween(app.createdAt ?? new Date().toISOString(), termsOf(app).firstPaymentOn)),
           disbursement: disbursementCheck(user, app),
         };
       })
@@ -1272,6 +1291,8 @@ export const handlers = [
 
   http.post(`${API_BASE}/applications/:applicationId/disburse`, async ({ params, request }) => {
     await delay(450);
+    const replay = replayOf(request);
+    if (replay) return replay;
     const user = currentDemoUser();
     const app = applications.find((a) => a.id === params.applicationId);
     if (!app || !canSeeRecord(user, app.officerId)) return HttpResponse.json({ message: "That application wasn't found." }, { status: 404 });
@@ -1283,6 +1304,9 @@ export const handlers = [
     const body = (await request.json()) as DisburseRequest;
     const invalid = (message: string) => HttpResponse.json({ message }, { status: 422 });
     if (!systemSettings.payments.payoutMethods.includes(body.method as "MTN MoMo")) return invalid(`Pay out with ${systemSettings.payments.payoutMethods.join(" or ")}.`);
+    if (body.consentConfirmed !== true) return invalid("Confirm the payout first.");
+    const fromAccount = systemSettings.business.payoutAccounts.find((account) => account.method === body.method && normalisePhone(account.number) === normalisePhone(body.payoutAccount ?? ""));
+    if (!fromAccount) return invalid(`Choose one of Tamu's ${body.method} accounts to pay from.`);
     const reference = body.reference?.trim() ?? "";
     if (!reference) return invalid("Enter the mobile money transaction ID.");
     if (!PAYOUT_REFERENCE.test(reference)) return invalid("Check the transaction ID: 6 to 30 letters, numbers, dots or dashes.");
@@ -1294,7 +1318,7 @@ export const handlers = [
 
     // The schedule moves with the payout: the first payment keeps the gap planned at application
     const terms = termsOf(app);
-    const gap = Math.max(1, daysBetween(app.createdAt ?? today, terms.firstPaymentOn));
+    const gap = Math.max(0, daysBetween(app.createdAt ?? today, terms.firstPaymentOn));
     // Calendar dates (local), like the preview: converting through UTC would move them a day in Uganda
     const firstPaymentOn = paymentDate(body.paidOn, "daily", gap);
     const summary = summariseTerms({ ...terms, firstPaymentOn });
@@ -1332,7 +1356,9 @@ export const handlers = [
     const amount = `UGX ${payout.toLocaleString("en-US")}`;
     recordBorrowerEvent(borrower, "money", `Disbursed ${amount} for ${loanId} · ${body.method} (${reference}) to ${borrower.phone}`, actorOf(user));
     audit(user, `disbursed ${loanId} · ${amount} to ${borrower.name} (${body.method} ${reference})`);
-    return HttpResponse.json<DisburseResult>({ loanId, firstPaymentOn, lastPaymentOn: summary.lastPaymentOn }, { status: 201 });
+    const result: DisburseResult = { loanId, firstPaymentOn, lastPaymentOn: summary.lastPaymentOn };
+    rememberResult(request, result);
+    return HttpResponse.json<DisburseResult>(result, { status: 201 });
   }),
 
   // (after /loans/list and /loans/to-disburse, which this pattern would also match)
@@ -1673,7 +1699,7 @@ export const handlers = [
           secondaryPhone: person.secondaryPhone ? normalisePhone(person.secondaryPhone) : null,
           premises: person.premises?.trim() ?? "",
           area: person.area?.trim() ?? "",
-          nextOfKin: person.nextOfKin?.name?.trim() && normalisePhone(person.nextOfKin.phone ?? "") ? { name: person.nextOfKin.name.trim(), phone: normalisePhone(person.nextOfKin.phone)! } : { name: "", phone: "" },
+          nextOfKin: { name: person.nextOfKin?.name?.trim() || null, phone: normalisePhone(person.nextOfKin?.phone ?? "") },
         },
         officerId,
       );
@@ -1758,6 +1784,8 @@ export const handlers = [
     const borrowerProblem = newBorrowerProblem(details.borrower);
     if (borrowerProblem) return HttpResponse.json({ message: borrowerProblem }, { status: 422 });
     if (details.guarantors.some((g) => !g.relationship?.trim())) return HttpResponse.json({ message: "Say how each guarantor knows you." }, { status: 422 });
+    // No drawn signatures: each of the three people must have ticked the consent box
+    if (details.consent?.borrower !== true || details.consent?.guarantor1 !== true || details.consent?.guarantor2 !== true) return HttpResponse.json({ message: "All three people need to tick the box to agree." }, { status: 422 });
 
     const images = {
       idFront: await imageFromForm(form, "idFront", true, MAX_UPLOAD_BYTES),
@@ -1766,12 +1794,9 @@ export const handlers = [
       g1Back: await imageFromForm(form, "guarantor1IdBack", true, MAX_UPLOAD_BYTES),
       g2Front: await imageFromForm(form, "guarantor2IdFront", true, MAX_UPLOAD_BYTES),
       g2Back: await imageFromForm(form, "guarantor2IdBack", true, MAX_UPLOAD_BYTES),
-      borrower: await imageFromForm(form, "borrowerSignature", false, 512 * 1024),
-      guarantor1: await imageFromForm(form, "guarantor1Signature", false, 512 * 1024),
-      guarantor2: await imageFromForm(form, "guarantor2Signature", false, 512 * 1024),
     };
     const failed = Object.values(images).find((image) => typeof image === "string");
-    if (failed) return HttpResponse.json({ message: "A photo or signature couldn't be read. Take it again and resubmit." }, { status: 422 });
+    if (failed) return HttpResponse.json({ message: "A photo couldn't be read. Take it again and resubmit." }, { status: 422 });
     const image = (value: StoredImage | string) => value as StoredImage;
 
     const normalised: OnlineApplicationDetails = {
@@ -1782,9 +1807,10 @@ export const handlers = [
         secondaryPhone: details.borrower.secondaryPhone ? normalisePhone(details.borrower.secondaryPhone) : null,
         premises: details.borrower.premises.trim(),
         area: details.borrower.area.trim(),
-        nextOfKin: { name: details.borrower.nextOfKin.name.trim(), phone: normalisePhone(details.borrower.nextOfKin.phone)! },
+        nextOfKin: { name: details.borrower.nextOfKin?.name?.trim() || null, phone: normalisePhone(details.borrower.nextOfKin?.phone ?? "") },
       },
       guarantors: details.guarantors.map((g) => ({ fullName: g.fullName.trim(), nationalId: g.nationalId, phone: normalisePhone(g.phone)!, relationship: g.relationship.trim() })) as OnlineApplicationDetails["guarantors"],
+      consent: { borrower: true, guarantor1: true, guarantor2: true },
     };
     // The link stops working now
     submitOnlineApplication(token, {
@@ -1795,7 +1821,7 @@ export const handlers = [
         { front: image(images.g1Front), back: image(images.g1Back) },
         { front: image(images.g2Front), back: image(images.g2Back) },
       ],
-      signatures: { borrower: image(images.borrower), guarantor1: image(images.guarantor1), guarantor2: image(images.guarantor2) },
+      consentAt: new Date().toISOString(),
     });
     const borrower = borrowers.find((b) => b.id === application!.borrowerId);
     if (borrower) syncOnlineApplications(borrower);
@@ -1976,6 +2002,8 @@ export const handlers = [
 
   http.post(`${API_BASE}/payments`, async ({ request }) => {
     await delay(250);
+    const replay = replayOf(request);
+    if (replay) return replay;
     const user = currentDemoUser();
     const body = (await request.json()) as RecordPaymentRequest;
     const loan = loans.find((l) => l.id === body.loanId);
@@ -2026,6 +2054,7 @@ export const handlers = [
       surplus: Math.max(0, body.amount - balanceBefore),
       taskId: task?.id ?? null,
     };
+    rememberResult(request, response);
     return HttpResponse.json(response, { status: 201 });
   }),
 
@@ -2473,15 +2502,16 @@ export const handlers = [
     const body = (await request.json()) as BorrowerDetailsUpdate;
     const phone = normalisePhone(body.phone ?? "");
     const secondaryPhone = body.secondaryPhone?.trim() ? normalisePhone(body.secondaryPhone) : null;
-    const kinPhone = body.nextOfKin ? normalisePhone(body.nextOfKin.phone ?? "") : null;
+    const kinPhone = body.nextOfKin?.phone?.trim() ? normalisePhone(body.nextOfKin.phone) : null;
     if (!phone) return HttpResponse.json({ message: "The main phone must be a Ugandan mobile number, e.g. 0772 418 230." }, { status: 422 });
     if (body.secondaryPhone?.trim() && !secondaryPhone) return HttpResponse.json({ message: "The other phone must be a Ugandan mobile number." }, { status: 422 });
     if (!body.area?.trim() || !body.premises?.trim()) return HttpResponse.json({ message: "Enter the address and the shop or premises." }, { status: 422 });
     if (!["female", "male"].includes(body.gender)) return HttpResponse.json({ message: "Choose female or male." }, { status: 422 });
-    if (!body.nextOfKin?.name?.trim() || !kinPhone) return HttpResponse.json({ message: "Give the next of kin's name and a Ugandan mobile number." }, { status: 422 });
+    // Next of kin is optional; a number, if given, must be a Ugandan mobile number
+    if (body.nextOfKin?.phone?.trim() && !kinPhone) return HttpResponse.json({ message: "The next of kin's phone must be a Ugandan mobile number." }, { status: 422 });
 
     const details = borrowerDetails.get(borrower.id)!;
-    const nextOfKin = { name: body.nextOfKin.name.trim(), relationship: body.nextOfKin.relationship?.trim() ?? "", phone: kinPhone };
+    const nextOfKin = { name: body.nextOfKin?.name?.trim() || null, relationship: body.nextOfKin?.relationship?.trim() || null, phone: kinPhone };
     const changed: string[] = [];
     if (secondaryPhone !== details.secondaryPhone) changed.push("other phone");
     if (body.area.trim() !== borrower.area) changed.push("address");
@@ -2725,12 +2755,22 @@ export const handlers = [
     const body = (await request.json()) as SystemSettings[typeof section];
     const problem = settingsProblem(section, body);
     if (problem) return invalid(problem);
+    if (section === "business") {
+      // New markets get an id; a renamed market keeps its id, and the people in it follow the new name
+      const current = systemSettings.business.branches;
+      for (const market of (body as SystemSettings["business"]).branches) {
+        market.name = market.name.trim();
+        if (market.id === null) market.id = `mkt-${Math.random().toString(36).slice(2, 8)}`;
+        const old = current.find((existing) => existing.id === market.id);
+        if (old && old.name !== market.name) for (const member of staff) if (member.branch === old.name) member.branch = market.name;
+      }
+    }
     const before = systemSettings[section] as unknown as Record<string, unknown>;
     const changes = Object.keys(body).filter((key) => JSON.stringify(before[key]) !== JSON.stringify((body as unknown as Record<string, unknown>)[key]));
     if (changes.length === 0) return HttpResponse.json<SystemSettings>(systemSettings);
     Object.assign(systemSettings, { [section]: structuredClone(body) });
     systemSettings.changed[section] = { at: new Date().toISOString(), by: user.name };
-    const show = (value: unknown) => (value === null ? "off" : Array.isArray(value) ? value.map((v) => (typeof v === "object" ? Object.values(v as object).join(" ") : v)).join(", ") || "none" : typeof value === "boolean" ? (value ? "on" : "off") : String(value));
+    const show = (value: unknown) => (value === null ? "off" : Array.isArray(value) ? value.map((v) => (typeof v === "object" ? ("name" in (v as object) ? String((v as { name: string }).name) : Object.values(v as object).join(" ")) : v)).join(", ") || "none" : typeof value === "boolean" ? (value ? "on" : "off") : String(value));
     audit(
       user,
       `changed ${SECTION_NAMES[section]} settings: ${changes.join(", ")}`,
@@ -2824,7 +2864,8 @@ export const handlers = [
     if (!EMAIL_PATTERN.test(email)) return invalid("Enter a valid email address.");
     if (!phone) return invalid("Enter a Ugandan mobile number, e.g. 0772 123 456.");
     if (!roles[body.roleId]) return invalid("Choose a role.");
-    if (!systemSettings.business.branches.includes(body.branch)) return invalid("Choose a market.");
+    const market = systemSettings.business.branches.find((candidate) => candidate.id === body.branchId);
+    if (!market) return invalid("Choose a market.");
     const taken = staff.find((member) => member.email.toLowerCase() === email);
     if (taken) return HttpResponse.json({ message: `${taken.name} already uses this email${taken.status === "deactivated" ? " (switched off). Turn their account back on instead" : ""}.` }, { status: 409 });
     const member: MockStaff = {
@@ -2833,7 +2874,7 @@ export const handlers = [
       email,
       phone,
       photoUrl: null,
-      branch: body.branch,
+      branch: market.name,
       roleId: body.roleId,
       status: "invited",
       lastSignInAt: null,
@@ -2841,7 +2882,7 @@ export const handlers = [
       deactivated: null,
     };
     staff.push(member);
-    audit(user, `invited ${name} as ${roles[body.roleId].name} (${body.branch})`);
+    audit(user, `invited ${name} as ${roles[body.roleId].name} (${market.name})`);
     return HttpResponse.json(staffMember(member), { status: 201 });
   }),
 
@@ -2896,8 +2937,10 @@ export const handlers = [
     if (!hasPermission(user, "users.manage")) return forbidden("You can't change staff details.");
     const member = findStaff(String(params.staffId));
     if (!member || member.status === "deactivated") return notFound("That person wasn't found.");
-    const { branch } = (await request.json()) as { branch: string };
-    if (!systemSettings.business.branches.includes(branch)) return invalid("Choose a market.");
+    const { branchId } = (await request.json()) as { branchId: string };
+    const target = systemSettings.business.branches.find((market) => market.id === branchId);
+    if (!target) return invalid("Choose a market.");
+    const branch = target.name;
     if (member.branch === branch) return HttpResponse.json(staffMember(member));
     const before = member.branch;
     member.branch = branch;

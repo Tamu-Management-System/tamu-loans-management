@@ -54,8 +54,8 @@ export function EditBorrowerDialog({ borrower, onClose, onSaved }: EditBorrowerD
   if (!form.area.trim()) errors.area = "Enter the address.";
   if (!form.premises.trim()) errors.premises = "Enter the shop, premises, building or arcade.";
   if (form.secondaryPhone.trim() && !secondaryPhone) errors.secondaryPhone = "Enter a Ugandan mobile number, or leave it empty.";
-  if (!form.kinName.trim()) errors.kinName = "Enter the next of kin's name.";
-  if (!kinPhone) errors.kinPhone = "Enter the next of kin's mobile number.";
+  // Next of kin is optional; a number, if given, must be valid
+  if (form.kinPhone.trim() && !kinPhone) errors.kinPhone = "Enter a Ugandan mobile number, or leave it empty.";
   const valid = Object.keys(errors).length === 0;
   const changed = (Object.keys(initial) as (keyof FormState)[]).some((key) => form[key].trim() !== initial[key].trim());
   const phoneChanging = !!phone && phone !== borrower.phone && phone !== borrower.pendingPhoneChange?.newPhone;
@@ -63,14 +63,14 @@ export function EditBorrowerDialog({ borrower, onClose, onSaved }: EditBorrowerD
 
   const submit = () => {
     setSubmitted(true);
-    if (!valid || !phone || !kinPhone || !form.gender) return;
+    if (!valid || !phone || !form.gender) return;
     update.mutate(
       {
         phone,
         secondaryPhone,
         area: form.area.trim(),
         premises: form.premises.trim(),
-        nextOfKin: { name: form.kinName.trim(), relationship: form.kinRelationship.trim(), phone: kinPhone },
+        nextOfKin: { name: form.kinName.trim() || null, relationship: form.kinRelationship.trim() || null, phone: kinPhone },
         gender: form.gender,
       },
       {
@@ -143,7 +143,7 @@ export function EditBorrowerDialog({ borrower, onClose, onSaved }: EditBorrowerD
       </fieldset>
 
       <fieldset className={styles.group}>
-        <legend>Next of kin</legend>
+        <legend>Next of kin (optional)</legend>
         {input("kinName", { label: "Full name" })}
         <div className={styles.pair}>
           {input("kinRelationship", { label: "Relationship" })}

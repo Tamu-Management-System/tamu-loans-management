@@ -55,11 +55,8 @@ function blockedReason(borrower: { name: string; status: BorrowerStatus; current
   return null;
 }
 
-const tomorrowDate = () => {
-  const date = new Date();
-  date.setDate(date.getDate() + 1);
-  return toDateInputValue(date);
-};
+/** The earliest first payment: the day the application is made. */
+const todayDate = () => toDateInputValue(new Date());
 
 /** The draft's guarantors, padded to two. */
 const draftGuarantors = (draft: ApplicationDraft): [GuarantorDraft, GuarantorDraft] => [{ ...EMPTY_GUARANTOR, ...draft.guarantors[0] }, { ...EMPTY_GUARANTOR, ...draft.guarantors[1] }];
@@ -87,7 +84,7 @@ const pricingOf = (product: LoanProduct) => ({ productName: product.name, intere
  * New application (user flow, phase 3). The officer finds the borrower (or starts with someone
  * new), sets the loan terms, and chooses how the forms are completed:
  * - paper: they type in the details from the signed forms and upload the forms as one PDF;
- * - online: the borrower fills in everything and signs, through a link the officer sends.
+ * - online: the borrower fills in everything and the three people tick a box to agree, through a link the officer sends.
  */
 export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {}) {
   const navigate = useNavigate();
@@ -111,7 +108,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
   const product = products.find((p) => p.id === productId);
   const schedule: RepaymentSchedule = product?.repaymentSchedule ?? draft?.terms.repaymentSchedule ?? "weekly";
   const [firstPaymentOn, setFirstPaymentOn] = useState(
-    draft && draft.terms.firstPaymentOn >= tomorrowDate() ? draft.terms.firstPaymentOn : defaultFirstPayment(draft?.terms.repaymentSchedule ?? "weekly"),
+    draft && draft.terms.firstPaymentOn >= todayDate() ? draft.terms.firstPaymentOn : defaultFirstPayment(draft?.terms.repaymentSchedule ?? "weekly"),
   );
   const [firstPaymentEdited, setFirstPaymentEdited] = useState(!!draft);
   const [route, setRoute] = useState<Route | null>(draft ? "paper" : null);
@@ -148,7 +145,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
 
   // ----- Terms -----
   const amountValue = Number(amount.replace(/\D/g, "")) || 0;
-  const tomorrow = tomorrowDate();
+  const earliest = todayDate();
   const termErrors: { product?: string; amount?: string; firstPaymentOn?: string } = {};
   // The product sets how long the loan runs
   const paymentsValue = product?.numberOfPayments ?? 0;
@@ -156,7 +153,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
   if (!product) termErrors.product = "Choose a loan product.";
   if (amountValue <= 0) termErrors.amount = "Enter the amount to lend.";
   else if (product && (amountValue < product.amount.min || amountValue > product.amount.max)) termErrors.amount = `${product.name}: ${formatUGX(product.amount.min)} to ${formatUGX(product.amount.max)}.`;
-  if (!firstPaymentOn || firstPaymentOn < tomorrow) termErrors.firstPaymentOn = "Choose a date from tomorrow on.";
+  if (!firstPaymentOn || firstPaymentOn < earliest) termErrors.firstPaymentOn = "Choose today or a later date.";
   else if (firstPaymentOn > latest) termErrors.firstPaymentOn = `${product!.name}: the first payment must be by ${formatLongDate(latest)}.`;
   const termsValid = Object.keys(termErrors).length === 0;
   const pricing = product ? pricingOf(product) : undefined;
@@ -214,7 +211,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
     secondaryPhone: normalisePhone(borrower.secondaryPhone),
     area: borrower.area.trim(),
     premises: borrower.premises.trim(),
-    nextOfKin: { name: borrower.kinName.trim().replace(/\s+/g, " "), phone: normalisePhone(borrower.kinPhone) ?? borrower.kinPhone.trim() },
+    nextOfKin: { name: borrower.kinName.trim().replace(/\s+/g, " ") || null, phone: normalisePhone(borrower.kinPhone) },
   });
   const send = (asRoute: Route, submit: boolean) => {
     if (!chosen || !termsValid) return;
@@ -327,7 +324,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
           <DateField
             label="First payment"
             value={firstPaymentOn}
-            min={tomorrow}
+            min={earliest}
             max={latest}
             onChange={(value) => {
               setFirstPaymentOn(value);
@@ -393,7 +390,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
             onSelect={() => setRoute("online")}
             icon="link"
             title="Online link"
-            text="For a borrower with a smartphone. You send a link (e.g. on WhatsApp); they fill in their own and their guarantors' details, and all three sign on the phone."
+            text="For a borrower with a smartphone. You send a link (e.g. on WhatsApp); they fill in their own and their guarantors' details, and all three tick a box to agree on the phone."
           />
         </div>
         {showErrors && !route && <p className={styles.error}>Choose paper forms or an online link.</p>}
@@ -470,7 +467,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
           <b>{borrowerName}</b>
           {isNew ? (
             <span>
-              NIN {normaliseNationalId(newBorrower.nationalId)} · {normalisePhone(newBorrower.phone)} · {newBorrower.gender === "male" ? "Male" : "Female"} · {newBorrower.area} · {newBorrower.premises} · Next of kin {newBorrower.kinName} ({normalisePhone(newBorrower.kinPhone)})
+              NIN {normaliseNationalId(newBorrower.nationalId)} · {normalisePhone(newBorrower.phone)} · {newBorrower.gender === "male" ? "Male" : "Female"} · {newBorrower.area} · {newBorrower.premises} {newBorrower.kinName.trim() && <> · Next of kin {newBorrower.kinName}{normalisePhone(newBorrower.kinPhone) && ` (${normalisePhone(newBorrower.kinPhone)})`}</>}
             </span>
           ) : (
             <span>
@@ -821,7 +818,7 @@ function OnlineLinkReady({ result, borrowerName }: { result: NewApplicationResul
           {result.id} is ready to send
         </h2>
         <p className={styles.stepIntro}>
-          Send this link to {borrowerName ?? "the borrower"}, e.g. on WhatsApp. They fill in their details and their two guarantors', and all three sign on the phone.
+          Send this link to {borrowerName ?? "the borrower"}, e.g. on WhatsApp. They fill in their details and their two guarantors', and all three tick a box to agree on the phone.
         </p>
         <label htmlFor={id} className={styles.linkLabel}>
           Online link

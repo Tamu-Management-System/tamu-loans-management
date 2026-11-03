@@ -386,8 +386,8 @@ export interface BorrowerProfile {
   /** ISO date */
   registeredOn: string;
   officer: { id: string; name: string };
-  /** Missing on some older records */
-  nextOfKin: { name: string; phone: string; relationship: string } | null;
+  /** Optional: each part may be missing (and the whole thing on older records) */
+  nextOfKin: { name: string | null; phone: string | null; relationship: string | null } | null;
   /** Missing on some older records */
   gender: "female" | "male" | null;
   currentLoan: BorrowerCurrentLoan | null;
@@ -414,7 +414,8 @@ export interface BorrowerDetailsUpdate {
   secondaryPhone: string | null;
   area: string;
   premises: string;
-  nextOfKin: { name: string; phone: string; relationship: string };
+  /** Optional; send null for anything not given */
+  nextOfKin: { name: string | null; phone: string | null; relationship: string | null };
   gender: "female" | "male";
 }
 
@@ -504,6 +505,7 @@ export interface GuarantorDetails {
   fullName: string;
   nationalId: string;
   phone: string;
+  /** Online form only; empty on the paper route (it's on the signed consent) */
   relationship: string;
 }
 
@@ -518,7 +520,8 @@ export interface NewBorrowerDetails {
   area: string;
   /** Shop / premises / building / arcade, as on the payment agreement */
   premises: string;
-  nextOfKin: { name: string; phone: string };
+  /** Optional; null for anything not given */
+  nextOfKin: { name: string | null; phone: string | null };
 }
 
 /** A document the borrower should (or may) have, uploaded or not */
@@ -596,11 +599,13 @@ export interface OnlineApplicationPerson {
 /**
  * POST /public/forms/{token} (multipart): `details` (this, as JSON), `idFront` and `idBack` (photos
  * of the borrower's National ID), `guarantor1IdFront`, `guarantor1IdBack`, `guarantor2IdFront`, `guarantor2IdBack`
- * (the guarantors' IDs), and `borrowerSignature`, `guarantor1Signature`, `guarantor2Signature`.
+ * (the guarantors' IDs). There are no drawn signatures: each of the three people ticks a consent box.
  */
 export interface OnlineApplicationDetails {
   borrower: NewBorrowerDetails;
   guarantors: [GuarantorDetails, GuarantorDetails];
+  /** Each person ticked "I agree" (the server records when). All three must be true. */
+  consent: { borrower: true; guarantor1: true; guarantor2: true };
 }
 
 /** Loan terms the officer sets on a new application */
@@ -777,6 +782,10 @@ export interface DisburseRequest {
   amount: number;
   /** ISO date */
   paidOn: string;
+  /** Tamu's own mobile money number the money was sent from (one of the payout accounts in Settings) */
+  payoutAccount: string;
+  /** The person paying out ticked the confirmation step; the server records when */
+  consentConfirmed: true;
 }
 
 export interface DisburseResult {
@@ -938,8 +947,9 @@ export interface StaffMember {
   phone: string;
   photoUrl: string | null;
   role: { id: string; name: string };
-  /** Their market (the API calls it a branch), e.g. "Mbarara" */
+  /** Their market (the API calls it a branch), e.g. "Mbarara", and its id */
   branch: string;
+  branchId: string;
   status: StaffStatus;
   /** ISO date-time; null if they've never signed in */
   lastSignInAt: string | null;
@@ -969,8 +979,8 @@ export interface InviteStaffRequest {
   email: string;
   phone: string;
   roleId: string;
-  /** One of the markets in business settings */
-  branch: string;
+  /** The id of one of the markets in business settings */
+  branchId: string;
 }
 
 /** POST /staff/{id}/deactivate */
@@ -1044,8 +1054,15 @@ export interface BusinessSettings {
   email: string;
   /** Tamu's accounts that loans are paid out from */
   payoutAccounts: PayoutAccount[];
-  /** Where Tamu works; staff each belong to one. Tamu calls them markets (the API keeps "branch") */
-  branches: string[];
+  /** Where Tamu works; staff each belong to one. Tamu calls them markets (the API keeps "branch"). */
+  branches: Market[];
+}
+
+/** A market (a Region in the data model). Its id never changes, so a market can be renamed. */
+export interface Market {
+  /** null for one just added in Settings, until it is saved */
+  id: string | null;
+  name: string;
 }
 
 export interface LoanRulesSettings {
@@ -1069,7 +1086,12 @@ export interface LoanRulesSettings {
   earlyWarningDays: number;
   /** How long an online application link works before it expires */
   onlineLinkValidHours: number;
+  /** Where a payment goes first: each part of what's owed, in the order a payment clears them */
+  paymentAllocationOrder: AllocationPart[];
 }
+
+/** A part of what a borrower owes, for the order payments are applied in */
+export type AllocationPart = "charges" | "fees" | "interest" | "principal";
 
 export interface PaymentSettings {
   /** Accepted for repayments */

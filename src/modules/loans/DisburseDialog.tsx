@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { ApiError } from "../../api/client";
+import { ApiError, newIdempotencyKey } from "../../api/client";
 import { useDisburse } from "../../api/loans";
 import type { LoanToDisburse, PayoutMethod } from "../../api/types";
 import { Dialog, Field, RadioOption, SummaryBox } from "../../components/ui/Dialog";
@@ -33,6 +33,8 @@ export function DisburseDialog({ loan, onClose }: { loan: LoanToDisburse; onClos
   // Second step: the person paying out confirms what they sent before it's recorded
   const [confirming, setConfirming] = useState(false);
   const [consent, setConsent] = useState(false);
+  // One key for this dialog: a retried payout is recorded once
+  const [idempotencyKey] = useState(newIdempotencyKey);
 
   const amount = Number(amountText.replace(/\D/g, "")) || 0;
   const errors = {
@@ -59,7 +61,7 @@ export function DisburseDialog({ loan, onClose }: { loan: LoanToDisburse; onClos
     if (!consent) return;
     // The dialog closes when the list refreshes, so confirm from the request itself
     disburse
-      .mutateAsync({ method, reference: reference.trim(), amount, paidOn })
+      .mutateAsync({ method, reference: reference.trim(), amount, paidOn, payoutAccount: from?.number ?? "", consentConfirmed: true, idempotencyKey })
       .then((result) => {
         showToast({ message: `${result.loanId} is active. First payment due ${formatLongDate(result.firstPaymentOn)}.` });
         onClose();

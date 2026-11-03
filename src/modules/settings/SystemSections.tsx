@@ -1,5 +1,5 @@
 import { useId } from "react";
-import type { PaymentMethod, PayoutAccount } from "../../api/types";
+import type { AllocationPart, PaymentMethod, PayoutAccount } from "../../api/types";
 import { useAuth } from "../../auth/AuthContext";
 import { Icon } from "../../components/ui/Icon";
 import { Select } from "../../components/ui/Select";
@@ -13,11 +13,19 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const outside = (value: number, [min, max]: readonly [number, number]) => value < min || value > max;
 const rangeText = ([min, max]: readonly [number, number], unit: string) => `${min} to ${max} ${unit}`;
 
+/** Where a payment goes first. Each choice is a full order, so it can't be left half-set. */
+const ALLOCATION_ORDERS: { order: AllocationPart[]; label: string }[] = [
+  { order: ["charges", "fees", "interest", "principal"], label: "Late fees, fees, interest, then the loan (recommended)" },
+  { order: ["fees", "interest", "principal", "charges"], label: "Fees, interest, the loan, then late fees" },
+  { order: ["interest", "principal", "fees", "charges"], label: "Interest, the loan, then fees and late fees" },
+];
+const orderKey = (order: AllocationPart[]) => order.join(">");
+
 /** Settings → Loan rules: the checks every loan goes through. */
 export function LoanRulesSection() {
   const { can } = useAuth();
   const draft = useSettingsDraft("loanRules");
-  const ids = { recovery: useId(), late: useId(), target: useId(), warning: useId(), link: useId() };
+  const ids = { recovery: useId(), late: useId(), target: useId(), warning: useId(), link: useId(), order: useId() };
   const numbers = [
     ["seriouslyLateDays", "Days late shown in red", "days"],
     ["par30TargetPercent", "PAR30 target", "%"],
@@ -60,6 +68,21 @@ export function LoanRulesSection() {
             </SettingRow>
             <SettingRow label="Online application links work for" htmlFor={ids.link} description="The link sent to a borrower stops working after this, or as soon as they submit.">
               <NumberField id={ids.link} value={rules.onlineLinkValidHours} onChange={(value) => draft.set("onlineLinkValidHours", value)} min={SETTING_LIMITS.onlineLinkValidHours[0]} max={SETTING_LIMITS.onlineLinkValidHours[1]} unit="hours" />
+            </SettingRow>
+          </SettingsGroup>
+
+          <SettingsGroup title="Payments" description="How money paid by a borrower is applied to what they owe.">
+            <SettingRow label="A payment goes first to" htmlFor={ids.order} description="Money clears things in this order. It changes what is cleared first, not how much is owed.">
+              <Select
+                id={ids.order}
+                value={orderKey(rules.paymentAllocationOrder)}
+                onChange={(value) => draft.set("paymentAllocationOrder", value.split(">") as AllocationPart[])}
+                options={[
+                  // An order set some other way (e.g. by the server) is still shown, so the form never hides what's saved
+                  ...(ALLOCATION_ORDERS.some((option) => orderKey(option.order) === orderKey(rules.paymentAllocationOrder)) ? [] : [{ value: orderKey(rules.paymentAllocationOrder), label: `Custom: ${rules.paymentAllocationOrder.join(", ")}` }]),
+                  ...ALLOCATION_ORDERS.map((option) => ({ value: orderKey(option.order), label: option.label })),
+                ]}
+              />
             </SettingRow>
           </SettingsGroup>
 
@@ -266,7 +289,7 @@ export function BusinessSection() {
                 ? "Add at least one payout account."
                 : business!.payoutAccounts.some((account) => !normalisePhone(account.number) || !account.accountName.trim())
                   ? "Each payout account needs a valid mobile money number and name."
-                  : business!.branches.length === 0 || business!.branches.some((market) => market.trim().length < 2)
+                  : business!.branches.length === 0 || business!.branches.some((market) => market.name.trim().length < 2)
                     ? "Add at least one market, each with a name."
                     : null
       }
@@ -323,21 +346,22 @@ export function BusinessSection() {
 
           <SettingsGroup title="Markets" description="Where Tamu works, e.g. Kampala Central or Mbarara. Each user belongs to one; choose it when inviting them.">
             {business.branches.map((market, index) => (
-              <div key={index} className={styles.marketRow}>
+              <div key={market.id ?? `new-${index}`} className={styles.marketRow}>
                 <input
                   className={styles.textInput}
                   aria-label={`Market ${index + 1}`}
-                  value={market}
+                  value={market.name}
                   maxLength={40}
-                  onChange={(event) => draft.set("branches", business.branches.map((name, i) => (i === index ? event.target.value : name)))}
+                  // Renaming keeps the market's id, so the people in it stay in it
+                  onChange={(event) => draft.set("branches", business.branches.map((existing, i) => (i === index ? { ...existing, name: event.target.value } : existing)))}
                   placeholder="Market name"
                 />
-                <button type="button" className={styles.iconButton} aria-label={`Remove the ${market || "new"} market`} onClick={() => draft.set("branches", business.branches.filter((_, i) => i !== index))}>
+                <button type="button" className={styles.iconButton} aria-label={`Remove the ${market.name || "new"} market`} onClick={() => draft.set("branches", business.branches.filter((_, i) => i !== index))}>
                   <Icon name="close" size={16} strokeWidth={2} />
                 </button>
               </div>
             ))}
-            <button type="button" className={styles.addButton} onClick={() => draft.set("branches", [...business.branches, ""])}>
+            <button type="button" className={styles.addButton} onClick={() => draft.set("branches", [...business.branches, { id: null, name: "" }])}>
               + Add market
             </button>
           </SettingsGroup>

@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
 import { ApiError } from "../../api/client";
 import { useCancelInvite, useChangeStaffBranch, useChangeStaffRole, useDeactivateStaff, useInviteStaff, useReactivateStaff, useSystemSettings } from "../../api/settings";
-import type { RoleSummary, StaffMember } from "../../api/types";
+import type { Market, RoleSummary, StaffMember } from "../../api/types";
 import { Dialog, Field } from "../../components/ui/Dialog";
 import { SEARCH_FROM, Select } from "../../components/ui/Select";
 import { useToast } from "../../components/ui/Toast";
@@ -12,7 +12,8 @@ import styles from "./Settings.module.css";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const errorMessage = (error: unknown) => (error instanceof ApiError ? error.message : error ? "That didn't go through. Try again." : null);
-const marketOptions = (markets: string[] = []) => markets.map((market) => ({ value: market, label: market }));
+const marketOptions = (markets: Market[] = []) => markets.flatMap((market) => (market.id ? [{ value: market.id, label: market.name }] : []));
+
 const roleOptions = (roles: RoleSummary[]) => roles.map((role) => ({ value: role.id, label: role.builtIn ? role.name : `${role.name} (custom)` }));
 
 /** The role's description, and the sensitive things it allows */
@@ -33,11 +34,11 @@ export function InviteStaffDialog({ roles, onClose, onInvited }: { roles: RoleSu
   const showToast = useToast();
   const invite = useInviteStaff();
   const { data: settings } = useSystemSettings();
-  const [form, setForm] = useState({ name: "", email: "", phone: "", roleId: "", branch: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", roleId: "", branchId: "" });
   const [touched, setTouched] = useState(false);
-  const markets = settings?.business.branches ?? [];
+  const markets = marketOptions(settings?.business.branches);
   // With a single market there's nothing to choose
-  const branch = form.branch || (markets.length === 1 ? markets[0] : "");
+  const branchId = form.branchId || (markets.length === 1 ? markets[0].value : "");
 
   const name = form.name.trim().replace(/\s+/g, " ");
   const email = form.email.trim().toLowerCase();
@@ -47,7 +48,7 @@ export function InviteStaffDialog({ roles, onClose, onInvited }: { roles: RoleSu
     email: !EMAIL_PATTERN.test(email) ? "Enter a valid email address." : null,
     phone: !phone ? "Enter a Ugandan mobile number, e.g. 0772 123 456." : null,
     roleId: !form.roleId ? "Choose a role." : null,
-    branch: !branch ? "Choose the market they work in." : null,
+    branchId: !branchId ? "Choose the market they work in." : null,
   };
   const valid = Object.values(problems).every((problem) => !problem);
   const show = (key: keyof typeof problems) => (touched ? problems[key] : null);
@@ -57,7 +58,7 @@ export function InviteStaffDialog({ roles, onClose, onInvited }: { roles: RoleSu
     setTouched(true);
     if (!valid) return;
     invite
-      .mutateAsync({ name, email, phone: phone!, roleId: form.roleId, branch })
+      .mutateAsync({ name, email, phone: phone!, roleId: form.roleId, branchId })
       .then(() => {
         showToast({ message: `Invite sent to ${email}.` });
         onInvited();
@@ -80,8 +81,8 @@ export function InviteStaffDialog({ roles, onClose, onInvited }: { roles: RoleSu
       <Field label="Role" htmlFor={ids.role} hint={show("roleId") ?? <RoleHint role={roles.find((role) => role.id === form.roleId)} />}>
         <Select id={ids.role} value={form.roleId} onChange={set("roleId")} options={roleOptions(roles)} placeholder="Choose a role" />
       </Field>
-      <Field label="Market" htmlFor={ids.market} hint={show("branch") ?? "Where they work. Admins add markets in Business details."}>
-        <Select id={ids.market} value={branch} onChange={set("branch")} options={marketOptions(markets)} placeholder="Choose a market" />
+      <Field label="Market" htmlFor={ids.market} hint={show("branchId") ?? "Where they work. Admins add markets in Business details."}>
+        <Select id={ids.market} value={branchId} onChange={set("branchId")} options={markets} placeholder="Choose a market" />
       </Field>
       <p className={styles.dialogNote}>The link works once, for {settings?.security.inviteValidHours ?? 48} hours. Nobody else sees their password, not even admins.</p>
     </Dialog>
@@ -97,9 +98,9 @@ export function ChangeRoleDialog({ member, roles, onClose }: { member: StaffMemb
   const move = useChangeStaffBranch();
   const { data: settings } = useSystemSettings();
   const [chosen, setChosen] = useState(member.role.id);
-  const [market, setMarket] = useState(member.branch);
+  const [market, setMarket] = useState(member.branchId);
   const roleChanged = chosen !== member.role.id;
-  const marketChanged = market !== member.branch;
+  const marketChanged = market !== member.branchId;
   const current = roles.find((role) => role.id === member.role.id);
   const next = roles.find((role) => role.id === chosen);
   const gains = next && current ? next.permissions.filter((p) => !current.permissions.includes(p)) : [];
@@ -110,8 +111,8 @@ export function ChangeRoleDialog({ member, roles, onClose }: { member: StaffMemb
   const submit = async () => {
     try {
       if (roleChanged) await change.mutateAsync({ staffId: member.id, roleId: chosen });
-      if (marketChanged) await move.mutateAsync({ staffId: member.id, branch: market });
-      const done = [roleChanged && `is now ${next?.name ?? "in their new role"}`, marketChanged && `works in ${market}`].filter(Boolean).join(" and ");
+      if (marketChanged) await move.mutateAsync({ staffId: member.id, branchId: market });
+      const done = [roleChanged && `is now ${next?.name ?? "in their new role"}`, marketChanged && `works in ${marketOptions(settings?.business.branches).find((option) => option.value === market)?.label ?? "the new market"}`].filter(Boolean).join(" and ");
       showToast({ message: `${member.name} ${done}.` });
       onClose();
     } catch {
@@ -134,7 +135,7 @@ export function ChangeRoleDialog({ member, roles, onClose }: { member: StaffMemb
         <Select id={roleId} value={chosen} onChange={setChosen} options={roleOptions(roles)} autoFocus />
       </Field>
       <Field label="Market" htmlFor={marketId}>
-        <Select id={marketId} value={market} onChange={setMarket} options={marketOptions(settings?.business.branches ?? [member.branch])} />
+        <Select id={marketId} value={market} onChange={setMarket} options={marketOptions(settings?.business.branches ?? [{ id: member.branchId, name: member.branch }])} />
       </Field>
       {(gains.length > 0 || losses.length > 0 || scopeChange) && (
         <div className={styles.changes} aria-label="What changes">

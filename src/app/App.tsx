@@ -54,6 +54,8 @@ const queryClient: QueryClient = new QueryClient({
 });
 
 // The borrowers' online application form: its own bundle, outside the staff app (no sign-in, no menus)
+import { FormSkeletonPage } from "../modules/online-application/FormSkeleton";
+
 const OnlineApplicationPage = lazy(() => import("../modules/online-application/OnlineApplicationPage").then((module) => ({ default: module.OnlineApplicationPage })));
 
 // TEMPORARY demo controls; not part of production builds (__MOCK_API_ENABLED__ in vite.config.ts)
@@ -179,7 +181,7 @@ export function App() {
             <Route
               path="forms/:token"
               element={
-                <Suspense fallback={null}>
+                <Suspense fallback={<FormSkeletonPage />}>
                   <OnlineApplicationPage />
                 </Suspense>
               }

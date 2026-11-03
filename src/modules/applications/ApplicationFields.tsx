@@ -41,14 +41,14 @@ export function BorrowerExtraFields({
       <TextField label="Other phone number (optional)" value={borrower.secondaryPhone} onChange={(secondaryPhone) => onChange({ secondaryPhone })} error={errors.secondaryPhone} hint="Another number to reach them" inputMode="tel" type="tel" />
       <TextField label="Address" value={borrower.area} onChange={(area) => onChange({ area })} error={errors.area} hint={you ? "Where you live" : "Where they live"} />
       <TextField label="Shop / premises / building / arcade" value={borrower.premises} onChange={(premises) => onChange({ premises })} error={errors.premises} />
-      <h3 className={styles.groupHeading}>Next of kin</h3>
+      <h3 className={styles.groupHeading}>Next of kin (optional)</h3>
       <TextField label="Full name" value={borrower.kinName} onChange={(kinName) => onChange({ kinName })} error={errors.kinName} />
-      <TextField label="Phone number" value={borrower.kinPhone} onChange={(kinPhone) => onChange({ kinPhone })} error={errors.kinPhone} inputMode="tel" type="tel" />
+      <TextField label="Phone number (optional)" value={borrower.kinPhone} onChange={(kinPhone) => onChange({ kinPhone })} error={errors.kinPhone} inputMode="tel" type="tel" />
     </>
   );
 }
 
-/** A guarantor's details: the person, and how they know the borrower */
+/** Online form: a guarantor's details, and how they know the borrower */
 export function GuarantorFields({ guarantor, onChange, errors }: { guarantor: GuarantorDraft; onChange: (changes: Partial<GuarantorDraft>) => void; errors: FieldErrors<GuarantorDraft> }) {
   return (
     <>

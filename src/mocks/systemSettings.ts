@@ -16,7 +16,10 @@ export const systemSettings: SystemSettings = {
       { method: "MTN MoMo", number: "0772 900 410", accountName: "Tamu Cleaning Services" },
       { method: "Airtel Money", number: "0752 900 410", accountName: "Tamu Cleaning Services" },
     ],
-    branches: ["Kampala Central", "Mbarara"],
+    branches: [
+      { id: "mkt-kampala", name: "Kampala Central" },
+      { id: "mkt-mbarara", name: "Mbarara" },
+    ],
   },
   loanRules: {
     approverCannotDisburse: true,
@@ -29,6 +32,7 @@ export const systemSettings: SystemSettings = {
     par30TargetPercent: 5,
     earlyWarningDays: 7,
     onlineLinkValidHours: 72,
+    paymentAllocationOrder: ["charges", "fees", "interest", "principal"],
   },
   payments: {
     repaymentMethods: ["Cash", "MTN MoMo", "Airtel Money"],

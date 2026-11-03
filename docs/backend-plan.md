@@ -22,6 +22,9 @@ Arrears automation, SMS and accounting (Modules 3 and 4) are Phase 2.
 
 ## 2. Data model
 
+> **The backend developer's own data model document is the source of truth for the database.** The table below is an
+> early sketch kept for reference. Section 6 maps his model's names to the API's.
+
 One branch for now (keep a `branch` column on users and borrowers so more can be added later). **Tamu calls these
 "markets"** (they have staff in Mbarara): the screens say "Market"; the API keeps the key `branch` (e.g. data scope
 `branch` = "Whole market"). Mbarara staff use the same shared book in the MVP. Money is whole
@@ -75,7 +78,8 @@ later). `arrearsAmount` = what's unpaid on instalments due before today. "Seriou
 `loanRules.seriouslyLateDays` (default 30).
 
 **Late fees** (from the loan's product): after `grace_days`, `percent` of the overdue amount or a `fixed` amount,
-charged once per missed payment or every day late. The frontend shows them separately; the backend adds them to
+charged once per missed payment or every day late. The nightly job must never charge twice: one late fee per instalment when charged per missed payment,
+one per instalment per day when charged per day (a unique key on the charge enforces it). The frontend shows them separately; the backend adds them to
 what's owed.
 
 **Portfolio figures** (scope = the user's data access; open loans only):
@@ -141,10 +145,64 @@ Each phase leaves the frontend working for the screens it covers (switch screens
 each with up to a year of one-month loans (most repaid on time, some often late, a few stopped paying and went to
 recovery), real schedules and payments, and applications at every stage. Never load sample data into production.
 
-## 6. Open questions for the client
+## 6. Data model and API names
+
+The data model (database) and the API (what the screens call) can use different names. The API shapes in
+[api-contract.md](api-contract.md) are what the frontend expects, so the API maps the model's names as below.
+Nothing in the frontend has to change for the model, and nothing in the model has to change for the frontend.
+
+**Style.** The model uses `camelCase` fields and `UPPER_CASE` enums. The API uses lower-case words for enum values
+(`awaiting-borrower`, `in-arrears`, `missed-payment`), so map them at the edge.
+
+| Model | API |
+|---|---|
+| Region (a "market") | `branch` (name) and `branchId` (the Region id) on staff; `settings.business.branches` is a list of `{ id, name }`. A rename keeps the id. Screens say "Market"; role `dataScope: "branch"` = MARKET. |
+| Person.fullName, otherNames | `fullName` (borrowers also `name`). `otherNames` isn't on any screen. |
+| Person.gender, address | Required by the screens for borrowers only (`gender`, `area`). Not asked for guarantors or staff, so they stay empty on their Person. |
+| Person.address, placeOfWork | `area` (shown as "Address"), `premises` (shop / arcade / building) |
+| TelephoneNumber MAIN / OTHER | `phone` (mobile money), `secondaryPhone`. A PhoneChangeRequest shows as `pendingPhoneChange`. |
+| Phone numbers (E.164) | Store `+2567…`. Accept local or `+256` on input. **Return the local display form `0772 418 230`**, so screens show it unchanged. |
+| Borrower.nextOfKinName / Phone / Relationship (all optional) | `nextOfKin: { name, phone, relationship }`, each `null` when not given |
+| Borrower.status | `status`: `applicant`, `active`, `in-arrears`, `cleared` |
+| LoanProduct fields | `interest { ratePercent, per }`, `amount { min, max }`, `numberOfPayments`, `fee { type, value, collection: added \| deducted }`, `penalty { type, value, per: missed-payment \| day, graceDays }`, `repaymentSchedule`, `status: active \| archived` |
+| LoanApplication.status | `draft`, `awaiting-borrower` (WAITING_FOR_BORROWER), `submitted` (PENDING_APPROVAL), `approved`, `rejected`. DISBURSED = `approved` with `loanId` set. CANCELLED applications aren't returned (no screen yet). |
+| ApplicationEvent (RETURNED) | `returned { reason, note, by, at }` = the latest return that hasn't been fixed |
+| decidedBy / decidedAt | `decided { by, at }` |
+| ApplicationGuarantor | `guarantors[]` with `fullName`, `nationalId`, `phone`, `relationship` (empty on paper applications) |
+| Disbursement (belongs to the application) | `POST /applications/{id}/disburse`; its response gives the new `loanId`. The loan exists only after a CONFIRMED payout. |
+| Loan.status ACTIVE / CLOSED / IN_RECOVERY / WRITTEN_OFF | `status` `active` / `cleared`; in recovery = `recovery` object present; late = `daysPastDue > 0` (computed). WRITTEN_OFF has no screen yet. |
+| Loan.loanOfficer | `officer { id, name }` |
+| RepaymentSchedule (current version) | `schedule[]` with `number`, `dueOn`, `amount`, `status`. Superseded versions aren't shown. |
+| Payment | `payments[]`; `method` is `Cash`, `MTN MoMo` or `Airtel Money` |
+| LoanCharge (LATE_FEE) | `lateFees { amount, … }`. "Owed now" = balance + late fees. |
+| Recovery.reason | `long-overdue`, `unreachable`, `refuses-to-pay`, `other` |
+| WorklistTask.type | `instalment-due`, `promise-due`, `overdue`, `application-incomplete`, `awaiting-approval`, `awaiting-disbursement`, `access-request` |
+| Allocation order (Settings LOAN_RULES) | `loanRules.paymentAllocationOrder`: `charges`, `fees`, `interest`, `principal` in the order a payment clears them |
+| Settings sections BUSINESS / LOAN_RULES / PAYMENTS / SECURITY | `business`, `loanRules`, `payments`, `security`; `changed { at, by }` from the newest row |
+| Payment.transactionId | `reference` (mobile money transaction ID; for cash an optional receipt number) |
+| Payment.idempotencyKey | the `Idempotency-Key` header on `POST /payments` |
+| Disbursement.payoutAccount, consentConfirmedAt | `payoutAccount`, `consentConfirmed: true` in the payout request (the server stamps the time) |
+| LoanApplication.createdBy | `officer { id, name }` on applications: the loan officer who created it. Applications have no market of their own in the model: work it out from the creator's market (or the borrower's, when there is one). |
+| Consent (online form) | No signatures: each of the three people ticks "I agree". `consent: { borrower, guarantor1, guarantor2 }` in the submission; the server stamps `ApplicationGuarantor.consentSignedAt` for each guarantor and logs the borrower's consent time in the AuditLog (actorType BORROWER). |
+| Session / sign-in history | `recentSignIns` on My profile = the person's AuditLog SIGN_IN entries (successful and failed), not Session rows |
+| Technical support contact (KadoshDev) | Server configuration, not a database table: `GET /support/contacts` returns it with the admins and business contacts |
+| AuditLog.actorType + actorId | `actor { id, name, role, photoUrl }` (SYSTEM shows as "Automatic") |
+
+**Calculations to keep.** Each instalment's `amountDue` follows the rule in section 3 (rounded down to 100, the last
+one takes the remainder). The model's principal / interest / fee parts of an instalment are that amount split in
+proportion (any rounding remainder goes to the last instalment).
+
+**Not on any screen yet (build when the module arrives):** PaymentReversal (reversals were dropped from the MVP), Refund and
+LoanWriteOff (money moved or forgiven, each needing a second person's approval),
+the Ledger and LedgerEntry accounting entries (Module 4), MobileMoneyTransaction matching, MessageTemplate /
+CommunicationLog / AutomationWorkflow (Module 3). The screens for them show "Coming soon".
+
+## 7. Open questions for the client
 
 - Who can override a late fee, and whether late fees count towards PAR.
 - Recovery charges ("as determined by the recovery team" on the agreement): how they're worked out and recorded.
 - Whether recovery staff need their own logins (a custom role exists for it).
 - Monthly loans: is one month always the length, or do officers pick 1, 2 or 3 months per loan?
+- Where a payment goes first: admins choose it in Settings → Loan rules (default charges → fees → interest →
+  principal). Confirm with Tamu which order they want as the default.
 - Payment matching with MTN/Airtel statements (Module 4) and SMS reminders (Module 3) are Phase 2.

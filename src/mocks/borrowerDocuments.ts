@@ -250,6 +250,7 @@ const FIRST_PAYMENT_DAYS = { daily: 1, weekly: 7, monthly: 30 };
 /** What the online form shows: the loan terms the officer set, nothing personal. */
 function newOnlineApplication(borrowerId: string, officerId: string, slotKey: string, forms: MockLoanForms, createdBy: string, createdAt = Date.now()): MockOnlineApplication {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
+  // A plain random token, like the real one: it carries no information
   const token = btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   const day = (offset: number) => new Date(createdAt + offset * DAY_MS).toISOString().slice(0, 10);
   const pricing = forms.pricing ?? LEGACY_PRICING;
@@ -392,15 +393,13 @@ export async function documentFile(version: MockDocumentVersion, borrower: MockB
   else if (key === "national-id-back") version.file = await nationalIdBack(borrower.nin);
   else if (key === "workplace-photo") version.file = await workplacePhoto(details.premises, "Shop");
   else if (slot?.forms && version.submission) {
-    // Completed online: what the borrower filled in, with the three drawn signatures
-    const { details, signatures } = version.submission;
-    const image = (stored: StoredImage) => ({ jpeg: dataUrlBytes(stored.dataUrl), width: stored.width, height: stored.height });
+    // Completed online: what the borrower filled in, agreed to by a consent tick from each of the three people
+    const { details } = version.submission;
     version.file = loanApplicationPdf({
       borrower: { name: details.borrower.fullName, nin: details.borrower.nationalId, phone: details.borrower.phone, premises: details.borrower.premises },
       forms: { ...slot.forms, guarantors: details.guarantors.map((g) => ({ name: g.fullName, nin: g.nationalId, phone: g.phone, nationalIdMasked: maskNationalId(g.nationalId) })) },
       signedOn: version.uploadedAt,
       signedOnline: true,
-      signatures: { borrower: image(signatures.borrower), guarantors: [image(signatures.guarantor1), image(signatures.guarantor2)] },
     });
     version.sizeBytes = version.file.size;
   } else if (slot?.forms)

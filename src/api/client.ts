@@ -43,10 +43,22 @@ function parseJson(text: string): unknown {
   }
 }
 
+interface RequestOptions {
+  /** Sent as the Idempotency-Key header: the server returns the first result again for a repeat of the same key */
+  idempotencyKey?: string;
+}
+
+/** A fresh key for one money action (one opened dialog); the same key is reused if that action is retried. */
+export function newIdempotencyKey() {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+
 /** Sends a request and returns the response, or throws an ApiError with the server's message. */
-async function send(method: string, path: string, body?: unknown): Promise<Response> {
+async function send(method: string, path: string, body?: unknown, options: RequestOptions = {}): Promise<Response> {
   const isUpload = body instanceof FormData;
   const headers: Record<string, string> = {};
+  // Money requests carry a key so a retry (a double click, a dropped connection) can't be recorded twice
+  if (options.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
   // Uploads: the browser sets the multipart Content-Type (with its boundary) itself
   if (body !== undefined && !isUpload) headers["Content-Type"] = "application/json";
   const csrfToken = SAFE_METHODS.includes(method) ? null : readCookie(CSRF_COOKIE);
@@ -72,14 +84,14 @@ async function send(method: string, path: string, body?: unknown): Promise<Respo
   return response;
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const response = await send(method, path, body);
+async function request<T>(method: string, path: string, body?: unknown, options?: RequestOptions): Promise<T> {
+  const response = await send(method, path, body, options);
   return parseJson(await response.text()) as T;
 }
 
 export const api = {
   get: <T>(path: string) => request<T>("GET", path),
-  post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),
+  post: <T>(path: string, body?: unknown, options?: RequestOptions) => request<T>("POST", path, body, options),
   patch: <T>(path: string, body?: unknown) => request<T>("PATCH", path, body),
   put: <T>(path: string, body?: unknown) => request<T>("PUT", path, body),
   delete: <T>(path: string) => request<T>("DELETE", path),
