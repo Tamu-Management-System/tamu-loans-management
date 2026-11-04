@@ -195,6 +195,8 @@ export interface LoanSummary {
   phone: string;
   /** UGX */
   outstandingBalance: number;
+  /** UGX owed right now: the balance plus any late fees. The most one payment can be. */
+  owedNow: number;
   /** UGX still due today, if an instalment or promise is due */
   dueToday: number | null;
 }
@@ -209,8 +211,6 @@ export interface RecordPaymentRequest {
   reference?: string;
   /** ISO date; omitted = today. How far back is allowed is in Settings → Payments */
   paidOn?: string;
-  /** Required (true) when the amount is more than the balance: the person confirmed the borrower really paid extra */
-  surplusConfirmed?: boolean;
 }
 
 /** POST /payments response */
@@ -219,8 +219,6 @@ export interface RecordPaymentResponse {
   loanId: string;
   balanceBefore: number;
   balanceAfter: number;
-  /** UGX paid beyond the balance (QA scenario 3); the loan closes and the team is notified */
-  surplus: number;
   /** Worklist task this payment counted towards, if any */
   taskId: string | null;
 }
@@ -1102,10 +1100,6 @@ export interface PaymentSettings {
   referenceRequired: boolean;
   /** How many days back a repayment can be dated (0 = today only) */
   backdateDays: number;
-  /** Payments bigger than the balance are accepted (the extra is recorded) */
-  allowOverpayment: boolean;
-  /** The most a payment may go over the balance, as a % of the balance; stops typing mistakes like an extra zero */
-  maxOverpaymentPercent: number;
 }
 
 export interface SecuritySettings {
@@ -1233,4 +1227,24 @@ export interface Report {
     /** A totals row, if the table adds up */
     total: Record<string, string | number | null> | null;
   };
+}
+
+// ---------- Set your password (public: opened from an emailed invite or reset link) ----------
+
+/** GET /public/invites/{token}: what the "Set your password" page shows. The token in the link is the only access. */
+export interface PasswordLinkInfo {
+  name: string;
+  /** Their sign-in email, shown so they know which account this is for */
+  email: string;
+  /** invite: a new account; reset: an admin sent a reset for an existing one */
+  purpose: "invite" | "reset";
+  /** From Settings → Security, so the page can show the same rule the server enforces */
+  minPasswordLength: number;
+  /** ISO date-time; the link also stops working once it's used */
+  expiresAt: string;
+}
+
+/** POST /public/invites/{token} */
+export interface SetPasswordRequest {
+  password: string;
 }

@@ -82,6 +82,8 @@ import type {
   SupportContacts,
   NewBorrowerDetails,
   InviteStaffRequest,
+  PasswordLinkInfo,
+  SetPasswordRequest,
   DeactivateStaffRequest,
   SaveRoleRequest,
 } from "../api/types";
@@ -110,6 +112,7 @@ import { formatValue } from "../modules/reports/reportFormat";
 import { borrowerDetails, maskNationalId, nextPayment } from "./borrowerProfiles";
 import { pastLoans } from "./loanHistory";
 import { addApplicationSection, addDocumentVersion, markApplicationPaidOut, applicationGuarantors, updateApplicationForms, applicationVersionFor, createOnlineLinkForApplication, borrowerDocumentsResponse, createOnlineLink, describeSlot, documentFile, findDocument, findSlot, ingestOnlineApplications } from "./borrowerDocuments";
+import { createPasswordLink, ensureDemoPasswordLinks, findPasswordLink, markPasswordLinkUsed, passwordLinkProblem, revokePasswordLinks, sendDemoEmail } from "./passwordLinks";
 import { assignBorrower, findOnlineApplication, linkProblem, submitOnlineApplication, submittedForNewBorrowers, type StoredImage } from "./onlineApplications";
 import { nextBorrowerId } from "./borrowerDirectory";
 import { loanPayments, recordLoanPayment } from "./loanPayments";
@@ -148,6 +151,16 @@ function normalisePhone(input: string): string | null {
 }
 
 const NATIONAL_ID = /^C[MF][A-Z0-9]{12}$/;
+// The sample links for the "Set your password" screens (see passwordLinks.ts)
+ensureDemoPasswordLinks(systemSettings.security.inviteValidHours);
+
+const PASSWORD_LINK_PROBLEMS = {
+  invalid: "This link isn't valid. Check that you opened the whole link, or ask your admin to send a new one.",
+  used: "This link has already been used.",
+  replaced: "This link was replaced by a newer one.",
+  expired: "This link has expired. Ask your admin to send a new one.",
+};
+
 const LINK_PROBLEM_MESSAGES = {
   invalid: "This link isn't valid. Check you copied all of it, or ask your loan officer for a new one.",
   used: "This application has already been submitted, so the link no longer works.",
@@ -602,7 +615,7 @@ function settingsProblem(section: SettingsSection, body: unknown): string | null
     if (!Array.isArray(p.repaymentMethods) || p.repaymentMethods.length === 0 || p.repaymentMethods.some((m) => !["Cash", "MTN MoMo", "Airtel Money"].includes(m))) return "Accept at least one way to repay.";
     if (!Array.isArray(p.payoutMethods) || p.payoutMethods.length === 0 || p.payoutMethods.some((m) => !["MTN MoMo", "Airtel Money"].includes(m))) return "Choose at least one way to pay out.";
     if (p.payoutMethods.some((m) => !systemSettings.business.payoutAccounts.some((a) => a.method === m))) return "Add a payout account for each payout method (Business details).";
-    return limit("backdateDays", "Days a payment can be back-dated", p.backdateDays) ?? limit("maxOverpaymentPercent", "Most over the balance", p.maxOverpaymentPercent);
+    return limit("backdateDays", "Days a payment can be back-dated", p.backdateDays);
   }
   const s = body as SystemSettings["security"];
   for (const [key, label] of [
@@ -655,6 +668,38 @@ function lateFeesOf(terms: { productId?: string; repaymentSchedule: LoanProduct[
   const product = findProduct(terms.productId) ?? productForSchedule(terms.repaymentSchedule);
   const missedPayments = schedule.filter((instalment) => instalment.status === "late").length || (daysLate > 0 ? 1 : 0);
   return { amount: latePenalty(product.penalty, { overdue, daysLate, missedPayments, principal: terms.principal }), rule: `${product.name}: ${describePenalty(product.penalty)}` };
+}
+
+/** The loan's instalments, with what's been repaid applied to them in order */
+function scheduleOf(terms: NonNullable<ReturnType<typeof borrowerDetails.get>>["loanTerms"], balance: number, today: string): LoanInstalment[] {
+  const schedule: LoanInstalment[] = [];
+  if (!terms?.schedule) return schedule;
+  let left = terms.totalRepayable - balance;
+  for (let index = 0; index < terms.schedule.numberOfPayments; index++) {
+    const last = index === terms.schedule.numberOfPayments - 1;
+    const amount = last ? terms.totalRepayable - terms.schedule.instalment * (terms.schedule.numberOfPayments - 1) : terms.schedule.instalment;
+    const paid = Math.max(0, Math.min(amount, left));
+    left -= paid;
+    const dueOn = paymentDate(terms.schedule.firstPaymentOn, terms.repaymentSchedule, index);
+    const status: LoanInstalment["status"] = paid >= amount ? "paid" : dueOn < today ? "late" : dueOn === today ? "due" : paid > 0 ? "part-paid" : "upcoming";
+    schedule.push({ number: index + 1, dueOn, amount, paid, status });
+  }
+  return schedule;
+}
+
+/**
+ * What a borrower owes right now: the loan balance plus any late fees. It is the most one payment can be, so a payment
+ * can never go beyond what's demanded (and nobody has to be refunded).
+ */
+function owedNowOf(loan: (typeof loans)[number]) {
+  const balance = Math.max(0, loan.outstandingBalance);
+  if (balance === 0 || loan.daysPastDue <= 0) return balance;
+  const borrower = borrowerForLoan(loan.id);
+  const terms = borrower ? borrowerDetails.get(borrower.id)?.loanTerms : null;
+  if (!terms) return balance;
+  const today = new Date().toLocaleDateString("en-CA");
+  const overdue = Math.min(loan.arrearsAmount || (nextPayment(terms, balance)?.amount ?? 0), balance);
+  return balance + lateFeesOf(terms, scheduleOf(terms, balance, today), loan.daysPastDue, overdue).amount;
 }
 
 /** Loans a person brought back from recovery: automatic recovery doesn't send them again */
@@ -1378,20 +1423,7 @@ export const handlers = [
       syncOnlineApplications(borrower);
       const balance = Math.max(0, loan.outstandingBalance);
       const repaid = terms.totalRepayable - balance;
-      // The schedule, with what's been repaid applied to the instalments in order
-      const schedule: LoanInstalment[] = [];
-      if (terms.schedule) {
-        let left = repaid;
-        for (let index = 0; index < terms.schedule.numberOfPayments; index++) {
-          const last = index === terms.schedule.numberOfPayments - 1;
-          const amount = last ? terms.totalRepayable - terms.schedule.instalment * (terms.schedule.numberOfPayments - 1) : terms.schedule.instalment;
-          const paid = Math.max(0, Math.min(amount, left));
-          left -= paid;
-          const dueOn = paymentDate(terms.schedule.firstPaymentOn, terms.repaymentSchedule, index);
-          const status: LoanInstalment["status"] = paid >= amount ? "paid" : dueOn < today ? "late" : dueOn === today ? "due" : paid > 0 ? "part-paid" : "upcoming";
-          schedule.push({ number: index + 1, dueOn, amount, paid, status });
-        }
-      }
+      const schedule = scheduleOf(terms, balance, today);
       const app = loan.applicationId ? applications.find((a) => a.id === loan.applicationId) : undefined;
       const paidOff = balance <= 0;
       return HttpResponse.json<LoanDetail>({
@@ -1750,6 +1782,39 @@ export const handlers = [
 
   // ---------- Online loan application (public: the link's token is the only access) ----------
 
+  // ----- Set your password (public: the token in the emailed link is the only access) -----
+  http.get(`${API_BASE}/public/invites/:token`, async ({ params }) => {
+    await delay(300);
+    const link = findPasswordLink(String(params.token));
+    const problem = passwordLinkProblem(link);
+    if (problem) return HttpResponse.json({ message: PASSWORD_LINK_PROBLEMS[problem], reason: problem }, { status: problem === "invalid" ? 404 : 410 });
+    return HttpResponse.json<PasswordLinkInfo>(
+      { name: link!.name, email: link!.email, purpose: link!.purpose, minPasswordLength: systemSettings.security.minPasswordLength, expiresAt: link!.expiresAt },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  }),
+
+  http.post(`${API_BASE}/public/invites/:token`, async ({ params, request }) => {
+    await delay(500);
+    const token = String(params.token);
+    const link = findPasswordLink(token);
+    const problem = passwordLinkProblem(link);
+    if (problem) return HttpResponse.json({ message: PASSWORD_LINK_PROBLEMS[problem], reason: problem }, { status: problem === "invalid" ? 404 : 410 });
+    const { password } = (await request.json()) as SetPasswordRequest;
+    // The same rules as changing a password; the demo can't tell this person's name and email apart from the link's
+    const wrong = passwordProblem(password ?? "", { email: link!.email, name: link!.name } as MockUser);
+    if (wrong) return HttpResponse.json({ message: wrong }, { status: 422 });
+    markPasswordLinkUsed(token);
+    const member = findStaff(link!.staffId);
+    if (member?.status === "invited") {
+      member.status = "active";
+      member.invite = null;
+    }
+    // The person is the actor: nobody else knows the password, and admins never see it
+    audit({ id: link!.staffId, name: link!.name, roleId: member?.roleId ?? "", photoUrl: member?.photoUrl ?? null } as MockUser, link!.purpose === "invite" ? "accepted their invite and set a password for their account" : "reset the password for their account");
+    return new HttpResponse(null, { status: 204 });
+  }),
+
   http.get(`${API_BASE}/public/forms/:token`, async ({ params }) => {
     await delay(300);
     const application = findOnlineApplication(String(params.token));
@@ -1994,7 +2059,7 @@ export const handlers = [
       .map((loan) => {
         const task = openTaskForLoan(loan.id);
         const dueToday = task && (task.type === "instalment-due" || task.type === "promise-due") ? task.amountDue - task.amountPaid : null;
-        return { id: loan.id, borrowerName: loan.borrowerName, phone: loan.phone, outstandingBalance: loan.outstandingBalance, dueToday };
+        return { id: loan.id, borrowerName: loan.borrowerName, phone: loan.phone, outstandingBalance: loan.outstandingBalance, owedNow: owedNowOf(loan), dueToday };
       })
       .sort((a, b) => a.borrowerName.localeCompare(b.borrowerName));
     return HttpResponse.json(body);
@@ -2014,13 +2079,9 @@ export const handlers = [
     if (!rules.repaymentMethods.includes(body.method)) return HttpResponse.json({ message: `${body.method} isn't accepted for repayments.` }, { status: 422 });
     if (rules.referenceRequired && body.method !== "Cash" && !body.reference?.trim()) return HttpResponse.json({ message: "Enter the mobile money transaction ID." }, { status: 422 });
     if (!Number.isInteger(body.amount)) return HttpResponse.json({ message: "Enter a whole number of shillings." }, { status: 422 });
-    if (body.amount > loan.outstandingBalance) {
-      const most = Math.floor(loan.outstandingBalance * (1 + rules.maxOverpaymentPercent / 100));
-      if (!rules.allowOverpayment) return HttpResponse.json({ message: `That's more than the balance of UGX ${loan.outstandingBalance.toLocaleString("en-US")}.` }, { status: 422 });
-      // A hard limit, so a typing mistake (an extra zero) can't go in even with the confirmation
-      if (body.amount > most) return HttpResponse.json({ message: `That's far more than the balance. The most accepted is UGX ${most.toLocaleString("en-US")} (${rules.maxOverpaymentPercent}% over). Check the amount.` }, { status: 422 });
-      if (body.surplusConfirmed !== true) return HttpResponse.json({ message: "Confirm that the borrower paid more than they owe." }, { status: 422 });
-    }
+    // Never more than the borrower owes: no overpayments, so there's nothing to refund later
+    const owedNow = owedNowOf(loan);
+    if (body.amount > owedNow) return HttpResponse.json({ message: `That's more than ${loan.borrowerName} owes. The most you can record is UGX ${owedNow.toLocaleString("en-US")}.` }, { status: 422 });
     const todayIso = new Date().toLocaleDateString("en-CA");
     const paidOn = body.paidOn ?? todayIso;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(paidOn) || paidOn > todayIso || paidOn < paymentDate(todayIso, "daily", -rules.backdateDays))
@@ -2051,7 +2112,6 @@ export const handlers = [
       loanId: loan.id,
       balanceBefore,
       balanceAfter: loan.outstandingBalance,
-      surplus: Math.max(0, body.amount - balanceBefore),
       taskId: task?.id ?? null,
     };
     rememberResult(request, response);
@@ -2096,6 +2156,9 @@ export const handlers = [
       task.status = "done";
       if (action === "send-reset-link") task.result = "Password reset link sent";
       if (action === "resend-invite") task.result = "Invite resent";
+      // The person the request is about gets a fresh link
+      const person = "user" in task ? staff.find((member) => member.name === task.user.name) : undefined;
+      if (person) sendDemoEmail(createPasswordLink(person, action === "send-reset-link" ? "reset" : "invite", systemSettings.security.inviteValidHours));
     }
     return HttpResponse.json(task);
   }),
@@ -2882,6 +2945,7 @@ export const handlers = [
       deactivated: null,
     };
     staff.push(member);
+    sendDemoEmail(createPasswordLink(member, "invite", systemSettings.security.inviteValidHours));
     audit(user, `invited ${name} as ${roles[body.roleId].name} (${market.name})`);
     return HttpResponse.json(staffMember(member), { status: 201 });
   }),
@@ -2894,6 +2958,7 @@ export const handlers = [
     if (!member || member.status !== "invited") return notFound("That invite wasn't found.");
     // A new link; the old one stops working
     member.invite = newInvite();
+    sendDemoEmail(createPasswordLink(member, "invite", systemSettings.security.inviteValidHours));
     audit(user, `sent a new invite to ${member.name}`);
     return HttpResponse.json(staffMember(member));
   }),
@@ -2906,6 +2971,7 @@ export const handlers = [
     if (!member || member.status !== "invited") return notFound("That invite wasn't found.");
     // They never had an account, so nothing else refers to them; the audit log keeps the record
     staff.splice(staff.indexOf(member), 1);
+    revokePasswordLinks(member.id);
     audit(user, `cancelled the invite for ${member.name} (${member.email})`);
     return new HttpResponse(null, { status: 204 });
   }),
@@ -2986,6 +3052,7 @@ export const handlers = [
     member.status = "invited";
     member.deactivated = null;
     member.invite = newInvite();
+    sendDemoEmail(createPasswordLink(member, "invite", systemSettings.security.inviteValidHours));
     audit(user, `turned ${member.name}'s account back on and sent them an invite`);
     return HttpResponse.json(staffMember(member));
   }),

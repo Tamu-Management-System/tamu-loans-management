@@ -84,7 +84,7 @@ Signs a staff member in with email and password.
   email or password. Use the same message for both, so the screen doesn't reveal which emails exist.
 - Consider `429` with a `message` after repeated failures (lockout); the frontend shows it as is.
 - **Decisions (client, 31 Oct):** email + password only; no 2-step code for the MVP (SMS is Phase 2);
-  forgotten passwords are reset by an admin (worklist action "Send reset link"), no self-service yet.
+  forgotten passwords are reset by an admin (worklist action "Send reset link"), no self-service yet. The person then sets a new one on the "Set your password" page (see `/public/invites/{token}`).
 
 ### `POST /auth/logout`
 
@@ -228,29 +228,33 @@ loans with a warning and applications waiting over 48 hours are `do-first` or `d
 Loans the user can see that still have a balance, for pickers such as Record payment. Same scope rule as search.
 
 ```json
-[{ "id": "TL-1042", "borrowerName": "Aisha Namubiru", "phone": "0772 418 230", "outstandingBalance": 2400000, "dueToday": 450000 }]
+[{ "id": "TL-1042", "borrowerName": "Aisha Namubiru", "phone": "0772 418 230", "outstandingBalance": 2400000, "owedNow": 2400000, "dueToday": 450000 }]
 ```
 
-`dueToday` is the amount still due today on an instalment or promise, otherwise `null`.
+`owedNow` is what the borrower owes right now: the balance plus any unpaid late fees. It is the most one payment can be (see
+`POST /payments`). `dueToday` is the amount still due today on an instalment or promise, otherwise `null`.
 
 ### `POST /payments`
 
 Records a repayment. Requires `payments.record`.
 
 ```json
-{ "loanId": "TL-1042", "amount": 450000, "method": "MTN MoMo", "reference": "MP261031.1042", "paidOn": "2026-10-31", "surplusConfirmed": true }
+{ "loanId": "TL-1042", "amount": 450000, "method": "MTN MoMo", "reference": "MP261031.1042", "paidOn": "2026-10-31" }
 ```
 
 - `method`: `Cash`, `MTN MoMo` or `Airtel Money`. `reference` is the transaction ID (required for mobile money when
   Settings say so; for cash it is an optional receipt number). `paidOn` is optional (default today; back-dating is
-  limited in Settings). `surplusConfirmed` is sent only when `amount` is more than the balance.
+  limited in Settings). Amounts are whole shillings.
 - Response `201`:
 
 ```json
-{ "paymentId": "PAY-1001", "loanId": "TL-1042", "balanceBefore": 2400000, "balanceAfter": 1950000, "surplus": 0, "taskId": "task-1042" }
+{ "paymentId": "PAY-1001", "loanId": "TL-1042", "balanceBefore": 2400000, "balanceAfter": 1950000, "taskId": "task-1042" }
 ```
 
-- **Overpayment (QA scenario 3):** accept it. The loan closes, `surplus` is the extra amount, and the team is notified.
+- **A payment can never be more than the borrower owes** (the loan's balance plus any unpaid late fees, the `owedNow` in
+  `GET /loans`). Refuse anything above it with `422` and a message like "That's more than Aisha owes. The most you can record
+  is UGX 2,400,000." There are no overpayments, so there is no surplus to hold and nothing to refund: `Payment.surplus` is
+  always 0 and the borrower-credit ledger stays empty. The screen checks this too, so a typing mistake (an extra zero) can't go in.
 - The payment counts towards the loan's open worklist task (`taskId`). Partly paid tasks stay open with a note.
 - `422` with a `message` if the amount isn't above zero; `404` if the user can't see the loan.
 
@@ -889,6 +893,30 @@ no gender or address: the Person model allows them to be empty.
   used by any account (including switched-off ones: turn that account back on instead). `422` if `branchId` isn't one
   of the markets in business settings.
 
+### Set your password: `GET` and `POST /public/invites/{token}` (public)
+
+The page behind the emailed link `https://<app>/set-password/<token>`. It is used for a new account (an invite, from
+`POST /staff/invites`, resend or turning an account back on) and for a password reset (the worklist action
+`send-reset-link`). These two requests sit outside the session (no `401`, no CSRF cookie): **the token is the only
+access**, so treat it like a password.
+
+`GET` returns what the page shows: `{ "name", "email", "purpose": "invite" | "reset", "minPasswordLength", "expiresAt" }`.
+`minPasswordLength` is the Settings → Security value, so the page shows the rule the server enforces.
+
+`POST` takes `{ "password": "…" }` and returns `204`:
+- Check the password with the same rules as `POST /me/password`: at least `minPasswordLength` characters (up to 128),
+  not a common or leaked password, and without the person's name or email in it. `422` with a readable `message` if not.
+- **Then, in one transaction:** save the password hash, mark the link used (it never works again), set the account
+  `ACTIVE` if it was `INVITED`, end every session the person already had, and write an audit-log entry
+  (actorType STAFF, the person). Nobody else, including admins, ever sees the password.
+- Problems answer `404 { "reason": "invalid" }` for a token that doesn't exist, or `410` with `"reason"`:
+  `used`, `replaced` (a newer link was sent) or `expired`. The page shows a different message for each.
+
+Security: a random token of at least 256 bits, only its hash stored; **works once**; lifetime from Settings → Security
+(invite links, 48 h by default); a new link for the same person ends the old one; rate-limit both requests per IP;
+never log the token or the request body; `Cache-Control: no-store` and `Referrer-Policy: no-referrer`. A wrong or
+used token must not reveal whether an email exists. Afterwards the page sends the person to `/login`.
+
 ### `POST /staff/{id}/invite` and `DELETE /staff/{id}/invite` (require `users.manage`)
 
 - `POST` sends a new link; the previous link stops working. `200` with the `StaffMember`.
@@ -953,7 +981,7 @@ Nothing an admin can change is hard-coded in the frontend: it reads these and fo
                  "par30TargetPercent": 5, "earlyWarningDays": 7, "onlineLinkValidHours": 72,
                  "paymentAllocationOrder": ["charges", "fees", "interest", "principal"] },
   "payments": { "repaymentMethods": ["Cash", "MTN MoMo", "Airtel Money"], "payoutMethods": ["MTN MoMo", "Airtel Money"],
-                "referenceRequired": true, "backdateDays": 3, "allowOverpayment": true, "maxOverpaymentPercent": 10 },
+                "referenceRequired": true, "backdateDays": 3 },
   "security": { "idleTimeoutMinutes": 15, "nationalIdVisibleSeconds": 30, "inviteValidHours": 48, "maxFailedSignIns": 5, "lockoutMinutes": 15, "minPasswordLength": 12 },
   "changed": { "business": { "at": "…", "by": "Martin Ssempa" }, "loanRules": null, "payments": null, "security": null }
 }
@@ -979,10 +1007,7 @@ What each setting does on the server:
 - `phoneChangeNeedsApproval: false`: a new mobile money number applies straight away (still logged).
 - Payments: refuse methods not in `repaymentMethods`/`payoutMethods`; require `reference` for mobile money when
   `referenceRequired`; `paidOn` (new, optional on `POST /payments`) may be up to `backdateDays` in the past;
-  refuse amounts above the balance when `allowOverpayment` is false. When it's true, an amount above the balance
-  needs `"surplusConfirmed": true` in `POST /payments` (the person ticked "the borrower paid more than they owe"),
-  and anything above balance × (1 + `maxOverpaymentPercent`/100) is refused with `422` (stops an extra zero).
-  Amounts must be whole shillings.
+  refuse any amount above what the borrower owes (`owedNow`); amounts must be whole shillings.
 - Security: sign-in lockout, idle timeout, National ID display time and invite lifetime follow these values.
 
 ### Loan products

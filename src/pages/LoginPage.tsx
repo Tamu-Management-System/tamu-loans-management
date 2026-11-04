@@ -5,8 +5,8 @@ import { useSignIn } from "../api/auth";
 import { useSession } from "../auth/AuthContext";
 import { isSessionEndReason, safeNextPath, type SessionEndReason } from "../auth/session";
 import { Button } from "../components/ui/Button";
-import { Icon, TamuLogoMark } from "../components/ui/Icon";
-import brandImage from "../images/login-brand-panel.jpeg";
+import { AuthLayout } from "../components/layout/AuthLayout";
+import { Icon } from "../components/ui/Icon";
 import styles from "./LoginPage.module.css";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -44,7 +44,8 @@ export function LoginPage() {
   const [searchParams] = useSearchParams();
   const nextPath = safeNextPath(searchParams.get("next"));
   const reasonParam = searchParams.get("reason");
-  const sessionEndNotice = isSessionEndReason(reasonParam) ? SESSION_END_NOTICES[reasonParam] : null;
+  // After setting a password from an invite or reset link, the page sends people here with ?notice=password-set
+  const sessionEndNotice = isSessionEndReason(reasonParam) ? SESSION_END_NOTICES[reasonParam] : searchParams.get("notice") === "password-set" ? "Your password is set. Sign in with your email and new password." : null;
   const ids = { email: useId(), password: useId(), emailError: useId(), passwordError: useId(), forgot: useId() };
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
@@ -76,21 +77,7 @@ export function LoginPage() {
   if (status === "signed-in") return <Navigate to={nextPath} replace />;
 
   return (
-    <div className={styles.page}>
-      <aside className={styles.brand}>
-        <div className={styles.brandName}>
-          <span className={styles.brandMark}>
-            <TamuLogoMark size={24} />
-          </span>
-          Tamu Loans
-        </div>
-        {/* Decorative: the tagline says what the product is */}
-        <img className={styles.brandImage} src={brandImage} alt="" />
-        <p className={styles.tagline}>Every loan, every repayment, in one place.</p>
-        <p className={styles.brandFooter}>© {new Date().getFullYear()} Tamu Cleaning Services</p>
-      </aside>
-
-      <main className={styles.formPanel}>
+    <AuthLayout>
         <form className={styles.form} onSubmit={submit} noValidate>
           <h1>Welcome back</h1>
           <p className={styles.subtitle}>Sign in to continue</p>
@@ -196,7 +183,6 @@ export function LoginPage() {
             </Suspense>
           )}
         </form>
-      </main>
-    </div>
+    </AuthLayout>
   );
 }

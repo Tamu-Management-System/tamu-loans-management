@@ -39,8 +39,6 @@ export const systemSettings: SystemSettings = {
     payoutMethods: ["MTN MoMo", "Airtel Money"],
     referenceRequired: true,
     backdateDays: 3,
-    maxOverpaymentPercent: 10,
-    allowOverpayment: true,
   },
   security: {
     idleTimeoutMinutes: 15,

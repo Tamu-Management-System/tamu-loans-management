@@ -25,6 +25,21 @@ reload. An online application link is a plain random token, like the real one, s
 profile) that made it: not in incognito, another browser or on a phone. The real backend fixes this, and nothing about
 the link changes when it arrives.
 
+The demo has no email either: when an admin invites someone, resends an invite or sends a reset link, the "email" is printed
+in the browser console (look for `[demo email]`). Open that link in the same browser to try the "Set your password" page.
+New accounts made this way can't actually sign in to the demo (the demo only knows its sample accounts).
+
+Sample "Set your password" links (they open in any browser; add one to the site address, e.g. `http://localhost:5173/set-password/<token>`):
+
+| Screen | Token |
+|---|---|
+| Invite, for Grace | `lF9s8BLc0oh5BgGK4oLFQmXQB7y7rurvQWwqPSmVSSs` |
+| Password reset, for Sarah | `x4dDv2BLme-koAhRc4WDrukxuEq6fIHZMBUvMtJaJiU` |
+| Expired link | `eJo0EOOMurRsR-Agqo30Uvn_Iwt4L5u7cT1E3NjckB4` |
+| Already-used link | `RNI7fBvwCqY0ax1C8FTWoLyutlLrNfO6HOlW--7Axcg` |
+
+Setting a password with the first two uses the link up in that browser (clear the site's data to reset it).
+
 ## How it's organised
 
 ```

@@ -53,6 +53,8 @@ const queryClient: QueryClient = new QueryClient({
   }),
 });
 
+import { SetPasswordPage } from "../modules/set-password/SetPasswordPage";
+
 // The borrowers' online application form: its own bundle, outside the staff app (no sign-in, no menus)
 import { FormSkeletonPage } from "../modules/online-application/FormSkeleton";
 
@@ -186,6 +188,8 @@ export function App() {
                 </Suspense>
               }
             />
+            {/* Opened from an emailed invite or reset link, before the person has a password to sign in with */}
+            <Route path="set-password/:token" element={<SetPasswordPage />} />
             <Route path="*" element={<StaffApp />} />
           </Routes>
         </BrowserRouter>

@@ -69,9 +69,10 @@ last instalment takes the remainder. Due dates: the first payment date, then eve
 At payout the schedule moves so the first payment keeps the gap planned at application (payout date + that gap).
 The first payment must be within 7 (daily), 14 (weekly) or 35 (monthly) days of the application.
 
-**Payments** pay instalments oldest first. A loan clears when payments reach the total; with overpayment allowed,
-the surplus is recorded. Back-dating up to `payments.backdateDays`; mobile money needs a transaction ID when
-`payments.referenceRequired`.
+**Payments** pay instalments oldest first. A loan clears when payments reach the total. **A payment can never be more than
+the borrower owes** (balance plus unpaid late fees): there are no overpayments, so `Payment.surplus` is always 0, the
+BORROWER_CREDIT ledger stays empty, and no refunds are needed. Back-dating up to `payments.backdateDays`; mobile money
+needs a transaction ID when `payments.referenceRequired`.
 
 **Late.** `daysPastDue` = days since the due date of the oldest instalment not fully paid (0 if it's due today or
 later). `arrearsAmount` = what's unpaid on instalments due before today. "Seriously late" from
@@ -169,6 +170,7 @@ Nothing in the frontend has to change for the model, and nothing in the model ha
 | ApplicationEvent (RETURNED) | `returned { reason, note, by, at }` = the latest return that hasn't been fixed |
 | decidedBy / decidedAt | `decided { by, at }` |
 | ApplicationGuarantor | `guarantors[]` with `fullName`, `nationalId`, `phone`, `relationship` (empty on paper applications) |
+| StaffInvite (INVITE / PASSWORD_RESET) | The emailed link `/set-password/<token>`; `GET` and `POST /public/invites/{token}` (see api-contract.md). Setting the password makes the account ACTIVE and ends its old sessions. |
 | Disbursement (belongs to the application) | `POST /applications/{id}/disburse`; its response gives the new `loanId`. The loan exists only after a CONFIRMED payout. |
 | Loan.status ACTIVE / CLOSED / IN_RECOVERY / WRITTEN_OFF | `status` `active` / `cleared`; in recovery = `recovery` object present; late = `daysPastDue > 0` (computed). WRITTEN_OFF has no screen yet. |
 | Loan.loanOfficer | `officer { id, name }` |
@@ -192,9 +194,13 @@ Nothing in the frontend has to change for the model, and nothing in the model ha
 one takes the remainder). The model's principal / interest / fee parts of an instalment are that amount split in
 proportion (any rounding remainder goes to the last instalment).
 
-**Not on any screen yet (build when the module arrives):** PaymentReversal (reversals were dropped from the MVP), Refund and
-LoanWriteOff (money moved or forgiven, each needing a second person's approval),
-the Ledger and LedgerEntry accounting entries (Module 4), MobileMoneyTransaction matching, MessageTemplate /
+**Not planned (the client doesn't need them; build only if that changes):** PaymentReversal and Refund. They are rare and
+hard to do safely, so the system prevents the cases instead: a payment can never be more than the borrower owes (see
+Payments in section 3), so there are no overpayments to refund, and a wrong payment is fixed by telling Finance or an admin.
+The tables stay in the data model but nothing uses them yet.
+
+**Not on any screen yet (build when the module arrives):** LoanWriteOff (forgiving money, needing a second person's
+approval), the Ledger and LedgerEntry accounting entries (Module 4), MobileMoneyTransaction matching, MessageTemplate /
 CommunicationLog / AutomationWorkflow (Module 3). The screens for them show "Coming soon".
 
 ## 7. Open questions for the client
