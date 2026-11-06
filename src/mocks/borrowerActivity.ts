@@ -1,4 +1,4 @@
-// Each borrower's timeline: a seeded history (registration, documents, loans, payments, calls) built
+// Each client's timeline: a seeded history (registration, documents, loans, payments, calls) built
 // on first use, plus everything done in this session (payments, edits, uploads, ID and document views).
 import type { BorrowerActivityCategory, BorrowerActivityItem } from "../api/types";
 import type { MockBorrower } from "./borrowerDirectory";
@@ -42,7 +42,7 @@ function seedTimeline(borrower: MockBorrower): BorrowerActivityItem[] {
   const officer: Actor = { name: officers.find((o) => o.id === borrower.officerId)?.name ?? "Loan officer", role: "Loan officer" };
   const dayAt = (isoDate: string, hourFrom = 9, hours = 8) => new Date(`${isoDate}T00:00:00`).getTime() + (hourFrom + random() * hours) * 3_600_000;
   // People registered during the demo get their real events as they happen
-  const items: BorrowerActivityItem[] = borrower.addedInSession ? [] : [event("changes", "Registered the borrower", officer, dayAt(borrower.registeredOn, 9, 2))];
+  const items: BorrowerActivityItem[] = borrower.addedInSession ? [] : [event("changes", "Registered the client", officer, dayAt(borrower.registeredOn, 9, 2))];
 
   // Documents uploaded before this session (uploads in the session are recorded as they happen)
   for (const section of borrowerDocumentsResponse(borrower).sections) {
@@ -51,7 +51,7 @@ function seedTimeline(borrower: MockBorrower): BorrowerActivityItem[] {
         const what = `${slot.label}${section.id.includes("-") ? ` for ${section.id}` : ""}`;
         if (slot.file.method === "online") {
           // Completed through the link the officer sent
-          items.push(event("changes", `Completed the loan application for ${section.id} online`, { name: slot.file.uploadedBy, role: "Borrower" }, slot.file.uploadedAt));
+          items.push(event("changes", `Completed the loan application for ${section.id} online`, { name: slot.file.uploadedBy, role: "Client" }, slot.file.uploadedAt));
         } else {
           items.push(event("changes", `Uploaded ${what}${slot.canCompleteOnline ? " (scanned paper)" : ""}`, { name: slot.file.uploadedBy, role: "Loan officer" }, slot.file.uploadedAt));
         }
@@ -102,7 +102,7 @@ function timelineFor(borrower: MockBorrower) {
   return timeline;
 }
 
-/** Adds something done now to the borrower's timeline. */
+/** Adds something done now to the client's timeline. */
 export function recordBorrowerEvent(borrower: MockBorrower, category: BorrowerActivityCategory, description: string, actor: Actor) {
   timelineFor(borrower).push(event(category, description, actor, Date.now()));
 }

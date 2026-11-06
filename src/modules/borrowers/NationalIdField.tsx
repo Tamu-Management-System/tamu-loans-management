@@ -12,7 +12,7 @@ interface NationalIdFieldProps {
 }
 
 /**
- * The borrower's National ID number, masked. "Show" asks the server for the full number (the
+ * The client's National ID number, masked. "Show" asks the server for the full number (the
  * server records every request in the audit log) and masks it again after the time the server
  * allows, or straight away when the user hides it, switches tab or leaves the page.
  */

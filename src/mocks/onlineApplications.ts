@@ -25,9 +25,9 @@ export interface OnlineSubmission {
 
 export interface MockOnlineApplication {
   token: string;
-  /** Empty for someone new: their borrower record is created when they submit */
+  /** Empty for someone new: their client record is created when they submit */
   borrowerId: string;
-  /** The officer who sent it (a new borrower joins their portfolio) */
+  /** The officer who sent it (a new client joins their portfolio) */
   officerId: string;
   /** The document it completes, e.g. "APP-311:application" */
   slotKey: string;
@@ -91,7 +91,7 @@ export function submitOnlineApplication(token: string, submission: OnlineSubmiss
 }
 
 /**
- * Borrower records made for new people, per tab: each tab has its own in-memory borrowers, so the
+ * Client records made for new people, per tab: each tab has its own in-memory clients, so the
  * link between a submission and the record made for it can't be shared through storage.
  */
 const registeredInThisTab = new Map<string, string>();
@@ -108,10 +108,10 @@ export function linkProblem(application: MockOnlineApplication | undefined): "in
   return null;
 }
 
-/** Submitted applications from people who weren't borrowers yet (not yet registered in this tab). */
+/** Submitted applications from people who weren't clients yet (not yet registered in this tab). */
 export const submittedForNewBorrowers = () => load().filter((a) => !a.borrowerId && a.status === "submitted" && a.submission && !registeredInThisTab.has(a.token));
 
-/** Links a submitted application to the borrower record made (or found) for it in this tab. */
+/** Links a submitted application to the client record made (or found) for it in this tab. */
 export function assignBorrower(token: string, borrowerId: string) {
   registeredInThisTab.set(token, borrowerId);
 }

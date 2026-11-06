@@ -40,7 +40,7 @@ export function Topbar() {
 
 const SEARCH_DEBOUNCE_MS = 200;
 
-/** Finds borrowers, loans and applications by name, ID or phone. Results respect the user's scope. */
+/** Finds clients, loans and applications by name, ID or phone. Results respect the user's scope. */
 function GlobalSearch() {
   const navigate = useNavigate();
   const [input, setInput] = useState("");
@@ -83,8 +83,8 @@ function GlobalSearch() {
         <input
           type="search"
           value={input}
-          placeholder="Search borrower, loan ID or phone"
-          aria-label="Search borrowers, loan IDs or phone numbers"
+          placeholder="Search client, loan ID or phone"
+          aria-label="Search clients, loan IDs or phone numbers"
           autoComplete="off"
           role="combobox"
           aria-expanded={showPanel}

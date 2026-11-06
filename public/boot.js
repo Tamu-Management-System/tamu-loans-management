@@ -1,4 +1,4 @@
-// Runs before the app loads. The public pages (the borrower's online form, the sign-in page) have no sidebar,
+// Runs before the app loads. The public pages (the client's online form, the sign-in page) have no sidebar,
 // so they show placeholders shaped like their own content while loading instead of the signed-in layout.
 (function () {
   var path = location.pathname;

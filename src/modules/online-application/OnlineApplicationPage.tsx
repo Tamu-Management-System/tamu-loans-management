@@ -45,7 +45,7 @@ const LINK_PROBLEMS: Record<string, { title: string; text: string }> = {
 
 /**
  * The online loan application (Tamu's digital alternative to the paper forms). The loan officer
- * sends this link to the borrower, e.g. on WhatsApp. The borrower fills in their own details and
+ * sends this link to the client, e.g. on WhatsApp. The client fills in their own details and
  * both guarantors' details, adds photos of their National ID, and all three tick a box to agree
  * (their ID photos are the proof of who they are, so nobody has to draw a signature).
  * The link works once: it stops working as soon as the form is submitted, or when it expires.
@@ -131,7 +131,7 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
   const guarantorPhotoErrors = guarantorIds.map((ids) => ({ front: ids.front ? undefined : "Take a photo of the front of their National ID.", back: ids.back ? undefined : "Take a photo of the back of their National ID." }));
   const guarantorFieldErrors = guarantors.map((guarantor, index) => {
     const errors = guarantorErrors(guarantor);
-    const others = [{ nationalId: borrower.nationalId, who: "the borrower" }, ...(index === 1 ? [{ nationalId: guarantors[0].nationalId, who: "guarantor 1" }] : [])];
+    const others = [{ nationalId: borrower.nationalId, who: "the client" }, ...(index === 1 ? [{ nationalId: guarantors[0].nationalId, who: "guarantor 1" }] : [])];
     const duplicate = sameAsError(guarantor.nationalId, others);
     return duplicate && !errors.nationalId ? { ...errors, nationalId: duplicate } : errors;
   });
@@ -167,6 +167,7 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
             secondaryPhone: normalisePhone(borrower.secondaryPhone),
             area: borrower.area.trim(),
             premises: borrower.premises.trim(),
+            occupation: borrower.occupation.trim(),
             nextOfKin: { name: borrower.kinName.trim().replace(/\s+/g, " ") || null, phone: normalisePhone(borrower.kinPhone) },
           },
           guarantors: [cleanGuarantor(guarantors[0]), cleanGuarantor(guarantors[1])],
@@ -370,7 +371,7 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
         <ReviewPerson title="Guarantor 2" person={guarantors[1]} extra={`${guarantors[1].relationship} · ID photos added`} onEdit={() => goTo("guarantor2")} />
       </dl>
 
-      {signBlock("borrower", borrower.fullName, "Borrower", "I have read and agree to this payment agreement.", <AgreementWording form={form} borrower={borrower} guarantors={guarantors} />)}
+      {signBlock("borrower", borrower.fullName, "Client", "I have read and agree to this payment agreement.", <AgreementWording form={form} borrower={borrower} guarantors={guarantors} />)}
       {signBlock("guarantor1", guarantors[0].fullName, "Guarantor 1", `I agree to guarantee this loan to ${borrower.fullName}.`, <ConsentWording form={form} borrower={borrower} guarantor={guarantors[0]} />)}
       {signBlock("guarantor2", guarantors[1].fullName, "Guarantor 2", `I agree to guarantee this loan to ${borrower.fullName}.`, <ConsentWording form={form} borrower={borrower} guarantor={guarantors[1]} />)}
 

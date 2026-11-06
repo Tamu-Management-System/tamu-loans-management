@@ -10,6 +10,6 @@ export interface CurrentUser {
   role: { id: string; name: string };
   /** Resolved from the user's role by the backend; the UI only reads this list. */
   permissions: Permission[];
-  /** Whose records they see: their own borrowers, or the whole branch */
+  /** Whose records they see: their own clients, or the whole branch */
   dataScope: DataScope;
 }

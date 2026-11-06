@@ -27,7 +27,7 @@ function buildTiles(today: DashboardToday, { marketWide, canApprove }: { marketW
     });
   if (collections)
     tiles.push({
-      // Market-wide it's everyone's borrowers, so the box opens Payments rather than filtering your worklist
+      // Market-wide it's everyone's clients, so the box opens Payments rather than filtering your worklist
       ...(marketWide ? { filter: null, href: "/payments" } : { filter: "collect" as const }),
       label: "Due to collect",
       icon: "coins",

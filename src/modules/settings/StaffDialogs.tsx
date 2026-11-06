@@ -163,7 +163,7 @@ export function ChangeRoleDialog({ member, roles, onClose }: { member: StaffMemb
 
 /**
  * Switch an account off. It's never deleted: their name stays on everything they did. If they
- * look after borrowers, someone else must take them over first.
+ * look after clients, someone else must take them over first.
  */
 export function DeactivateStaffDialog({ member, staff, roles, onClose }: { member: StaffMember; staff: StaffMember[]; roles: RoleSummary[]; onClose: () => void }) {
   const ids = { reassign: useId(), reason: useId() };
@@ -173,7 +173,7 @@ export function DeactivateStaffDialog({ member, staff, roles, onClose }: { membe
   const [reason, setReason] = useState("");
   const { portfolio } = member;
   const needsReassign = portfolio.borrowers > 0;
-  // Someone active whose role looks after their own borrowers
+  // Someone active whose role looks after their own clients
   const takers = staff.filter((other) => {
     const role = roles.find((r) => r.id === other.role.id);
     return other.id !== member.id && other.status === "active" && role?.dataScope === "own" && role.permissions.includes("loans.view");
@@ -211,15 +211,15 @@ export function DeactivateStaffDialog({ member, staff, roles, onClose }: { membe
       </ul>
       {needsReassign && (
         <Field
-          label="Who looks after their borrowers now?"
+          label="Who looks after their clients now?"
           htmlFor={ids.reassign}
-          hint={`${plural(portfolio.borrowers, "borrower")}, ${plural(portfolio.activeLoans, "active loan")} and ${plural(portfolio.openApplications, "open application")} move to them.`}
+          hint={`${plural(portfolio.borrowers, "client")}, ${plural(portfolio.activeLoans, "active loan")} and ${plural(portfolio.openApplications, "open application")} move to them.`}
         >
           <Select
             id={ids.reassign}
             value={reassignTo}
             onChange={setReassignTo}
-            options={takers.map((other) => ({ value: other.id, label: `${other.name} · ${other.portfolio.borrowers} borrowers` }))}
+            options={takers.map((other) => ({ value: other.id, label: `${other.name} · ${other.portfolio.borrowers} clients` }))}
             placeholder={takers.length ? "Choose a loan officer" : "No other loan officers"}
             searchable={takers.length > SEARCH_FROM}
             searchPlaceholder="Search officers"

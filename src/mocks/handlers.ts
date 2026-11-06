@@ -126,10 +126,10 @@ const MAX_SEARCH_RESULTS = 6;
 
 const hasPermission = (user: MockUser, permission: Permission) => !!roles[user.roleId]?.permissions.includes(permission);
 
-/** Their role sees the whole branch (otherwise only the borrowers they look after) */
+/** Their role sees the whole branch (otherwise only the clients they look after) */
 const seesBranch = (user: MockUser) => roles[user.roleId]?.dataScope === "branch";
 
-/** Officers see only their own borrowers; anyone with loans.view.all sees the whole branch. */
+/** Officers see only their own clients; anyone with loans.view.all sees the whole branch. */
 const canSeeRecord = (user: MockUser, officerId: string) => seesBranch(user) || officerId === user.id;
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
@@ -170,13 +170,13 @@ const LINK_PROBLEM_MESSAGES = {
 
 /**
  * Online applications submitted (in any tab) become documents the next time staff look at the
- * borrower; this records them on the timeline and in the audit log once.
+ * client; this records them on the timeline and in the audit log once.
  */
 function syncOnlineApplications(borrower: (typeof borrowers)[number]) {
   for (const application of ingestOnlineApplications(borrower)) {
     const signer = application.submission!.details.borrower.fullName;
-    recordBorrowerEvent(borrower, "changes", `Completed and signed the loan application for ${application.form.reference} online, with both guarantors`, { name: signer, role: "Borrower" });
-    activityLog.unshift({ id: `act-${Date.now()}-${application.token.slice(0, 6)}`, actor: { name: signer, role: "Borrower", photoUrl: null }, description: `submitted the online loan application ${application.form.reference}`, at: application.submittedAt! });
+    recordBorrowerEvent(borrower, "changes", `Completed and signed the loan application for ${application.form.reference} online, with both guarantors`, { name: signer, role: "Client" });
+    activityLog.unshift({ id: `act-${Date.now()}-${application.token.slice(0, 6)}`, actor: { name: signer, role: "Client", photoUrl: null }, description: `submitted the online loan application ${application.form.reference}`, at: application.submittedAt! });
     // Complete now: it goes to the approvers
     const app = applications.find((a) => a.id === application.form.reference);
     if (app) {
@@ -226,9 +226,9 @@ function checkTerms(terms: ApplicationTerms | undefined, keepProductId: string |
   return null;
 }
 
-/** The status the screens use: an open online application is waiting for the borrower. */
+/** The status the screens use: an open online application is waiting for the client. */
 const applicationStatus = (app: (typeof applications)[number]): ApplicationStatus =>
-  app.status === "draft" && app.route === "online" && app.missing === "Waiting for the borrower to complete it online" ? "awaiting-borrower" : app.status;
+  app.status === "draft" && app.route === "online" && app.missing === "Waiting for the client to complete it online" ? "awaiting-borrower" : app.status;
 
 function applicationListItem(app: (typeof applications)[number]): ApplicationListItem {
   const borrower = app.borrowerId ? borrowers.find((b) => b.id === app.borrowerId) : borrowers.find((b) => b.applicationId === app.id);
@@ -285,7 +285,7 @@ function applicationDetail(app: (typeof applications)[number], user: MockUser): 
         : null;
   return {
     ...item,
-    borrowerDetails: borrower && details ? { nationalIdMasked: maskNationalId(borrower.nin), phone: borrower.phone, premises: details.premises, area: borrower.area } : null,
+    borrowerDetails: borrower && details ? { nationalIdMasked: maskNationalId(borrower.nin), phone: borrower.phone, premises: details.premises, occupation: details.occupation, area: borrower.area } : null,
     guarantors: own?.guarantors ?? [],
     schedule: { firstPaymentOn: terms.firstPaymentOn, lastPaymentOn: summary.lastPaymentOn, interest: summary.interest, totalRepayable: summary.totalRepayable, finalInstalment: summary.finalInstalment },
     documents: {
@@ -297,7 +297,7 @@ function applicationDetail(app: (typeof applications)[number], user: MockUser): 
   };
 }
 
-/** A paper draft its officer may edit: their own, still a draft, with a registered borrower. */
+/** A paper draft its officer may edit: their own, still a draft, with a registered client. */
 function editableDraft(user: MockUser, id: string) {
   const app = applications.find((a) => a.id === id);
   if (!app || app.officerId !== user.id || !hasPermission(user, "applications.create")) return { error: HttpResponse.json({ message: "That draft wasn't found." }, { status: 404 }) };
@@ -438,6 +438,7 @@ function registerBorrower(person: NewBorrowerDetails, officerId: string) {
   borrowers.push(borrower);
   borrowerDetails.set(borrower.id, {
     premises: person.premises,
+    occupation: person.occupation?.trim() ?? "",
     secondaryPhone: person.secondaryPhone ?? null,
     nextOfKin: person.nextOfKin ? { name: person.nextOfKin.name, phone: person.nextOfKin.phone, relationship: "" } : null,
     gender: person.gender ?? null,
@@ -447,8 +448,8 @@ function registerBorrower(person: NewBorrowerDetails, officerId: string) {
 }
 
 /**
- * Online applications completed by people who weren't borrowers yet (possibly in another tab):
- * register them in the officer's portfolio, or match an existing borrower by National ID.
+ * Online applications completed by people who weren't clients yet (possibly in another tab):
+ * register them in the officer's portfolio, or match an existing client by National ID.
  */
 function syncNewBorrowerApplications() {
   for (const entry of submittedForNewBorrowers()) {
@@ -467,7 +468,7 @@ function syncNewBorrowerApplications() {
     Object.assign(app, { borrowerId: borrower.id, borrowerName: details.borrower.fullName, phone: details.borrower.phone, guarantors: details.guarantors });
     borrower.applicationId = app.id;
     assignBorrower(entry.token, borrower.id);
-    recordBorrowerEvent(borrower, "changes", `Registered through the online application ${app.id}`, { name: details.borrower.fullName, role: "Borrower" });
+    recordBorrowerEvent(borrower, "changes", `Registered through the online application ${app.id}`, { name: details.borrower.fullName, role: "Client" });
     syncOnlineApplications(borrower);
   }
 }
@@ -485,7 +486,7 @@ async function imageFromForm(form: FormData, field: string, allowPng: boolean, m
   return { dataUrl: `data:${type};base64,${btoa(binary)}`, width: bitmap.width, height: bitmap.height };
 }
 
-/** Mobile money number changes waiting for a second person, by borrower. */
+/** Mobile money number changes waiting for a second person, by client. */
 const pendingPhoneChanges = new Map<string, PendingPhoneChange>();
 /** Passwords changed in the demo (everyone else still uses the demo password) */
 const passwords = new Map<string, string>();
@@ -527,7 +528,7 @@ function staffMember(member: MockStaff): StaffMember {
   };
 }
 
-/** Someone who can look after borrowers: an active account whose role sees their own loans */
+/** Someone who can look after clients: an active account whose role sees their own loans */
 const canTakeBorrowers = (member: MockStaff) => member.status === "active" && roles[member.roleId]?.dataScope === "own" && !!roles[member.roleId]?.permissions.includes("loans.view");
 
 /**
@@ -688,7 +689,7 @@ function scheduleOf(terms: NonNullable<ReturnType<typeof borrowerDetails.get>>["
 }
 
 /**
- * What a borrower owes right now: the loan balance plus any late fees. It is the most one payment can be, so a payment
+ * What a client owes right now: the loan balance plus any late fees. It is the most one payment can be, so a payment
  * can never go beyond what's demanded (and nobody has to be refunded).
  */
 function owedNowOf(loan: (typeof loans)[number]) {
@@ -722,7 +723,7 @@ function applyAutoRecovery() {
 }
 
 const AUDIT_PAGE_SIZE = 30;
-const AUDIT_CATEGORY_NAMES: Record<AuditCategory, string> = { money: "Money", decisions: "Decisions", access: "Data access", borrowers: "Borrower changes", admin: "Staff and settings", signin: "Sign-ins" };
+const AUDIT_CATEGORY_NAMES: Record<AuditCategory, string> = { money: "Money", decisions: "Decisions", access: "Data access", borrowers: "Client changes", admin: "Staff and settings", signin: "Sign-ins" };
 
 const auditEvent = (item: (typeof activityLog)[number]): AuditEvent => ({
   id: item.id,
@@ -1021,7 +1022,7 @@ function buildReport(user: MockUser, name: string, params: URLSearchParams): { r
           columns: [
             { key: "day", label: "Paid out", format: "date" },
             { key: "loan", label: "Loan", format: "text" },
-            { key: "borrower", label: "Borrower", format: "text" },
+            { key: "borrower", label: "Client", format: "text" },
             { key: "product", label: "Product", format: "text" },
             { key: "amount", label: "Amount", format: "ugx" },
             ...(branch ? [{ key: "officer", label: "Officer", format: "text" as const }] : []),
@@ -1085,13 +1086,13 @@ function buildReport(user: MockUser, name: string, params: URLSearchParams): { r
   };
 }
 
-/** What's missing or wrong in a new borrower's details (both routes), or null */
+/** What's missing or wrong in a new client's details (both routes), or null */
 function newBorrowerProblem(person: Partial<NewBorrowerDetails> | undefined) {
-  if (!person) return "Enter the borrower's details.";
-  if (!["female", "male"].includes(person.gender ?? "")) return "Choose the borrower's gender.";
+  if (!person) return "Enter the client's details.";
+  if (!["female", "male"].includes(person.gender ?? "")) return "Choose the client's gender.";
   if (person.secondaryPhone && !normalisePhone(person.secondaryPhone)) return "Check the other phone number, or leave it empty.";
-  if (!person.area?.trim()) return "Enter the borrower's address.";
-  if (!person.premises?.trim()) return "Enter the borrower's shop or premises.";
+  if (!person.area?.trim()) return "Enter the client's address.";
+  if (!person.premises?.trim()) return "Enter the client's shop or premises.";
   // Next of kin is optional; a number, if given, must be valid
   if (person.nextOfKin?.phone?.trim() && !normalisePhone(person.nextOfKin.phone)) return "Check the next of kin's phone number, or leave it empty.";
   return null;
@@ -1135,7 +1136,7 @@ function notificationsFor(user: MockUser): NotificationContent[] {
   const isOfficer = hasPermission(user, "loans.view") && !seesBranch(user);
 
   if (isOfficer) {
-    items.push({ id: "repayments-due", title: "Repayments due today", detail: "Record them as borrowers pay", href: "/?worklist=collect" });
+    items.push({ id: "repayments-due", title: "Repayments due today", detail: "Record them as clients pay", href: "/?worklist=collect" });
     items.push({ id: "overdue-follow-up", title: "Overdue loans to follow up", detail: "Call before they fall further behind", href: "/?worklist=follow-up" });
   }
   if (isOfficer && hasPermission(user, "applications.create")) {
@@ -1157,7 +1158,7 @@ export const handlers = [
   // Like the real backend: everything except signing in needs a session
   http.all(`${API_BASE}/*`, ({ request }) => {
     const path = new URL(request.url).pathname;
-    // Sign-in, and the online application form (borrowers have no account; the link's token is the access)
+    // Sign-in, and the online application form (clients have no account; the link's token is the access)
     if (path.startsWith(`${API_BASE}/auth/`) || path.startsWith(`${API_BASE}/public/`)) return;
     if (!signedInDemoUser()) return HttpResponse.json({ message: "Please sign in." }, { status: 401 });
   }),
@@ -1344,7 +1345,7 @@ export const handlers = [
     const check = disbursementCheck(user, app);
     if (!check.allowed) return HttpResponse.json({ message: check.reason }, { status: app.status === "approved" && !app.loanId ? 403 : 409 });
     const borrower = app.borrowerId ? borrowers.find((b) => b.id === app.borrowerId) : borrowers.find((b) => b.applicationId === app.id);
-    if (!borrower) return HttpResponse.json({ message: "The borrower wasn't found." }, { status: 409 });
+    if (!borrower) return HttpResponse.json({ message: "The client wasn't found." }, { status: 409 });
 
     const body = (await request.json()) as DisburseRequest;
     const invalid = (message: string) => HttpResponse.json({ message }, { status: 422 });
@@ -1369,7 +1370,7 @@ export const handlers = [
     const summary = summariseTerms({ ...terms, firstPaymentOn });
     const product = terms.pricing.productName;
 
-    // Load the borrower's documents while the application is still attached (its signed PDF moves to the loan)
+    // Load the client's documents while the application is still attached (its signed PDF moves to the loan)
     borrowerDocumentsResponse(borrower);
     const loanId = nextLoanId();
     loans.push({
@@ -1579,7 +1580,7 @@ export const handlers = [
     if (termsProblem) return invalid(termsProblem);
     const guarantors = (body.guarantors ?? []).filter((g) => g?.fullName?.trim() && NATIONAL_ID.test(g.nationalId ?? "") && normalisePhone(g.phone ?? ""));
     if (guarantors.some((g) => g.nationalId === borrower.nin) || (guarantors.length === 2 && guarantors[0].nationalId === guarantors[1].nationalId))
-      return invalid("The borrower and the two guarantors must be three different people.");
+      return invalid("The client and the two guarantors must be three different people.");
     const signed = form.get("signedApplication");
     const signedFile = signed instanceof File && signed.size > 0 ? signed : null;
     if (signedFile && (signedFile.size > MAX_UPLOAD_BYTES || (await sniffDocumentType(signedFile)) !== "application/pdf")) return HttpResponse.json({ message: "The signed application must be one PDF, up to 5 MB." }, { status: 415 });
@@ -1649,7 +1650,7 @@ export const handlers = [
     app.returned = { reason: REJECTION_REASONS[reason], note: note?.trim() || null, by: user.name, at };
     const borrower = detail.borrower.id ? borrowers.find((b) => b.id === detail.borrower.id) : undefined;
     if (reason === "not-eligible") {
-      // Closed for good; a borrower with earlier loans goes back to their history, a newcomer stays on record
+      // Closed for good; a client with earlier loans goes back to their history, a newcomer stays on record
       app.status = "rejected";
       app.decided = { by: user.name, at };
       if (borrower && borrower.clearedLoans > 0) borrower.applicationId = null;
@@ -1684,7 +1685,7 @@ export const handlers = [
 
     // Who it's for
     let borrower = body.borrowerId ? borrowers.find((b) => b.id === body.borrowerId) : undefined;
-    if (body.borrowerId && (!borrower || !canSeeRecord(user, borrower.officerId))) return HttpResponse.json({ message: "That borrower wasn't found." }, { status: 404 });
+    if (body.borrowerId && (!borrower || !canSeeRecord(user, borrower.officerId))) return HttpResponse.json({ message: "That client wasn't found." }, { status: 404 });
     if (borrower) {
       const loan = borrower.currentLoanId ? loans.find((l) => l.id === borrower!.currentLoanId) : undefined;
       if (loan && loan.outstandingBalance > 0 && systemSettings.loanRules.oneOpenLoanPerBorrower)
@@ -1697,20 +1698,20 @@ export const handlers = [
     const submit = paper && body.submit;
     const person = body.newBorrower;
     if (paper && !borrower) {
-      if (!person?.fullName?.trim() || person.fullName.trim().split(/\s+/).length < 2) return invalid("Enter the borrower's full name, as on their National ID.");
-      if (!NATIONAL_ID.test(person.nationalId ?? "")) return invalid("Check the borrower's National ID number.");
-      if (!normalisePhone(person.phone ?? "")) return invalid("Check the borrower's phone number.");
+      if (!person?.fullName?.trim() || person.fullName.trim().split(/\s+/).length < 2) return invalid("Enter the client's full name, as on their National ID.");
+      if (!NATIONAL_ID.test(person.nationalId ?? "")) return invalid("Check the client's National ID number.");
+      if (!normalisePhone(person.phone ?? "")) return invalid("Check the client's phone number.");
       if (submit) {
         const problem = newBorrowerProblem(person);
         if (problem) return invalid(problem);
       }
-      // Not saying whose: an officer mustn't learn about another officer's borrowers
-      if (borrowers.some((b) => b.nin === person.nationalId)) return HttpResponse.json({ message: "A borrower with this National ID is already registered. Search for them instead, or ask an admin." }, { status: 409 });
+      // Not saying whose: an officer mustn't learn about another officer's clients
+      if (borrowers.some((b) => b.nin === person.nationalId)) return HttpResponse.json({ message: "A client with this National ID is already registered. Search for them instead, or ask an admin." }, { status: 409 });
     }
     const guarantors = (paper ? body.guarantors ?? [] : []).filter((g) => g?.fullName?.trim() && NATIONAL_ID.test(g.nationalId ?? "") && normalisePhone(g.phone ?? ""));
     const borrowerNin = borrower?.nin ?? person?.nationalId;
     if (guarantors.some((g) => g.nationalId === borrowerNin) || (guarantors.length === 2 && guarantors[0].nationalId === guarantors[1].nationalId))
-      return invalid("The borrower and the two guarantors must be three different people.");
+      return invalid("The client and the two guarantors must be three different people.");
     if (submit && guarantors.length !== 2) return invalid("Enter both guarantors' details.");
 
     // Files (paper route)
@@ -1730,6 +1731,7 @@ export const handlers = [
           phone: normalisePhone(person.phone)!,
           secondaryPhone: person.secondaryPhone ? normalisePhone(person.secondaryPhone) : null,
           premises: person.premises?.trim() ?? "",
+          occupation: person.occupation?.trim() ?? "",
           area: person.area?.trim() ?? "",
           nextOfKin: { name: person.nextOfKin?.name?.trim() || null, phone: normalisePhone(person.nextOfKin?.phone ?? "") },
         },
@@ -1737,10 +1739,10 @@ export const handlers = [
       );
     const missing = paper
       ? [guarantors.length < 2 && "Guarantor details missing", !signedFile && "Signed application PDF missing"].find(Boolean) || null
-      : "Waiting for the borrower to complete it online";
+      : "Waiting for the client to complete it online";
     const app = {
       id: nextApplicationId(),
-      borrowerName: borrower?.name ?? "New borrower (online)",
+      borrowerName: borrower?.name ?? "New client (online)",
       phone: borrower?.phone ?? "",
       amount: terms.amount,
       purpose: "",
@@ -1773,10 +1775,10 @@ export const handlers = [
     }
     const amount = `UGX ${terms.amount.toLocaleString("en-US")}`;
     if (borrower) {
-      if (borrower.addedInSession && paper) recordBorrowerEvent(borrower, "changes", "Registered the borrower", actor);
+      if (borrower.addedInSession && paper) recordBorrowerEvent(borrower, "changes", "Registered the client", actor);
       recordBorrowerEvent(borrower, "changes", `${submit ? "Submitted" : paper ? "Started" : "Sent an online link for"} application ${app.id} · ${amount}${submit ? " for approval (paper forms)" : ""}`, actor);
     }
-    audit(user, `${submit ? "submitted" : "started"} application ${app.id} · ${amount}${borrower ? ` for ${borrower.name}` : " (online, new borrower)"}`);
+    audit(user, `${submit ? "submitted" : "started"} application ${app.id} · ${amount}${borrower ? ` for ${borrower.name}` : " (online, new client)"}`);
     return HttpResponse.json<NewApplicationResult>({ id: app.id, borrowerId: borrower?.id ?? null, status: app.status, onlineLink }, { status: 201 });
   }),
 
@@ -1845,7 +1847,7 @@ export const handlers = [
       if (!NATIONAL_ID.test(person.nationalId ?? "")) return HttpResponse.json({ message: `Check the National ID number for ${person.fullName}.` }, { status: 422 });
       if (!normalisePhone(person.phone ?? "")) return HttpResponse.json({ message: `Check the phone number for ${person.fullName}.` }, { status: 422 });
     }
-    if (new Set(people.map((p) => p.nationalId)).size !== 3) return HttpResponse.json({ message: "The borrower and the two guarantors must be three different people." }, { status: 422 });
+    if (new Set(people.map((p) => p.nationalId)).size !== 3) return HttpResponse.json({ message: "The client and the two guarantors must be three different people." }, { status: 422 });
     const borrowerProblem = newBorrowerProblem(details.borrower);
     if (borrowerProblem) return HttpResponse.json({ message: borrowerProblem }, { status: 422 });
     if (details.guarantors.some((g) => !g.relationship?.trim())) return HttpResponse.json({ message: "Say how each guarantor knows you." }, { status: 422 });
@@ -1871,6 +1873,7 @@ export const handlers = [
         phone: normalisePhone(details.borrower.phone)!,
         secondaryPhone: details.borrower.secondaryPhone ? normalisePhone(details.borrower.secondaryPhone) : null,
         premises: details.borrower.premises.trim(),
+        occupation: details.borrower.occupation?.trim() ?? "",
         area: details.borrower.area.trim(),
         nextOfKin: { name: details.borrower.nextOfKin?.name?.trim() || null, phone: normalisePhone(details.borrower.nextOfKin?.phone ?? "") },
       },
@@ -2016,7 +2019,7 @@ export const handlers = [
       const open = loans.filter((loan) => loan.outstandingBalance > 0 && canSeeRecord(user, loan.officerId));
       today.activeLoans = { count: open.length, outstanding: open.reduce((sum, loan) => sum + loan.outstandingBalance, 0), lateCount: open.filter((loan) => loan.daysPastDue > 0).length };
     }
-    // Due to collect: your own borrowers, or (for people who record payments market-wide) everyone's
+    // Due to collect: your own clients, or (for people who record payments market-wide) everyone's
     const collectionTasks = ownBook ? tasks : can("payments.record") ? officers.flatMap((officer) => (canSeeRecord(user, officer.id) ? tasksFor(officer.id) : [])) : null;
     if (collectionTasks) {
       const dueToday = collectionTasks.filter((task) => task.type === "instalment-due" || task.type === "promise-due");
@@ -2079,7 +2082,7 @@ export const handlers = [
     if (!rules.repaymentMethods.includes(body.method)) return HttpResponse.json({ message: `${body.method} isn't accepted for repayments.` }, { status: 422 });
     if (rules.referenceRequired && body.method !== "Cash" && !body.reference?.trim()) return HttpResponse.json({ message: "Enter the mobile money transaction ID." }, { status: 422 });
     if (!Number.isInteger(body.amount)) return HttpResponse.json({ message: "Enter a whole number of shillings." }, { status: 422 });
-    // Never more than the borrower owes: no overpayments, so there's nothing to refund later
+    // Never more than the client owes: no overpayments, so there's nothing to refund later
     const owedNow = owedNowOf(loan);
     if (body.amount > owedNow) return HttpResponse.json({ message: `That's more than ${loan.borrowerName} owes. The most you can record is UGX ${owedNow.toLocaleString("en-US")}.` }, { status: 422 });
     const todayIso = new Date().toLocaleDateString("en-CA");
@@ -2281,7 +2284,7 @@ export const handlers = [
     const params = new URL(request.url).searchParams;
     const query = (params.get("q") ?? "").trim().toLowerCase();
     const status = params.get("status") as BorrowerStatus | null;
-    // Officers only ever see their own borrowers, whatever filter they send
+    // Officers only ever see their own clients, whatever filter they send
     const officerId = seesBranch(user) ? params.get("officerId") : user.id;
     const sort = (params.get("sort") as BorrowerSort | null) ?? "name";
     const descending = params.get("order") === "desc";
@@ -2344,8 +2347,8 @@ export const handlers = [
     syncNewBorrowerApplications();
     const user = currentDemoUser();
     const borrower = borrowers.find((b) => b.id === params.borrowerId);
-    // Out of scope looks the same as missing, so officers can't confirm who else is a borrower
-    if (!borrower || !canSeeRecord(user, borrower.officerId)) return HttpResponse.json({ message: "That borrower wasn't found." }, { status: 404 });
+    // Out of scope looks the same as missing, so officers can't confirm who else is a client
+    if (!borrower || !canSeeRecord(user, borrower.officerId)) return HttpResponse.json({ message: "That client wasn't found." }, { status: 404 });
     syncOnlineApplications(borrower);
 
     const details = borrowerDetails.get(borrower.id)!;
@@ -2365,6 +2368,7 @@ export const handlers = [
       secondaryPhone: details.secondaryPhone,
       area: borrower.area,
       premises: details.premises,
+      occupation: details.occupation,
       nationalIdMasked: maskNationalId(borrower.nin),
       registeredOn: borrower.registeredOn,
       officer: { id: borrower.officerId, name: officers.find((o) => o.id === borrower.officerId)?.name ?? "" },
@@ -2396,7 +2400,7 @@ export const handlers = [
     await delay(200);
     const user = currentDemoUser();
     const borrower = borrowers.find((b) => b.id === params.borrowerId);
-    if (!borrower || !canSeeRecord(user, borrower.officerId)) return HttpResponse.json({ message: "That borrower wasn't found." }, { status: 404 });
+    if (!borrower || !canSeeRecord(user, borrower.officerId)) return HttpResponse.json({ message: "That client wasn't found." }, { status: 404 });
     syncOnlineApplications(borrower);
 
     const items: BorrowerLoanRecord[] = pastLoans
@@ -2435,7 +2439,7 @@ export const handlers = [
   http.get(`${API_BASE}/borrowers/:borrowerId/documents`, async ({ params }) => {
     await delay(200);
     const borrower = borrowers.find((b) => b.id === params.borrowerId);
-    if (!borrower || !canSeeRecord(currentDemoUser(), borrower.officerId)) return HttpResponse.json({ message: "That borrower wasn't found." }, { status: 404 });
+    if (!borrower || !canSeeRecord(currentDemoUser(), borrower.officerId)) return HttpResponse.json({ message: "That client wasn't found." }, { status: 404 });
     syncOnlineApplications(borrower);
     return HttpResponse.json<BorrowerDocuments>(borrowerDocumentsResponse(borrower));
   }),
@@ -2472,7 +2476,7 @@ export const handlers = [
     await delay(250);
     const user = currentDemoUser();
     const borrower = borrowers.find((b) => b.id === params.borrowerId);
-    if (!borrower || !canSeeRecord(user, borrower.officerId)) return HttpResponse.json({ message: "That borrower wasn't found." }, { status: 404 });
+    if (!borrower || !canSeeRecord(user, borrower.officerId)) return HttpResponse.json({ message: "That client wasn't found." }, { status: 404 });
     if (!hasPermission(user, "applications.onlineLink")) return HttpResponse.json({ message: "You can't send forms." }, { status: 403 });
     const { slot: slotKey } = (await request.json()) as { slot: string };
     const slot = findSlot(borrower, slotKey);
@@ -2492,13 +2496,13 @@ export const handlers = [
     await delay(400);
     const user = currentDemoUser();
     const borrower = borrowers.find((b) => b.id === params.borrowerId);
-    if (!borrower || !canSeeRecord(user, borrower.officerId)) return HttpResponse.json({ message: "That borrower wasn't found." }, { status: 404 });
+    if (!borrower || !canSeeRecord(user, borrower.officerId)) return HttpResponse.json({ message: "That client wasn't found." }, { status: 404 });
     if (!hasPermission(user, "documents.upload")) return HttpResponse.json({ message: "You can't upload documents." }, { status: 403 });
 
     const form = await request.formData();
     const slot = findSlot(borrower, String(form.get("slot") ?? ""));
     const file = form.get("file");
-    if (!slot) return HttpResponse.json({ message: "That document type doesn't exist for this borrower." }, { status: 422 });
+    if (!slot) return HttpResponse.json({ message: "That document type doesn't exist for this client." }, { status: 422 });
     if (!(file instanceof File) || file.size === 0) return HttpResponse.json({ message: "Choose a file to upload." }, { status: 422 });
     if (file.size > MAX_UPLOAD_BYTES) return HttpResponse.json({ message: "The file is larger than 5 MB." }, { status: 413 });
     const contentType = await sniffDocumentType(file);
@@ -2548,7 +2552,7 @@ export const handlers = [
   http.get(`${API_BASE}/borrowers/:borrowerId/activity`, async ({ params, request }) => {
     await delay(200);
     const borrower = borrowers.find((b) => b.id === params.borrowerId);
-    if (!borrower || !canSeeRecord(currentDemoUser(), borrower.officerId)) return HttpResponse.json({ message: "That borrower wasn't found." }, { status: 404 });
+    if (!borrower || !canSeeRecord(currentDemoUser(), borrower.officerId)) return HttpResponse.json({ message: "That client wasn't found." }, { status: 404 });
     syncOnlineApplications(borrower);
     const search = new URL(request.url).searchParams;
     const category = search.get("category") as BorrowerActivityCategory | null;
@@ -2559,8 +2563,8 @@ export const handlers = [
     await delay(300);
     const user = currentDemoUser();
     const borrower = borrowers.find((b) => b.id === params.borrowerId);
-    if (!borrower || !canSeeRecord(user, borrower.officerId)) return HttpResponse.json({ message: "That borrower wasn't found." }, { status: 404 });
-    if (!hasPermission(user, "borrowers.edit")) return HttpResponse.json({ message: "You can't change borrower details." }, { status: 403 });
+    if (!borrower || !canSeeRecord(user, borrower.officerId)) return HttpResponse.json({ message: "That client wasn't found." }, { status: 404 });
+    if (!hasPermission(user, "borrowers.edit")) return HttpResponse.json({ message: "You can't change client details." }, { status: 403 });
 
     const body = (await request.json()) as BorrowerDetailsUpdate;
     const phone = normalisePhone(body.phone ?? "");
@@ -2580,11 +2584,13 @@ export const handlers = [
     if (body.area.trim() !== borrower.area) changed.push("address");
     if (body.gender !== details.gender) changed.push("gender");
     if (body.premises.trim() !== details.premises) changed.push("shop / premises");
+    if ((body.occupation ?? "").trim() !== details.occupation) changed.push("occupation");
     if (JSON.stringify(nextOfKin) !== JSON.stringify(details.nextOfKin)) changed.push("next of kin");
 
     details.secondaryPhone = secondaryPhone;
     borrower.area = body.area.trim();
     details.premises = body.premises.trim();
+    details.occupation = (body.occupation ?? "").trim().slice(0, 80);
     details.nextOfKin = nextOfKin;
     details.gender = body.gender;
     const currentLoan = borrower.currentLoanId ? loans.find((l) => l.id === borrower.currentLoanId) : undefined;
@@ -2616,7 +2622,7 @@ export const handlers = [
     await delay(300);
     const user = currentDemoUser();
     const borrower = borrowers.find((b) => b.id === params.borrowerId);
-    if (!borrower || !canSeeRecord(user, borrower.officerId)) return HttpResponse.json({ message: "That borrower wasn't found." }, { status: 404 });
+    if (!borrower || !canSeeRecord(user, borrower.officerId)) return HttpResponse.json({ message: "That client wasn't found." }, { status: 404 });
     const change = pendingPhoneChanges.get(borrower.id);
     if (!change || change.id !== params.changeId) return HttpResponse.json({ message: "This change has already been dealt with." }, { status: 409 });
     const { decision } = (await request.json()) as { decision: "approve" | "reject" };
@@ -2645,7 +2651,7 @@ export const handlers = [
     await delay(250);
     const user = currentDemoUser();
     const borrower = borrowers.find((b) => b.id === params.borrowerId);
-    if (!borrower || !canSeeRecord(user, borrower.officerId)) return HttpResponse.json({ message: "That borrower wasn't found." }, { status: 404 });
+    if (!borrower || !canSeeRecord(user, borrower.officerId)) return HttpResponse.json({ message: "That client wasn't found." }, { status: 404 });
     if (!hasPermission(user, "borrowers.nationalId")) return forbidden("You can't see full National ID numbers.");
     // Every reveal goes in the audit log: who, whose ID, when
     recordBorrowerEvent(borrower, "access", "Viewed the National ID number", actorOf(user));
@@ -2990,7 +2996,7 @@ export const handlers = [
     const lockout = lockoutProblem({ member, roleId });
     if (lockout) return conflict(lockout);
     if (member.status === "active" && portfolioOf(member.id).borrowers > 0 && !role.permissions.includes("loans.view"))
-      return conflict(`${member.name} looks after borrowers, and ${role.name} can't see loans. Move their borrowers to another officer first.`);
+      return conflict(`${member.name} looks after clients, and ${role.name} can't see loans. Move their clients to another officer first.`);
     const before = roles[member.roleId]?.name ?? "no role";
     member.roleId = roleId;
     audit(user, `changed ${member.name}'s role from ${before} to ${role.name}`, [{ label: "Role", value: `${before} → ${role.name}` }]);
@@ -3029,7 +3035,7 @@ export const handlers = [
     let movedTo: MockStaff | undefined;
     if (portfolio.borrowers > 0) {
       movedTo = body.reassignTo ? findStaff(body.reassignTo) : undefined;
-      if (!movedTo || movedTo.id === member.id || !canTakeBorrowers(movedTo)) return invalid(`Choose who looks after ${member.name}'s ${portfolio.borrowers} borrowers.`);
+      if (!movedTo || movedTo.id === member.id || !canTakeBorrowers(movedTo)) return invalid(`Choose who looks after ${member.name}'s ${portfolio.borrowers} clients.`);
       for (const borrower of borrowers) if (borrower.officerId === member.id) borrower.officerId = movedTo.id;
       for (const loan of loans) if (loan.officerId === member.id) loan.officerId = movedTo.id;
       for (const app of applications) if (app.officerId === member.id) app.officerId = movedTo.id;

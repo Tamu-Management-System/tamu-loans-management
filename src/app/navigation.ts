@@ -39,7 +39,7 @@ export const NAVIGATION: NavItem[] = [
     ],
   },
   { label: "Applications", icon: "applications", to: "/applications", requires: "applications.view", badge: "applications" },
-  { label: "Borrowers", icon: "user", to: "/borrowers", requires: "borrowers.view" },
+  { label: "Clients", icon: "user", to: "/borrowers", requires: "borrowers.view" },
   { label: "Arrears & SMS", icon: "arrears", to: "/arrears", requires: VIEW_LOANS_PERMISSIONS, release: "phase-2" },
   { label: "Payments", icon: "payments", to: "/payments", requires: "payments.view" },
   { label: "Accounting", icon: "accounting", to: "/accounting", requires: "reports.view", release: "phase-2" },

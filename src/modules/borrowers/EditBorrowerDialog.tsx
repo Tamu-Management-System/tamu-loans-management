@@ -16,6 +16,7 @@ type FormState = {
   phone: string;
   area: string;
   premises: string;
+  occupation: string;
   secondaryPhone: string;
   kinName: string;
   kinRelationship: string;
@@ -24,7 +25,7 @@ type FormState = {
 };
 
 /**
- * Updates the borrower's details (the fields the client confirmed). Name and National ID are locked
+ * Updates the client's details (the fields the client confirmed). Name and National ID are locked
  * (they must match the ID card). A new main phone, the mobile money payout number, only takes effect
  * after a second person approves it.
  */
@@ -35,6 +36,7 @@ export function EditBorrowerDialog({ borrower, onClose, onSaved }: EditBorrowerD
     phone: borrower.phone,
     area: borrower.area,
     premises: borrower.premises,
+    occupation: borrower.occupation,
     secondaryPhone: borrower.secondaryPhone ?? "",
     kinName: borrower.nextOfKin?.name ?? "",
     kinRelationship: borrower.nextOfKin?.relationship ?? "",
@@ -70,6 +72,7 @@ export function EditBorrowerDialog({ borrower, onClose, onSaved }: EditBorrowerD
         secondaryPhone,
         area: form.area.trim(),
         premises: form.premises.trim(),
+        occupation: form.occupation.trim(),
         nextOfKin: { name: form.kinName.trim() || null, relationship: form.kinRelationship.trim() || null, phone: kinPhone },
         gender: form.gender,
       },
@@ -137,7 +140,8 @@ export function EditBorrowerDialog({ borrower, onClose, onSaved }: EditBorrowerD
           </div>
         </Field>
         <div className={styles.pair}>
-          {input("area", { label: "Address", hint: "Where they live" })}
+          {input("area", { label: "Address (Location)", hint: "Where they live" })}
+          {input("occupation", { label: "Occupation (optional)", hint: "What they do for a living" })}
           {input("premises", { label: "Shop / premises / building / arcade" })}
         </div>
       </fieldset>

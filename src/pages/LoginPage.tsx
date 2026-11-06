@@ -16,7 +16,7 @@ const DemoAccounts = __MOCK_API_ENABLED__ ? lazy(() => import("../demo/DemoAccou
 
 /** Why the user is on the login page, when it wasn't their choice. */
 const SESSION_END_NOTICES: Record<SessionEndReason, string> = {
-  idle: "You were signed out after a while without activity, to keep borrower data safe. Sign in again to continue.",
+  idle: "You were signed out after a while without activity, to keep client data safe. Sign in again to continue.",
   expired: "Your session has ended. Sign in again to continue.",
   "signed-out-elsewhere": "You signed out in another tab.",
 };

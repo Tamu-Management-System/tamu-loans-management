@@ -5,7 +5,7 @@ interface PaginationProps {
   page: number;
   pageSize: number;
   total: number;
-  /** What's being counted, e.g. "borrowers" */
+  /** What's being counted, e.g. "clients" */
   noun: string;
   onPageChange: (page: number) => void;
 }
@@ -17,7 +17,7 @@ function visiblePages(page: number, pageCount: number): (number | "gap")[] {
   return sorted.flatMap((p, index) => (index > 0 && p - sorted[index - 1] > 1 ? ["gap" as const, p] : [p]));
 }
 
-/** "Showing 1–25 of 210 borrowers" with previous / next and page numbers. */
+/** "Showing 1–25 of 210 clients" with previous / next and page numbers. */
 export function Pagination({ page, pageSize, total, noun, onPageChange }: PaginationProps) {
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const first = total === 0 ? 0 : (page - 1) * pageSize + 1;

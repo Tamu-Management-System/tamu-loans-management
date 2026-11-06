@@ -29,7 +29,7 @@ export function AccountSettingsPage() {
               <h2 id="timeout-heading">Automatic sign-out</h2>
             </div>
             <p className={styles.text}>
-              You're signed out after <b>{settings?.security.idleTimeoutMinutes ?? 15} minutes</b> without activity, so an unattended screen doesn't show borrowers' details. Your admin sets this.
+              You're signed out after <b>{settings?.security.idleTimeoutMinutes ?? 15} minutes</b> without activity, so an unattended screen doesn't show clients' details. Your admin sets this.
             </p>
           </section>
         </div>

@@ -27,7 +27,7 @@ const ACTION_MESSAGES: Record<WorklistAction, (name: string, reference: string) 
 };
 
 interface WorklistProps {
-  /** Opens the Record payment dialog, for a loan or (without one) for any borrower */
+  /** Opens the Record payment dialog, for a loan or (without one) for any client */
   onRecordPayment: (loanId?: string) => void;
   /** Shows a confirmation; with a task id it offers Undo */
   announce: (message: string, undoTaskId?: string | null) => void;
@@ -237,7 +237,7 @@ function UpcomingGroupPreview({ group, tasks, handlers }: { group: WorklistGroup
   if (!group.upcoming || tasks.length === 0) return null;
   const PREVIEW_ROWS = 2;
   return (
-    <ComingSoon feature={group.upcoming.feature} module={group.upcoming.module} className={`${styles.group} ${styles.upcomingGroup}`}>
+    <ComingSoon feature={group.upcoming.feature} className={`${styles.group} ${styles.upcomingGroup}`}>
       <div className={styles.groupHeader}>
         <div>
           <h4>{group.title}</h4>

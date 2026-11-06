@@ -97,7 +97,7 @@ function SidebarRiskCard() {
 
   return (
     <div className={styles.sidebarFooter}>
-      <ComingSoon feature="Risk alerts" module="Module 3" compact className={`${styles.riskCard} ${aboveTarget ? styles.riskCardAlert : ""}`}>
+      <ComingSoon feature="Risk alerts" compact className={`${styles.riskCard} ${aboveTarget ? styles.riskCardAlert : ""}`}>
         <button
           type="button"
           className={styles.riskCardButton}

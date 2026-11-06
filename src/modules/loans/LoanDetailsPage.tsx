@@ -234,7 +234,7 @@ export function LoanDetailsPage() {
               <h2 id="details-heading">Loan details</h2>
             </div>
             <dl className={styles.details}>
-              <Row label="Borrower">
+              <Row label="Client">
                 <Link to={`/borrowers/${loan.borrower.id}`}>{loan.borrower.name}</Link>
                 <span className={styles.muted}>{loan.borrower.phone} · mobile money</span>
               </Row>

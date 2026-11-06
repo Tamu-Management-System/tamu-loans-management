@@ -24,7 +24,7 @@ export function describeSubject(task: WorklistTask): { name: string; reference: 
       return { name: task.borrower.name, reference: task.applicationId, detail: `Submitted by ${task.submittedBy}` };
     case "awaiting-disbursement": {
       const approved = daysSince(task.approvedOn) === 1 ? "yesterday" : `on ${formatShortDate(task.approvedOn)}`;
-      return { name: task.borrower.name, reference: task.loanId, detail: `Approved by Finance ${approved} · ${task.officerName}'s borrower` };
+      return { name: task.borrower.name, reference: task.loanId, detail: `Approved by Finance ${approved} · ${task.officerName}'s client` };
     }
     case "access-request":
       return {

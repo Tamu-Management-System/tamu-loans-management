@@ -18,7 +18,7 @@ export interface LoanTermsInput {
 export interface LoanTermsSummary {
   interest: number;
   fee: number;
-  /** What the borrower receives (the amount, less a fee taken from the payout) */
+  /** What the client receives (the amount, less a fee taken from the payout) */
   payout: number;
   totalRepayable: number;
   /** Each payment except the last, rounded to UGX 100 */

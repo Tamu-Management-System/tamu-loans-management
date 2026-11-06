@@ -9,7 +9,7 @@ import { RecordPaymentDialog } from "../modules/payments/RecordPaymentDialog";
 import { PortfolioSection } from "../modules/portfolio/PortfolioSection";
 import styles from "./DashboardPage.module.css";
 
-/** Which Record payment dialog is open: undefined = closed; null loanId = choose a borrower. */
+/** Which Record payment dialog is open: undefined = closed; null loanId = choose a client. */
 type PaymentDialogState = { loanId: string | null } | undefined;
 
 export function DashboardPage() {

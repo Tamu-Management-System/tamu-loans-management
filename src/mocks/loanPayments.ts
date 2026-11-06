@@ -1,4 +1,4 @@
-// Repayments on each loan: the sample history (from seed.ts, following each borrower's habits) and
+// Repayments on each loan: the sample history (from seed.ts, following each client's habits) and
 // the ones recorded during the demo.
 import type { LoanPayment } from "../api/types";
 

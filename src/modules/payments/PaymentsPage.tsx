@@ -63,7 +63,7 @@ function usePaymentFilters() {
   return { range, params, update };
 }
 
-/** Payments (user flow, phase 6): every repayment and what was collected. Officers see their own borrowers; Finance and admins the branch. */
+/** Payments (user flow, phase 6): every repayment and what was collected. Officers see their own clients; Finance and admins the branch. */
 export function PaymentsPage() {
   const { can, seesBranch } = useAuth();
   const searchId = useId();
@@ -92,7 +92,7 @@ export function PaymentsPage() {
       <div className={styles.header}>
         <div>
           <h1>Payments</h1>
-          <p className={styles.subtitle}>{branchWide ? "Repayments across the market" : "Repayments from your borrowers"}</p>
+          <p className={styles.subtitle}>{branchWide ? "Repayments across the market" : "Repayments from your clients"}</p>
         </div>
         {can("payments.record") && <Button onClick={() => setRecording(true)}>Record payment</Button>}
       </div>
@@ -133,8 +133,8 @@ export function PaymentsPage() {
               type="search"
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
-              placeholder="Search borrower, loan ID, phone or transaction ID"
-              aria-label="Search payments by borrower, loan ID, phone or transaction ID"
+              placeholder="Search client, loan ID, phone or transaction ID"
+              aria-label="Search payments by client, loan ID, phone or transaction ID"
               autoComplete="off"
             />
           </label>
@@ -194,7 +194,7 @@ export function PaymentsPage() {
               <thead>
                 <tr>
                   <th>WHEN</th>
-                  <th>BORROWER</th>
+                  <th>CLIENT</th>
                   <th>AMOUNT</th>
                   <th>METHOD</th>
                   {/* Officers mostly see payments they recorded themselves */}

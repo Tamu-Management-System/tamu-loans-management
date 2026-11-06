@@ -18,9 +18,9 @@ function CardSlot<T>({ data, children }: { data: T | undefined; children: (data:
 }
 
 /** Phase 2 card: blurred under a "Coming soon" overlay until Phase 2 is switched on. */
-function UpcomingCard({ feature, module, children }: { feature: string; module: string; children: ReactNode }) {
+function UpcomingCard({ feature, children }: { feature: string; children: ReactNode }) {
   return (
-    <ComingSoon feature={feature} module={module} className={styles.cardSlot}>
+    <ComingSoon feature={feature} className={styles.cardSlot}>
       {children}
     </ComingSoon>
   );
@@ -31,7 +31,7 @@ interface PortfolioSectionProps {
 }
 
 /**
- * "My portfolio" for people who look after their own borrowers, "Market portfolio" for people who see the
+ * "My portfolio" for people who look after their own clients, "Market portfolio" for people who see the
  * whole market. Shown to anyone who can view loans, whatever their role (built-in or custom). Risk cards (PAR30, arrears,
  * early warnings) belong to the arrears engine (Module 3) and stay under "Coming soon" for the MVP.
  */
@@ -59,10 +59,10 @@ export function PortfolioSection({ announce }: PortfolioSectionProps) {
       </div>
 
       <div className={styles.grid}>
-        <UpcomingCard feature="PAR30 trend" module="Module 3 · Arrears aging engine">
+        <UpcomingCard feature="PAR30 trend">
           <CardSlot data={risk.data}>{(data) => <ParTrendCard risk={data} />}</CardSlot>
         </UpcomingCard>
-        <UpcomingCard feature="Arrears insights" module="Module 3 · Arrears aging engine">
+        <UpcomingCard feature="Arrears insights">
           <CardSlot data={arrears.data}>{(data) => <ArrearsInsightsCard arrears={data} />}</CardSlot>
         </UpcomingCard>
         {isOfficer ? <OfficerCards announce={announce} /> : <AdminCards targetPercent={risk.data?.targetPercent} />}
@@ -76,7 +76,7 @@ function OfficerCards({ announce }: PortfolioSectionProps) {
   const summary = usePortfolioSummary();
   return (
     <>
-      <UpcomingCard feature="Early warnings" module="Module 3 · Arrears engine & SMS">
+      <UpcomingCard feature="Early warnings">
         <CardSlot data={warnings.data}>{(data) => <EarlyWarningsCard warnings={data} announce={announce} />}</CardSlot>
       </UpcomingCard>
       <CardSlot data={summary.data}>{(data) => <PortfolioSummaryCard summary={data} />}</CardSlot>

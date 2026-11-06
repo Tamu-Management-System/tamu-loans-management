@@ -48,7 +48,7 @@ export function ToDisbursePage() {
               <thead>
                 <tr>
                   <th>APPROVED</th>
-                  <th>BORROWER</th>
+                  <th>CLIENT</th>
                   <th className={styles.numeric}>AMOUNT</th>
                   <th className={styles.payToHeading}>PAY TO</th>
                   {branchWide && <th>OFFICER</th>}

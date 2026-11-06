@@ -1,8 +1,8 @@
-// Sample documents for the borrower profile, following Tamu's real forms (loan-docs/). The officer
-// enters the borrower's and guarantors' details as data; the proof is one signed loan application
+// Sample documents for the client profile, following Tamu's real forms (loan-docs/). The officer
+// enters the client's and guarantors' details as data; the proof is one signed loan application
 // per loan: the payment agreement and both guarantor consents merged into one PDF, either signed on
-// paper and scanned, or completed online through a link. Plus the borrower's ID copy and an
-// optional workplace photo. Built per borrower on first use (fixed seed per borrower) and kept
+// paper and scanned, or completed online through a link. Plus the client's ID copy and an
+// optional workplace photo. Built per client on first use (fixed seed per client) and kept
 // in memory, so uploads, replacements and online links show up until the page is reloaded.
 import type { BorrowerDocuments, DocumentFile, DocumentSlot, Guarantor, LoanPricing, RepaymentSchedule } from "../api/types";
 import type { MockBorrower } from "./borrowerDirectory";
@@ -62,7 +62,7 @@ const PHONE_PREFIXES = ["0772", "0701", "0756", "0782", "0774", "0703"];
 const RELATIONSHIPS = ["Sister", "Brother", "Friend", "Workmate", "Neighbour", "Cousin", "Landlord", "Spouse"];
 const DAY_MS = 86_400_000;
 
-/** Same small generator as the other sample data, seeded per borrower */
+/** Same small generator as the other sample data, seeded per client */
 function seededRandom(seed: number) {
   return () => {
     seed = (seed + 0x6d2b79f5) | 0;
@@ -90,7 +90,7 @@ const currentVersion = (borrowerId: string, slotKey: string) => versions.filter(
 
 export const findDocument = (documentId: string) => versions.find((v) => v.id === documentId);
 
-/** Builds the borrower's sections and sample files the first time they're asked for. */
+/** Builds the client's sections and sample files the first time they're asked for. */
 export function documentSectionsFor(borrower: MockBorrower): MockSection[] {
   const existing = sections.get(borrower.id);
   if (existing) return existing;
@@ -115,14 +115,14 @@ export function documentSectionsFor(borrower: MockBorrower): MockSection[] {
     {
       id: "identity",
       title: "Identity",
-      subtitle: "Photos of the borrower's National ID, from online applications. On paper applications the ID copy is in the signed PDF.",
+      subtitle: "Photos of the client's National ID, from online applications. On paper applications the ID copy is in the signed PDF.",
       slots: [
         { key: "national-id-front", label: "National ID · front", required: false, canCompleteOnline: false },
         { key: "national-id-back", label: "National ID · back", required: false, canCompleteOnline: false },
       ],
     },
   ];
-  // Sample files only for the seeded borrowers; people registered in the demo have only what was uploaded
+  // Sample files only for the seeded clients; people registered in the demo have only what was uploaded
   if (!borrower.addedInSession) {
     // ID photos only come from the online form; on paper the ID copy is in the signed PDF
     if (application?.route === "online" && application.missing !== "National ID copy missing") {
@@ -146,7 +146,7 @@ export function documentSectionsFor(borrower: MockBorrower): MockSection[] {
         addOnlineApplication(newOnlineApplication(borrower.id, borrower.officerId, slot.key, loanForms, officerName, created));
       }
     } else if (!noSignedYet) {
-      // Paper (signed, scanned and merged) for most; some borrowers completed it online
+      // Paper (signed, scanned and merged) for most; some clients completed it online
       const online = random() < 0.3;
       sample(slot.key, "loan-application.pdf", "application/pdf", signedOn, online ? "online" : "scanned", online ? borrower.name : officerName);
     }
@@ -205,7 +205,7 @@ export function documentSectionsFor(borrower: MockBorrower): MockSection[] {
 
 const publicGuarantor = (g: Guarantor & { nin: string }): Guarantor => ({ name: g.name, phone: g.phone, nationalIdMasked: g.nationalIdMasked, relationship: g.relationship });
 
-/** The borrower's documents as the API returns them (no full NINs, no file contents, no link tokens). */
+/** The client's documents as the API returns them (no full NINs, no file contents, no link tokens). */
 export function borrowerDocumentsResponse(borrower: MockBorrower): BorrowerDocuments {
   return {
     sections: documentSectionsFor(borrower).map((section) => ({
@@ -320,20 +320,20 @@ function applicationSection(app: MockApplication): MockSection {
   return {
     id: app.id,
     title: `${app.id} · application`,
-    subtitle: app.status === "submitted" ? "Waiting for approval" : app.route === "online" ? "Draft · the borrower completes it online" : "Draft",
+    subtitle: app.status === "submitted" ? "Waiting for approval" : app.route === "online" ? "Draft · the client completes it online" : "Draft",
     forms,
     slots: [{ key: `${app.id}:application`, label: "Signed loan application", required: true, canCompleteOnline: true, forms }],
   };
 }
 
-/** Adds a new application's section to a borrower whose documents were already loaded. */
+/** Adds a new application's section to a client whose documents were already loaded. */
 export function addApplicationSection(borrower: MockBorrower, app: MockApplication) {
   const existing = sections.get(borrower.id);
   if (!existing || existing.some((section) => section.id === app.id)) return;
   existing.splice(1, 0, applicationSection(app)); // after Identity, before older loans
 }
 
-/** The one-time link for an online application (the borrower may not be registered yet). */
+/** The one-time link for an online application (the client may not be registered yet). */
 export function createOnlineLinkForApplication(app: MockApplication, borrowerId: string | null, officerId: string, createdBy: string) {
   const application = newOnlineApplication(borrowerId ?? "", officerId, `${app.id}:application`, applicationForms(app), createdBy);
   addOnlineApplication(application);
@@ -346,7 +346,7 @@ const ingested = new Set<string>();
 
 /**
  * Turns online applications submitted (in any tab) into documents: the signed loan application and
- * the borrower's ID photos. Returns the ones added now, so the caller can record them.
+ * the client's ID photos. Returns the ones added now, so the caller can record them.
  */
 export function ingestOnlineApplications(borrower: MockBorrower) {
   documentSectionsFor(borrower);
@@ -393,7 +393,7 @@ export async function documentFile(version: MockDocumentVersion, borrower: MockB
   else if (key === "national-id-back") version.file = await nationalIdBack(borrower.nin);
   else if (key === "workplace-photo") version.file = await workplacePhoto(details.premises, "Shop");
   else if (slot?.forms && version.submission) {
-    // Completed online: what the borrower filled in, agreed to by a consent tick from each of the three people
+    // Completed online: what the client filled in, agreed to by a consent tick from each of the three people
     const { details } = version.submission;
     version.file = loanApplicationPdf({
       borrower: { name: details.borrower.fullName, nin: details.borrower.nationalId, phone: details.borrower.phone, premises: details.borrower.premises },

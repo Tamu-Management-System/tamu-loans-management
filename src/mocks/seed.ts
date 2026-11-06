@@ -1,9 +1,9 @@
 // The demo's sample data, generated from the current rules so every number on screen adds up:
-// - borrowers with the client's fields (gender, address, shop / premises, next of kin, other phone);
+// - clients with the client's fields (gender, address, shop / premises, next of kin, other phone);
 // - loans made from the loan products (one month long by default), each with its real repayment
-//   schedule and payments that follow the borrower's habits (on time, often late, or stopped paying);
-// - each borrower's earlier loans, repaid in full, before the current one;
-// - applications at every stage, with guarantors and their relationship to the borrower.
+//   schedule and payments that follow the client's habits (on time, often late, or stopped paying);
+// - each client's earlier loans, repaid in full, before the current one;
+// - applications at every stage, with guarantors and their relationship to the client.
 // A fixed seed makes it the same every time. Import this module before reading any sample data.
 import type { LoanPayment, LoanProduct, PaymentMethod, RepaymentSchedule } from "../api/types";
 import { paymentDate, summariseTerms } from "../lib/repaymentSchedule";
@@ -43,6 +43,7 @@ const FEMALE_NAMES = ["Aisha", "Agnes", "Annet", "Betty", "Brenda", "Christine",
 const MALE_NAMES = ["Allan", "Arthur", "Brian", "Charles", "Collins", "Daniel", "Denis", "Derrick", "Edward", "Emmanuel", "Gerald", "Hakim", "Hassan", "Henry", "Isaac", "Ivan", "John", "Joseph", "Julius", "Kenneth", "Martin", "Moses", "Nicholas", "Patrick", "Paul", "Peter", "Robert", "Ronald", "Samuel", "Simon"];
 const SURNAMES = ["Ainembabazi", "Akello", "Atuhaire", "Auma", "Babirye", "Byaruhanga", "Kasozi", "Kato", "Kiggundu", "Kizito", "Lubega", "Mugisha", "Mukasa", "Mwesige", "Nabirye", "Nakato", "Nakimuli", "Nalwoga", "Namutebi", "Nansubuga", "Nantongo", "Ochieng", "Okello", "Opio", "Ssebunya", "Ssemanda", "Tumusiime", "Turyahikayo", "Waiswa", "Wasswa"];
 const ADDRESSES = ["Kisenyi, Kampala Central", "Kawempe, Kampala", "Nakawa, Kampala", "Ntinda, Kampala", "Kireka, Wakiso", "Bwaise, Kawempe", "Katwe, Makindye", "Mengo, Rubaga", "Kasubi, Rubaga", "Nateete, Rubaga", "Wandegeya, Kampala", "Kalerwe, Kawempe", "Banda, Nakawa", "Bweyogerere, Wakiso", "Mukono town", "Seeta, Mukono", "Kyebando, Kawempe", "Kiwatule, Nakawa", "Makindye, Kampala", "Kansanga, Makindye", "Najjera, Wakiso", "Namuwongo, Makindye"];
+const OCCUPATIONS = ["Market vendor", "Tailor", "Hairdresser", "Shop owner", "Food seller", "Boda boda rider", "Mechanic", "Fruit seller", "Butcher", "Fish monger", "Charcoal seller", "Phone accessories seller"];
 const PREMISES = ["Owino market, stall {n}", "Nakasero market, stall {n}", "Kikuubo Lane, shop {n}", "Kalerwe market, stall {n}", "Nakawa market, block C {n}", "Wandegeya, plot {n}", "Ntinda shopping centre, shop {n}", "Kireka stage, kiosk {n}", "Bwaise trading centre, shop {n}", "Katwe junction, workshop {n}", "Kasubi market, stall {n}", "Mengo, Kabaka Anjagala Rd, shop {n}"];
 const KIN_RELATIONSHIPS = ["Spouse", "Sister", "Brother", "Mother", "Father", "Cousin", "Aunt", "Uncle"];
 const GUARANTOR_RELATIONSHIPS = ["Sister", "Brother", "Friend", "Workmate", "Neighbour", "Cousin", "Landlord", "Spouse"];
@@ -72,6 +73,7 @@ function newPerson() {
     secondaryPhone: random() < 0.45 ? phone() : null,
     area: pick(ADDRESSES),
     premises: pick(PREMISES).replace("{n}", String(between(1, 60))),
+    occupation: random() < 0.85 ? pick(OCCUPATIONS) : "",
     nextOfKin: { name: `${pick(kinGender === "female" ? FEMALE_NAMES : MALE_NAMES)} ${name.split(" ")[1]}`, phone: phone(), relationship: pick(KIN_RELATIONSHIPS) },
   };
 }
@@ -116,8 +118,8 @@ interface SimulatedLoan {
 const lengthInDays = (product: LoanProduct) => product.numberOfPayments * { daily: 1, weekly: 7, monthly: 30 }[product.repaymentSchedule];
 
 /**
- * A loan from payout to today: its schedule, and the payments the borrower made (none today yet:
- * today's instalments are still to collect). "stopped" borrowers pay `stopAfter` instalments, then nothing.
+ * A loan from payout to today: its schedule, and the payments the client made (none today yet:
+ * today's instalments are still to collect). "stopped" clients pay `stopAfter` instalments, then nothing.
  */
 function simulateLoan(product: LoanProduct, principal: number, disbursedOn: string, habit: Habit, method: PaymentMethod, recordedBy: string, stopAfter = Infinity): SimulatedLoan {
   const numberOfPayments = product.numberOfPayments;
@@ -159,9 +161,9 @@ function simulateLoan(product: LoanProduct, principal: number, disbursedOn: stri
 
 const clampAmount = (product: LoanProduct, amount: number) => Math.min(product.amount.max, Math.max(product.amount.min, roundTo(amount, 50_000)));
 
-// ---------- Borrowers and their loans ----------
+// ---------- Clients and their loans ----------
 
-/** How many borrowers each officer looks after */
+/** How many clients each officer looks after */
 const PORTFOLIO_SIZES: Record<string, number> = { [OFFICER_IDS.sharon]: 42, [OFFICER_IDS.joel]: 38, [OFFICER_IDS.sarah]: 36, [OFFICER_IDS.peter]: 36, [OFFICER_IDS.ruth]: 32 };
 
 interface Draft {
@@ -195,11 +197,11 @@ function buildBorrower(officerId: string): Draft {
     anchor = disbursedOn;
   }
 
-  // Earlier loans, repaid in full, one after another (repeat borrowers tend to borrow a bit more each time)
+  // Earlier loans, repaid in full, one after another (repeat clients tend to borrow a bit more each time)
   const history: SimulatedLoan[] = [];
   let next = anchor;
   let principal = clampAmount(product, (current?.principal ?? product.amount.min * 2) / (1.1 + random() * 0.3));
-  // Long-standing borrowers have up to a year of loans behind them
+  // Long-standing clients have up to a year of loans behind them
   for (let count = random() < 0.25 ? 0 : between(1, 9); count > 0; count--) {
     const pastProduct = random() < 0.85 ? product : activeProduct(preferredSchedule());
     // Most repaid on time; now and then one fell far behind before it was cleared
@@ -230,7 +232,7 @@ interface ApplicationPlan {
   officerId: string;
   status: MockApplication["status"];
   daysAgo: number;
-  /** "new": registered with this application; "repeat": a borrower who has repaid and applies again; "online-new": not registered until they submit the online form */
+  /** "new": registered with this application; "repeat": a client who has repaid and applies again; "online-new": not registered until they submit the online form */
   who: "new" | "repeat" | "online-new";
   missing?: string;
   returned?: { reason: string; note: string };
@@ -251,10 +253,10 @@ const PLANS: ApplicationPlan[] = [
   { officerId: sarah, status: "submitted", daysAgo: 2, who: "new" },
   { officerId: sharon, status: "submitted", daysAgo: 2, who: "repeat" },
   { officerId: peter, status: "draft", daysAgo: 2, who: "new", missing: "Guarantor details missing" },
-  { officerId: joel, status: "draft", daysAgo: 1.5, who: "online-new", missing: "Waiting for the borrower to complete it online" },
+  { officerId: joel, status: "draft", daysAgo: 1.5, who: "online-new", missing: "Waiting for the client to complete it online" },
   { officerId: sharon, status: "draft", daysAgo: 1, who: "new", missing: "Signed application PDF missing" },
   { officerId: sharon, status: "draft", daysAgo: 1, who: "new", missing: "Guarantor consent missing" },
-  { officerId: sharon, status: "draft", daysAgo: 0.2, who: "online-new", missing: "Waiting for the borrower to complete it online" },
+  { officerId: sharon, status: "draft", daysAgo: 0.2, who: "online-new", missing: "Waiting for the client to complete it online" },
 ];
 
 /** Applicants and their applications, in the order they were made */
@@ -268,7 +270,7 @@ const planned = PLANS.map((plan) => {
   }
   if (plan.who === "online-new") return { plan, draft: null };
   const draft = newApplicant(plan.officerId, Math.ceil(plan.daysAgo));
-  if (plan.status !== "rejected") drafts.push(draft); // people turned down for good aren't registered as borrowers
+  if (plan.status !== "rejected") drafts.push(draft); // people turned down for good aren't registered as clients
   return { plan, draft };
 });
 
@@ -279,7 +281,7 @@ const allLoans = drafts.flatMap((draft) => [...draft.history.map((loan) => ({ dr
 allLoans.sort((a, b) => a.loan.disbursedOn.localeCompare(b.loan.disbursedOn));
 const loanIds = new Map(allLoans.map((entry, index) => [entry.loan, `TL-${String(index + 1).padStart(4, "0")}`]));
 
-// Borrowers are numbered in the order they registered
+// Clients are numbered in the order they registered
 const registered = drafts.slice().sort((a, b) => a.registeredOn.localeCompare(b.registeredOn));
 const borrowerIds = new Map(registered.map((draft, index) => [draft, `B-${String(index + 1).padStart(4, "0")}`]));
 
@@ -332,7 +334,7 @@ for (const draft of registered) {
       schedule: { firstPaymentOn: loan.firstPaymentOn, numberOfPayments: loan.numberOfPayments, instalment: loan.instalment, paidAtStart: loan.paid },
     };
   }
-  borrowerDetails.set(id, { premises: person.premises, secondaryPhone: person.secondaryPhone, nextOfKin: person.nextOfKin, gender: person.gender, loanTerms });
+  borrowerDetails.set(id, { premises: person.premises, occupation: person.occupation, secondaryPhone: person.secondaryPhone, nextOfKin: person.nextOfKin, gender: person.gender, loanTerms });
 
   for (const loan of draft.history)
     pastLoans.push({
@@ -366,7 +368,7 @@ planned.forEach(({ plan, draft }, index) => {
   const createdAt = ago(plan.daysAgo, 9);
   const created = createdAt.slice(0, 10);
   const firstPaymentOn = [paymentDate(created, product.repaymentSchedule, 1), day(1)].sort().at(-1)!;
-  const name = draft?.person.name ?? "New borrower (online)";
+  const name = draft?.person.name ?? "New client (online)";
   const submitted = plan.status !== "draft" || !!plan.returned;
   const guarantors = plan.who === "online-new" || plan.missing === "Guarantor details missing" ? undefined : guarantorPair(name);
   const application: MockApplication = {

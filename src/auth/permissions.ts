@@ -1,6 +1,6 @@
 // Every action the UI can gate. Screens check permissions, never role names,
 // so custom roles (created by an admin) work without code changes.
-// A role also has a data access level: its own borrowers only, or the whole branch.
+// A role also has a data access level: its own clients only, or the whole branch.
 
 export const PERMISSIONS = [
   "borrowers.view",
@@ -40,12 +40,12 @@ export const PERMISSIONS = [
 
 export type Permission = (typeof PERMISSIONS)[number];
 
-/** Whose records a role sees: the borrowers its people look after, or everyone in the branch */
+/** Whose records a role sees: the clients its people look after, or everyone in the branch */
 export type DataScope = "own" | "branch";
 
 export const DATA_SCOPES: { value: DataScope; label: string; description: string }[] = [
-  { value: "own", label: "Own portfolio", description: "Only the borrowers, loans and payments of people they look after." },
-  { value: "branch", label: "Whole market", description: "Every borrower, loan and payment in the market." },
+  { value: "own", label: "Own portfolio", description: "Only the clients, loans and payments of people they look after." },
+  { value: "branch", label: "Whole market", description: "Every client, loan and payment in the market." },
 ];
 
 /** The columns of the permissions matrix */
@@ -83,7 +83,7 @@ export interface PermissionModule {
 }
 
 export const PERMISSION_MODULES: PermissionModule[] = [
-  { group: "Lending", name: "Borrowers", description: "Borrower records, contact details and their loans" },
+  { group: "Lending", name: "Clients", description: "Client records, contact details and their loans" },
   { group: "Lending", name: "Documents", description: "ID copies, signed applications and guarantor documents" },
   { group: "Lending", name: "Applications", description: "Loan applications, online forms and approval" },
   { group: "Lending", name: "Loans", description: "Active, cleared and to-be-paid-out loans" },
@@ -101,12 +101,12 @@ export const PERMISSION_MODULES: PermissionModule[] = [
 ];
 
 export const PERMISSION_CATALOG: PermissionInfo[] = [
-  { id: "borrowers.view", module: "Borrowers", action: "view", label: "See borrowers", description: "Names, phone numbers, work and loan history." },
-  { id: "borrowers.create", module: "Borrowers", action: "create", label: "Register borrowers", description: "Add new borrowers while starting an application.", requires: ["borrowers.view"] },
-  { id: "borrowers.edit", module: "Borrowers", action: "edit", label: "Edit borrower details", description: "Contact details, next of kin and work. A new mobile money number still needs someone else's approval.", requires: ["borrowers.view"] },
-  { id: "borrowers.phoneApprove", module: "Borrowers", action: "approve", cellLabel: "Number changes", label: "Approve mobile money number changes", description: "Confirm a borrower's new payout number asked for by someone else.", sensitive: true, requires: ["borrowers.view"] },
-  { id: "borrowers.export", module: "Borrowers", action: "export", label: "Export borrower lists", description: "Download borrower lists as spreadsheets.", sensitive: true, requires: ["borrowers.view"] },
-  { id: "borrowers.nationalId", module: "Borrowers", action: "manage", cellLabel: "Show National ID", label: "Show full National ID numbers", description: "Reveal a masked National ID for 30 seconds. Every reveal is logged.", sensitive: true, requires: ["borrowers.view"] },
+  { id: "borrowers.view", module: "Clients", action: "view", label: "See clients", description: "Names, phone numbers, work and loan history." },
+  { id: "borrowers.create", module: "Clients", action: "create", label: "Register clients", description: "Add new clients while starting an application.", requires: ["borrowers.view"] },
+  { id: "borrowers.edit", module: "Clients", action: "edit", label: "Edit client details", description: "Contact details, next of kin and work. A new mobile money number still needs someone else's approval.", requires: ["borrowers.view"] },
+  { id: "borrowers.phoneApprove", module: "Clients", action: "approve", cellLabel: "Number changes", label: "Approve mobile money number changes", description: "Confirm a client's new payout number asked for by someone else.", sensitive: true, requires: ["borrowers.view"] },
+  { id: "borrowers.export", module: "Clients", action: "export", label: "Export client lists", description: "Download client lists as spreadsheets.", sensitive: true, requires: ["borrowers.view"] },
+  { id: "borrowers.nationalId", module: "Clients", action: "manage", cellLabel: "Show National ID", label: "Show full National ID numbers", description: "Reveal a masked National ID for 30 seconds. Every reveal is logged.", sensitive: true, requires: ["borrowers.view"] },
 
   { id: "documents.view", module: "Documents", action: "view", label: "View documents", description: "Open ID copies and signed applications in the app. Every view is logged.", requires: ["borrowers.view"] },
   { id: "documents.upload", module: "Documents", action: "create", cellLabel: "Upload", label: "Upload and replace documents", description: "Add missing documents or replace old ones; old versions are kept.", requires: ["documents.view"] },
@@ -115,7 +115,7 @@ export const PERMISSION_CATALOG: PermissionInfo[] = [
   { id: "applications.view", module: "Applications", action: "view", label: "See applications", description: "Drafts, applications waiting for approval, approved and rejected." },
   { id: "applications.create", module: "Applications", action: "create", label: "Start applications", description: "Fill in new applications and send them for approval.", requires: ["applications.view", "borrowers.create", "documents.upload"] },
   { id: "applications.approve", module: "Applications", action: "approve", label: "Approve or reject applications", description: "Decide on applications. Nobody can approve one they started.", sensitive: true, requires: ["applications.view", "documents.view"] },
-  { id: "applications.onlineLink", module: "Applications", action: "manage", cellLabel: "Online form links", label: "Send online form links", description: "Create the secure link a borrower fills in on their phone.", requires: ["applications.view"] },
+  { id: "applications.onlineLink", module: "Applications", action: "manage", cellLabel: "Online form links", label: "Send online form links", description: "Create the secure link a client fills in on their phone.", requires: ["applications.view"] },
 
   { id: "loans.view", module: "Loans", action: "view", label: "See loans", description: "Balances, repayment schedules and payments on each loan." },
   { id: "loans.disburse", module: "Loans", action: "approve", cellLabel: "Pay out", label: "Pay out approved loans", description: "Record the mobile money payout. Whoever approved a loan can't pay it out.", sensitive: true, requires: ["loans.view", "applications.view"] },
@@ -136,7 +136,7 @@ export const PERMISSION_CATALOG: PermissionInfo[] = [
 
   { id: "roles.manage", module: "Roles", action: "manage", cellLabel: "Create and change", label: "Manage roles", description: "Create custom roles and choose their permissions.", sensitive: true, requires: ["users.view"] },
 
-  { id: "settings.business", module: "Business details", action: "manage", label: "Change business details", description: "Name, contacts and payout accounts shown to borrowers." },
+  { id: "settings.business", module: "Business details", action: "manage", label: "Change business details", description: "Name, contacts and payout accounts shown to clients." },
   { id: "settings.products", module: "Loan products", action: "manage", label: "Manage loan products", description: "Interest, fees, limits and late penalties.", sensitive: true },
   { id: "settings.rules", module: "Loan rules", action: "manage", label: "Change loan rules", description: "Two-person checks, guarantors and recovery rules.", sensitive: true },
   { id: "settings.payments", module: "Payment settings", action: "manage", label: "Change payment settings", description: "Accepted methods, references and back-dating.", sensitive: true },
@@ -259,7 +259,7 @@ export const BUILT_IN_ROLES: Record<BuiltInRoleId, Role> = {
   loan_officer: {
     id: "loan_officer",
     name: "Loan officer",
-    description: "Registers borrowers, sends applications and collects from their own borrowers.",
+    description: "Registers clients, sends applications and collects from their own clients.",
     builtIn: true,
     dataScope: "own",
     permissions: [

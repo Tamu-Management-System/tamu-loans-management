@@ -65,7 +65,7 @@ interface AuthValue {
   user: CurrentUser;
   /** can("applications.approve") or can(["users.view", "roles.manage"]) for any-of */
   can: (needed: Permission | Permission[]) => boolean;
-  /** Sees the whole branch (otherwise only the borrowers they look after) */
+  /** Sees the whole branch (otherwise only the clients they look after) */
   seesBranch: boolean;
 }
 

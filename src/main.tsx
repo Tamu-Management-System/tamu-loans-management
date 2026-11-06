@@ -10,7 +10,7 @@ async function enableMocking() {
   await worker.start({ onUnhandledRequest: "bypass", quiet: true });
 }
 
-// The borrower's form loads its code on demand; start that now, alongside the rest, so the page is ready when the app draws
+// The client's form loads its code on demand; start that now, alongside the rest, so the page is ready when the app draws
 if (location.pathname.startsWith("/forms/")) void import("./modules/online-application/OnlineApplicationPage");
 
 enableMocking().then(() => {

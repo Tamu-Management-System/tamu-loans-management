@@ -1,4 +1,4 @@
-// Loans repaid in full before each borrower's current one. Filled in by the sample data generator
+// Loans repaid in full before each client's current one. Filled in by the sample data generator
 // (seed.ts), with their real schedules and payments.
 import type { RepaymentSchedule } from "../api/types";
 

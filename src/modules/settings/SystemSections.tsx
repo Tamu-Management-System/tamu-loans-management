@@ -63,15 +63,15 @@ export function LoanRulesSection() {
           </SettingsGroup>
 
           <SettingsGroup title="Applications">
-            <SettingRow label="One loan at a time" description="A borrower can't start a new loan until the current one is repaid.">
+            <SettingRow label="One loan at a time" description="A client can't start a new loan until the current one is repaid.">
               <Switch label="One loan at a time" checked={rules.oneOpenLoanPerBorrower} onChange={(value) => draft.set("oneOpenLoanPerBorrower", value)} />
             </SettingRow>
-            <SettingRow label="Online application links work for" htmlFor={ids.link} description="The link sent to a borrower stops working after this, or as soon as they submit.">
+            <SettingRow label="Online application links work for" htmlFor={ids.link} description="The link sent to a client stops working after this, or as soon as they submit.">
               <NumberField id={ids.link} value={rules.onlineLinkValidHours} onChange={(value) => draft.set("onlineLinkValidHours", value)} min={SETTING_LIMITS.onlineLinkValidHours[0]} max={SETTING_LIMITS.onlineLinkValidHours[1]} unit="hours" />
             </SettingRow>
           </SettingsGroup>
 
-          <SettingsGroup title="Payments" description="How money paid by a borrower is applied to what they owe.">
+          <SettingsGroup title="Payments" description="How money paid by a client is applied to what they owe.">
             <SettingRow label="A payment goes first to" htmlFor={ids.order} description="Money clears things in this order. It changes what is cleared first, not how much is owed.">
               <Select
                 id={ids.order}
@@ -135,8 +135,8 @@ export function LoanRulesSection() {
 }
 
 const REPAYMENT_METHODS: { value: PaymentMethod; label: string; description: string }[] = [
-  { value: "MTN MoMo", label: "MTN Mobile Money", description: "Borrower sends to Tamu's MTN number" },
-  { value: "Airtel Money", label: "Airtel Money", description: "Borrower sends to Tamu's Airtel number" },
+  { value: "MTN MoMo", label: "MTN Mobile Money", description: "Client sends to Tamu's MTN number" },
+  { value: "Airtel Money", label: "Airtel Money", description: "Client sends to Tamu's Airtel number" },
   { value: "Cash", label: "Cash", description: "Paid to the loan officer or at the office" },
 ];
 
@@ -183,7 +183,7 @@ export function PaymentsSection() {
             </SettingRow>
           </SettingsGroup>
 
-          <SettingsGroup title="Payouts" description="How approved loans are sent to borrowers. Each method needs a payout account in Business details.">
+          <SettingsGroup title="Payouts" description="How approved loans are sent to clients. Each method needs a payout account in Business details.">
             {(["MTN MoMo", "Airtel Money"] as const).map((method) => (
               <SettingRow key={method} label={method === "MTN MoMo" ? "MTN Mobile Money" : "Airtel Money"}>
                 <Switch label={`Pay out with ${method}`} checked={payments.payoutMethods.includes(method)} onChange={(on) => draft.set("payoutMethods", toggle(payments.payoutMethods, method, on))} />
@@ -213,7 +213,7 @@ export function SecuritySection() {
   return (
     <SettingsForm
       title="Security & sign-in"
-      subtitle="Protects borrowers' data and Tamu's money"
+      subtitle="Protects clients' data and Tamu's money"
       draft={draft as never}
       canEdit={can("settings.security")}
       validate={() => {
@@ -264,7 +264,7 @@ export function BusinessSection() {
   return (
     <SettingsForm
       title="Business details"
-      subtitle="Shown on the online application, agreements and messages to borrowers"
+      subtitle="Shown on the online application, agreements and messages to clients"
       draft={draft as never}
       canEdit={can("settings.business")}
       validate={() =>
@@ -295,7 +295,7 @@ export function BusinessSection() {
             <SettingRow label="Address" htmlFor={ids.address}>
               {text("address", ids.address, { maxLength: 120 })}
             </SettingRow>
-            <SettingRow label="Phone" htmlFor={ids.phone} description="Borrowers call this with questions.">
+            <SettingRow label="Phone" htmlFor={ids.phone} description="Clients call this with questions.">
               {text("phone", ids.phone, { inputMode: "tel", maxLength: 20 })}
             </SettingRow>
             <SettingRow label="Email" htmlFor={ids.email}>

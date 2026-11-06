@@ -39,7 +39,7 @@ Ugandan shillings (integers). Dates are calendar dates in Kampala time (EAT, UTC
 | `role_permissions` | role_id, permission | Permission list in api-contract.md. Save adds required permissions. |
 | `settings` | section (`business`, `loanRules`, `payments`, `security`), value (JSON), changed_at, changed_by | Defaults in `src/mocks/systemSettings.ts`. |
 | `loan_products` | id, name, description, status (`active` / `archived`), repayment_schedule (`daily` / `weekly` / `monthly`), interest_rate_percent, interest_per (`loan` / `day` / `week` / `month`), amount_min, amount_max, number_of_payments (loan length), fee_type/value/collection, penalty_type/value/per/grace_days, updated_at/by | Defaults: Daily 0.6% a day, Weekly 4.5% a week, Monthly 18% a month, all one month long. |
-| `borrowers` | id (`B-0001`), full_name, nin (encrypted, unique), phone (mobile money), secondary_phone, gender, address, premises, next_of_kin_name/phone/relationship, officer_id, registered_on, branch | The client's confirmed fields (questionnaire, 2 Nov 2026). No work/income. |
+| `borrowers` | id (`B-0001`), full_name, nin (encrypted, unique), phone (mobile money), secondary_phone, gender, address, occupation (optional), premises, next_of_kin_name/phone/relationship, officer_id, registered_on, branch | The client's confirmed fields (questionnaire, 2 Nov 2026). No work/income. |
 | `phone_change_requests` | borrower_id, new_phone, requested_by, requested_at, decided_by, decision | Four-eyes on the payout number. |
 | `applications` | id (`APP-301`), borrower_id (null until an online form is submitted), officer_id, route (`paper` / `online`), status (`draft` / `awaiting-borrower` / `submitted` / `approved` / `rejected`), product_id, amount, repayment_schedule, first_payment_on, number_of_payments, **pricing snapshot** (product name, rate, basis, fee), missing, returned_reason/note/by/at, created/submitted/decided at/by, loan_id | Pricing is copied from the product when saved, so product edits never change it. |
 | `guarantors` | application_id, position (1/2), full_name, nin (encrypted), phone, relationship | Two per application. Relationship only from the online form (paper: it is on the signed consent). |
@@ -160,7 +160,7 @@ Nothing in the frontend has to change for the model, and nothing in the model ha
 | Region (a "market") | `branch` (name) and `branchId` (the Region id) on staff; `settings.business.branches` is a list of `{ id, name }`. A rename keeps the id. Screens say "Market"; role `dataScope: "branch"` = MARKET. |
 | Person.fullName, otherNames | `fullName` (borrowers also `name`). `otherNames` isn't on any screen. |
 | Person.gender, address | Required by the screens for borrowers only (`gender`, `area`). Not asked for guarantors or staff, so they stay empty on their Person. |
-| Person.address, placeOfWork | `area` (shown as "Address"), `premises` (shop / arcade / building) |
+| Person.address, placeOfWork | `area` (shown as "Address (Location)"), `premises` (shop / arcade / building) |
 | TelephoneNumber MAIN / OTHER | `phone` (mobile money), `secondaryPhone`. A PhoneChangeRequest shows as `pendingPhoneChange`. |
 | Phone numbers (E.164) | Store `+2567…`. Accept local or `+256` on input. **Return the local display form `0772 418 230`**, so screens show it unchanged. |
 | Borrower.nextOfKinName / Phone / Relationship (all optional) | `nextOfKin: { name, phone, relationship }`, each `null` when not given |

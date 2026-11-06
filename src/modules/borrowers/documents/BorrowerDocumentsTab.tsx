@@ -22,7 +22,7 @@ function missingText(slot: DocumentSlot) {
 }
 
 /**
- * The borrower's documents (Tamu's forms, loan-docs/): their ID copy, then for each loan or
+ * The client's documents (Tamu's forms, loan-docs/): their ID copy, then for each loan or
  * application the guarantors (entered by the officer) and, as proof, the signed loan application:
  * the payment agreement and both guarantor consents in one PDF. It's either signed on paper and
  * scanned, or completed online through a link the officer sends (e.g. on WhatsApp). Nothing can
@@ -145,7 +145,7 @@ export function BorrowerDocumentsTab({ borrowerId }: { borrowerId: string }) {
                           onClick={() => copyOnlineLink(slot)}
                           disabled={createLink.isPending && createLink.variables === slot.key}
                           aria-label={`Copy an online link for ${title}`}
-                          title={slot.onlineRequest ? "Creates a new link; the earlier one stops working" : "For borrowers and guarantors with a smartphone"}
+                          title={slot.onlineRequest ? "Creates a new link; the earlier one stops working" : "For clients and guarantors with a smartphone"}
                         >
                           <Icon name="link" size={15} strokeWidth={1.9} />
                           {slot.onlineRequest ? "Copy new link" : "Copy online link"}

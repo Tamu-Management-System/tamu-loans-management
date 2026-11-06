@@ -43,7 +43,7 @@ function byDay(items: BorrowerActivityItem[]) {
   return groups;
 }
 
-/** Everything that happened with the borrower: money, contact, changes and who looked at their ID or documents. */
+/** Everything that happened with the client: money, contact, changes and who looked at their ID or documents. */
 export function BorrowerActivityTab({ borrowerId }: { borrowerId: string }) {
   const [category, setCategory] = useState<BorrowerActivityCategory | null>(null);
   const { data, isPending, isError, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } = useBorrowerActivity(borrowerId, category);

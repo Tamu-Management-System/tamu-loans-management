@@ -48,35 +48,32 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-/* Slim primary scrollbar, hidden until the area is scrolled.
-   useScrollbarReveal() adds .is-scrolling while scrolling. */
-.scroll-area {
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
+/* Slim primary scrollbar, always visible so people can see there is more to scroll and drag it.
+   The ::-webkit-scrollbar rules also stop Chrome and Safari on a Mac from hiding it after a moment;
+   Firefox gets the standard properties. */
+.scroll-area::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
 }
 
-.scroll-area.is-scrolling {
-  scrollbar-color: rgba(33, 133, 246, 0.5) transparent;
+.scroll-area::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--color-page) 50%, transparent);
 }
 
-@supports not (scrollbar-color: red blue) {
-  .scroll-area::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
+.scroll-area::-webkit-scrollbar-thumb {
+  background-color: rgba(33, 133, 246, 0.55);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
 
-  .scroll-area::-webkit-scrollbar-track {
-    background: transparent;
-  }
+.scroll-area::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(33, 133, 246, 0.8);
+}
 
-  .scroll-area::-webkit-scrollbar-thumb {
-    background-color: transparent;
-    border-radius: 8px;
-    border: 2px solid transparent;
-    background-clip: padding-box;
-  }
-
-  .scroll-area.is-scrolling::-webkit-scrollbar-thumb {
-    background-color: rgba(33, 133, 246, 0.5);
+@supports (-moz-appearance: none) {
+  .scroll-area {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(33, 133, 246, 0.55) color-mix(in srgb, var(--color-page) 50%, transparent);
   }
 }

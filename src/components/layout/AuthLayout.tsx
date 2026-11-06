@@ -19,7 +19,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
         </div>
         {/* Decorative: the tagline says what the product is */}
         <img className={styles.brandImage} src={brandImage} alt="" />
-        <p className={styles.tagline}>Every loan, every repayment, in one place.</p>
+        <p className={styles.tagline}>Every amount, every repayment, in one place.</p>
         <p className={styles.brandFooter}>© {new Date().getFullYear()} Tamu Cleaning Services</p>
       </aside>
 

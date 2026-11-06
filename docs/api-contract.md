@@ -421,7 +421,7 @@ The borrower profile. Same scope rule as the list: an officer asking for another
 ```json
 {
   "id": "B-0176", "name": "Aisha Namubiru", "status": "active",
-  "phone": "0772 418 230", "secondaryPhone": "0756 790 295", "area": "Owino market", "premises": "Kisenyi, Shop 3",
+  "phone": "0772 418 230", "secondaryPhone": "0756 790 295", "area": "Owino market", "occupation": "Tailor", "premises": "Kisenyi, Shop 3",
   "nationalIdMasked": "CM••••••••••QK",
   "registeredOn": "2026-03-21",
   "officer": { "id": "u-sharon", "name": "Sharon Nakalema" },
@@ -439,6 +439,7 @@ The borrower profile. Same scope rule as the list: an officer asking for another
 ```
 
 - `nationalIdMasked` keeps the first two and last two characters. The full number is never in this response.
+- `occupation` is optional free text (what the client does for a living, max 80 characters); an empty string means not given. Sent on register, online submit and `PATCH` of client details.
 - `premises` (shop / premises / building / arcade) is on Tamu's payment agreement and required.
 - **Optional:** `secondaryPhone`, and `nextOfKin`. Next of kin is `{ name, phone, relationship }`, each part
   `null` when not given, or the whole `nextOfKin` `null` on older records.
@@ -806,7 +807,7 @@ Audit-logged like any other download.
 
 ```json
 {
-  "phone": "0701 999 888", "area": "Owino market", "premises": "Kisenyi, Shop 3",
+  "phone": "0701 999 888", "area": "Owino market", "occupation": "Tailor", "premises": "Kisenyi, Shop 3",
   "secondaryPhone": "0703 111 222",
   "nextOfKin": { "name": "Peter Namubiru", "relationship": "Sibling", "phone": "0701 908 735" },
   "work": { "occupation": "Tailor", "income": { "amount": 380000, "period": "weekly" } }

@@ -19,7 +19,7 @@ export function useCreateApplication() {
       if (signedApplication) form.append("signedApplication", signedApplication, "signed-application.pdf");
       return api.upload<NewApplicationResult>("/applications", form);
     },
-    // New borrower, application counts, dashboard tasks, audit preview
+    // New client, application counts, dashboard tasks, audit preview
     onSuccess: () =>
       Promise.all(
         [["applications"], ["borrowers"], ["navigation-badges"], ["dashboard"], ["worklist"], ["activity"], ["loans"]].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
@@ -52,7 +52,7 @@ export function useApplication(applicationId: string) {
   });
 }
 
-/** After a decision: show it at once, then refresh lists, badges, dashboard and the borrower. */
+/** After a decision: show it at once, then refresh lists, badges, dashboard and the client. */
 function useApplicationDecision<T>(applicationId: string, action: "approve" | "reject") {
   const queryClient = useQueryClient();
   return useMutation({

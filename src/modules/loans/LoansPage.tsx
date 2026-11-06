@@ -99,8 +99,8 @@ function LoanListPage({ tab }: { tab: LoanListTab }) {
               type="search"
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
-              placeholder="Search loan ID, borrower or phone"
-              aria-label="Search loans by loan ID, borrower name or phone"
+              placeholder="Search loan ID, client or phone"
+              aria-label="Search loans by loan ID, client name or phone"
               autoComplete="off"
             />
           </label>
@@ -168,7 +168,7 @@ function LoanListPage({ tab }: { tab: LoanListTab }) {
               <thead>
                 <tr>
                   <th>LOAN</th>
-                  <th>BORROWER</th>
+                  <th>CLIENT</th>
                   <th className={styles.numeric}>BORROWED</th>
                   <th className={styles.numeric}>BALANCE</th>
                   <th className={styles.statusHeading}>{tab === "cleared" ? "REPAYMENT" : tab === "recovery" ? "RECOVERY" : "NEXT PAYMENT"}</th>

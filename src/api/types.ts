@@ -100,7 +100,7 @@ export interface InstalmentDueTask extends LoanTaskBase {
 
 export interface PromiseDueTask extends LoanTaskBase {
   type: "promise-due";
-  /** ISO date the borrower made the promise */
+  /** ISO date the client made the promise */
   promiseMadeOn: string;
   daysPastDue: number;
 }
@@ -303,10 +303,10 @@ export interface OfficerPerformance {
   expectedToday: number;
 }
 
-// ---------- Borrowers ----------
+// ---------- Clients ----------
 
 /** active = loan up to date · in-arrears = loan overdue · cleared = all loans repaid · applicant = application only */
-/** A borrower's latest application (a rejected one stays only for people who never borrowed) */
+/** A client's latest application (a rejected one stays only for people who never borrowed) */
 export type BorrowerApplicationStatus = "draft" | "submitted" | "approved" | "rejected";
 
 export type BorrowerStatus = "active" | "in-arrears" | "cleared" | "applicant";
@@ -379,6 +379,8 @@ export interface BorrowerProfile {
   area: string;
   /** Shop / premises / building / arcade, as on the payment agreement */
   premises: string;
+  /** What they do for a living; empty when not given */
+  occupation: string;
   /** e.g. "CM••••••••••KL" */
   nationalIdMasked: string;
   /** ISO date */
@@ -412,6 +414,7 @@ export interface BorrowerDetailsUpdate {
   secondaryPhone: string | null;
   area: string;
   premises: string;
+  occupation: string;
   /** Optional; send null for anything not given */
   nextOfKin: { name: string | null; phone: string | null; relationship: string | null };
   gender: "female" | "male";
@@ -419,7 +422,7 @@ export interface BorrowerDetailsUpdate {
 
 export type BorrowerActivityCategory = "money" | "contact" | "changes" | "access";
 
-/** One event on the borrower's timeline (GET /borrowers/{id}/activity) */
+/** One event on the client's timeline (GET /borrowers/{id}/activity) */
 export interface BorrowerActivityItem {
   id: string;
   category: BorrowerActivityCategory;
@@ -443,7 +446,7 @@ export interface NationalIdReveal {
   visibleForSeconds: number;
 }
 
-/** One loan in a borrower's history (GET /borrowers/{id}/loans) */
+/** One loan in a client's history (GET /borrowers/{id}/loans) */
 export interface BorrowerLoanRecord {
   id: string;
   product: string;
@@ -462,7 +465,7 @@ export interface BorrowerLoanRecord {
   applicationPdfAvailable: boolean;
 }
 
-/** GET /borrowers/{id}/loans: newest first, with the borrower's track record */
+/** GET /borrowers/{id}/loans: newest first, with the client's track record */
 export interface BorrowerLoanHistory {
   items: BorrowerLoanRecord[];
   summary: {
@@ -494,7 +497,7 @@ export interface Guarantor {
   name: string;
   phone: string;
   nationalIdMasked: string;
-  /** How they know the borrower, e.g. "Sister" */
+  /** How they know the client, e.g. "Sister" */
   relationship: string | null;
 }
 
@@ -507,7 +510,7 @@ export interface GuarantorDetails {
   relationship: string;
 }
 
-/** A new borrower's details (paper route: typed from the signed forms; online: entered by the borrower) */
+/** A new client's details (paper route: typed from the signed forms; online: entered by the client) */
 export interface NewBorrowerDetails {
   fullName: string;
   nationalId: string;
@@ -518,11 +521,13 @@ export interface NewBorrowerDetails {
   area: string;
   /** Shop / premises / building / arcade, as on the payment agreement */
   premises: string;
+  /** Optional; empty when not given */
+  occupation: string;
   /** Optional; null for anything not given */
   nextOfKin: { name: string | null; phone: string | null };
 }
 
-/** A document the borrower should (or may) have, uploaded or not */
+/** A document the client should (or may) have, uploaded or not */
 export interface DocumentSlot {
   /** Identifies the slot for uploads, e.g. "national-id-front" or "TL-1042:application" */
   key: string;
@@ -596,7 +601,7 @@ export interface OnlineApplicationPerson {
 
 /**
  * POST /public/forms/{token} (multipart): `details` (this, as JSON), `idFront` and `idBack` (photos
- * of the borrower's National ID), `guarantor1IdFront`, `guarantor1IdBack`, `guarantor2IdFront`, `guarantor2IdBack`
+ * of the client's National ID), `guarantor1IdFront`, `guarantor1IdBack`, `guarantor2IdFront`, `guarantor2IdBack`
  * (the guarantors' IDs). There are no drawn signatures: each of the three people ticks a consent box.
  */
 export interface OnlineApplicationDetails {
@@ -635,7 +640,7 @@ export interface LoanFee {
   type: "none" | "percent" | "fixed";
   /** Percent of the amount, or UGX */
   value: number;
-  /** "deducted": taken from the payout; "added": added to what the borrower repays */
+  /** "deducted": taken from the payout; "added": added to what the client repays */
   collection: "deducted" | "added";
 }
 
@@ -644,25 +649,25 @@ export interface LoanFee {
  * `signedApplication` (one PDF). The ID copies are in that PDF, so no separate ID photos.
  */
 export interface NewApplicationRequest {
-  /** An existing borrower, or null for someone new */
+  /** An existing client, or null for someone new */
   borrowerId: string | null;
   terms: ApplicationTerms;
-  /** paper: details typed from the signed forms; online: the borrower fills everything in through a link */
+  /** paper: details typed from the signed forms; online: the client fills everything in through a link */
   route: "paper" | "online";
-  /** Paper route, new borrower: as on their National ID and the agreement (their ID copy is in the signed PDF) */
+  /** Paper route, new client: as on their National ID and the agreement (their ID copy is in the signed PDF) */
   newBorrower?: NewBorrowerDetails;
   /** Paper route */
   guarantors?: GuarantorDetails[];
-  /** Paper route: false saves a draft (anything may be missing except who the borrower is) */
+  /** Paper route: false saves a draft (anything may be missing except who the client is) */
   submit: boolean;
 }
 
 export interface NewApplicationResult {
   id: string;
-  /** null until an online application for a new borrower is completed */
+  /** null until an online application for a new client is completed */
   borrowerId: string | null;
   status: "draft" | "submitted";
-  /** Online route: the one-time link for the borrower */
+  /** Online route: the one-time link for the client */
   onlineLink: OnlineFormLink | null;
 }
 
@@ -702,8 +707,8 @@ export interface ApplicationList {
 
 /** GET /applications/{id}: everything an approver checks */
 export interface ApplicationDetail extends ApplicationListItem {
-  /** The borrower as registered (null until someone new completes the online form) */
-  borrowerDetails: { nationalIdMasked: string; phone: string; premises: string; area: string } | null;
+  /** The client as registered (null until someone new completes the online form) */
+  borrowerDetails: { nationalIdMasked: string; phone: string; premises: string; area: string; occupation: string } | null;
   guarantors: Guarantor[];
   schedule: { firstPaymentOn: string; lastPaymentOn: string; interest: number; totalRepayable: number; finalInstalment: number };
   documents: { signedApplication: DocumentFile | null; idFront: DocumentFile | null; idBack: DocumentFile | null };
@@ -736,7 +741,7 @@ export interface ApplicationDraft {
   terms: ApplicationTerms;
   guarantors: GuarantorDetails[];
   signedApplication: DocumentFile | null;
-  /** Both sides of the borrower's ID copy are on file */
+  /** Both sides of the client's ID copy are on file */
   idCopyComplete: boolean;
   missing: string | null;
   returned: { reason: string; note: string | null; by: string; at: string } | null;
@@ -754,10 +759,10 @@ export interface UpdateApplicationRequest {
 export interface LoanToDisburse {
   applicationId: string;
   borrower: { id: string; name: string };
-  /** The borrower's mobile money number: where the loan is paid */
+  /** The client's mobile money number: where the loan is paid */
   payTo: string;
   amount: number;
-  /** What's sent to the borrower: the amount, less a product fee taken from the payout */
+  /** What's sent to the client: the amount, less a product fee taken from the payout */
   payout: number;
   terms: { repaymentSchedule: RepaymentSchedule; numberOfPayments: number; instalment: number; pricing: LoanPricing };
   officer: { id: string; name: string };
@@ -955,7 +960,7 @@ export interface StaffMember {
   invite: { sentAt: string; expiresAt: string; expired: boolean } | null;
   /** Deactivated: when and by whom */
   deactivated: { at: string; by: string } | null;
-  /** Borrowers this person looks after (they move to someone else before deactivation) */
+  /** Clients this person looks after (they move to someone else before deactivation) */
   portfolio: { borrowers: number; activeLoans: number; openApplications: number };
 }
 
@@ -983,7 +988,7 @@ export interface InviteStaffRequest {
 
 /** POST /staff/{id}/deactivate */
 export interface DeactivateStaffRequest {
-  /** Required when they look after borrowers */
+  /** Required when they look after clients */
   reassignTo: string | null;
   reason: string;
 }
@@ -1070,7 +1075,7 @@ export interface LoanRulesSettings {
   creatorCannotApprove: boolean;
   /** A new mobile money number needs a second person's approval */
   phoneChangeNeedsApproval: boolean;
-  /** A borrower can't get a new loan while one is open */
+  /** A client can't get a new loan while one is open */
   oneOpenLoanPerBorrower: boolean;
   /** Days late after which recovery applies (null = off) */
   recoveryAfterDaysLate: number | null;
@@ -1088,7 +1093,7 @@ export interface LoanRulesSettings {
   paymentAllocationOrder: AllocationPart[];
 }
 
-/** A part of what a borrower owes, for the order payments are applied in */
+/** A part of what a client owes, for the order payments are applied in */
 export type AllocationPart = "charges" | "fees" | "interest" | "principal";
 
 export interface PaymentSettings {
@@ -1132,7 +1137,7 @@ export interface AuditEvent {
   id: string;
   /** ISO date-time */
   at: string;
-  /** Who did it (a person, a borrower on the online form, or an automatic rule) */
+  /** Who did it (a person, a client on the online form, or an automatic rule) */
   actor: { id: string | null; name: string; role: string; photoUrl: string | null };
   category: AuditCategory;
   description: string;

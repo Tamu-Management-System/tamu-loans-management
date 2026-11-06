@@ -109,7 +109,7 @@ export const findStaff = (id: string) => staff.find((member) => member.id === id
 
 export const inviteExpired = (member: MockStaff) => !!member.invite && new Date(member.invite.expiresAt).getTime() < Date.now();
 
-/** The borrowers someone looks after, with their open loans and applications */
+/** The clients someone looks after, with their open loans and applications */
 export function portfolioOf(staffId: string) {
   const own = borrowers.filter((borrower) => borrower.officerId === staffId);
   return { borrowers: own.length, activeLoans: own.filter((b) => b.currentLoanId).length, openApplications: own.filter((b) => b.applicationId).length };

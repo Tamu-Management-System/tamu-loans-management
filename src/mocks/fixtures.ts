@@ -57,7 +57,7 @@ export const roles: Record<string, Role> = {
   "role-recovery": {
     id: "role-recovery",
     name: "Recovery agent",
-    description: "Follows up loans with the recovery team and records what borrowers pay.",
+    description: "Follows up loans with the recovery team and records what clients pay.",
     builtIn: false,
     dataScope: "branch",
     permissions: ["borrowers.view", "loans.view", "payments.view", "payments.record", "recovery.view", "recovery.manage"],
@@ -93,7 +93,7 @@ export interface MockLoan {
   payout?: { method: string; reference: string; by: string; paidOn: string };
 }
 
-/** Current loans (one per borrower at most), filled in by the sample data generator (seed.ts) */
+/** Current loans (one per client at most), filled in by the sample data generator (seed.ts) */
 export const loans: MockLoan[] = [];
 
 export type MockApplicationStatus = "draft" | "submitted" | "approved" | "rejected";

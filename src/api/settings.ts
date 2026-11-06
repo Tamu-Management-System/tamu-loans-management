@@ -50,7 +50,7 @@ export function useChangeStaffBranch() {
   return useMutation({ mutationFn: ({ staffId, branchId }: { staffId: string; branchId: string }) => api.put<StaffMember>(staffPath(staffId, "/branch"), { branchId }), onSuccess: refresh });
 }
 
-/** Switches an account off. Their borrowers may move to someone else, so every list is refreshed. */
+/** Switches an account off. Their clients may move to someone else, so every list is refreshed. */
 export function useDeactivateStaff() {
   const queryClient = useQueryClient();
   return useMutation({

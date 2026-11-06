@@ -34,7 +34,7 @@ const REPAYMENT_SCHEDULE = { daily: "Daily", weekly: "Weekly", monthly: "Monthly
 /** "0772 418 230" -> "0772418230", for tel: and sms: links */
 const dialable = (phone: string) => phone.replace(/[^\d+]/g, "");
 
-/** Borrower profile (user flow, phase 8): who they are, their current loan and, in the tabs, their history. */
+/** Client profile (user flow, phase 8): who they are, their current loan and, in the tabs, their history. */
 export function BorrowerProfilePage() {
   const { borrowerId = "" } = useParams();
   const location = useLocation();
@@ -57,7 +57,7 @@ export function BorrowerProfilePage() {
 
   const breadcrumb = (
     <nav aria-label="Breadcrumb" className={styles.breadcrumb}>
-      <Link to={`/borrowers${listSearch}`}>Borrowers</Link>
+      <Link to={`/borrowers${listSearch}`}>Clients</Link>
       <Icon name="chevronDown" size={14} strokeWidth={2} className={styles.breadcrumbSeparator} />
       <span aria-current="page">{borrower?.name ?? borrowerId}</span>
     </nav>
@@ -71,10 +71,10 @@ export function BorrowerProfilePage() {
         <div className={styles.card}>
           <p className={styles.message} role="alert">
             {notFound ? (
-              "This borrower doesn't exist, or isn't in your portfolio."
+              "This client doesn't exist, or isn't in your portfolio."
             ) : (
               <>
-                The borrower's profile couldn't load.{" "}
+                The client's profile couldn't load.{" "}
                 <button type="button" className={styles.linkButton} onClick={() => refetch()}>
                   Try again
                 </button>
@@ -90,7 +90,7 @@ export function BorrowerProfilePage() {
     return (
       <>
         {breadcrumb}
-        <div className={styles.loading} aria-busy="true" aria-label="Loading the borrower's profile" />
+        <div className={styles.loading} aria-busy="true" aria-label="Loading the client's profile" />
       </>
     );
   }
@@ -100,7 +100,7 @@ export function BorrowerProfilePage() {
       {breadcrumb}
       <ProfileSummary borrower={borrower} />
 
-      <div className={styles.tabs} role="tablist" aria-label="Borrower profile">
+      <div className={styles.tabs} role="tablist" aria-label="Client profile">
         {TABS.map((t) => (
           <button key={t.id} type="button" role="tab" id={`tab-${t.id}`} aria-selected={tab === t.id} aria-controls="borrower-tab-panel" onClick={() => selectTab(t.id)}>
             {t.label}
@@ -135,7 +135,7 @@ function ProfileSummary({ borrower }: { borrower: BorrowerProfile }) {
   const canStartNewLoan = can("applications.create") && (!loan || !oneLoanAtATime) && (!borrower.application || borrower.application.status === "rejected");
 
   return (
-    <section className={`${styles.card} ${styles.summary}`} aria-label="Borrower summary">
+    <section className={`${styles.card} ${styles.summary}`} aria-label="Client summary">
       <div className={styles.identity}>
         <Avatar name={borrower.name} size={64} />
         <div>
@@ -144,7 +144,7 @@ function ProfileSummary({ borrower }: { borrower: BorrowerProfile }) {
             <BorrowerStatusChip status={borrower.status} daysPastDue={loan?.daysPastDue} applicationStatus={borrower.application?.status} />
           </div>
           <p className={styles.meta}>
-            {[borrower.id, borrower.area, `Borrower since ${formatMonthYear(borrower.registeredOn)}`].filter(Boolean).join(" · ")}
+            {[borrower.id, borrower.area, `Client since ${formatMonthYear(borrower.registeredOn)}`].filter(Boolean).join(" · ")}
           </p>
         </div>
       </div>
@@ -228,7 +228,8 @@ function Overview({ borrower }: { borrower: BorrowerProfile }) {
             <NationalIdField borrowerId={borrower.id} masked={borrower.nationalIdMasked} />
           </Detail>
           <Detail label="Gender">{borrower.gender ? (borrower.gender === "female" ? "Female" : "Male") : "—"}</Detail>
-          <Detail label="Address">{borrower.area}</Detail>
+          <Detail label="Address (Location)">{borrower.area}</Detail>
+          <Detail label="Occupation">{borrower.occupation || "—"}</Detail>
           <Detail label="Shop / premises">{borrower.premises}</Detail>
           <Detail label="Registered">{formatDate(borrower.registeredOn)}</Detail>
         </dl>

@@ -1,4 +1,4 @@
-// Data hooks for the Borrowers module.
+// Data hooks for the Clients module.
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { saveFile } from "../lib/saveFile";
 import { api } from "./client";
@@ -21,7 +21,7 @@ export function useBorrowerList(params: BorrowerListParams, { enabled = true }: 
   if (params.status) search.set("status", params.status);
   if (params.officerId) search.set("officerId", params.officerId);
   return useQuery({
-    queryKey: ["borrowers", "list", params],
+    queryKey: ["clients", "list", params],
     queryFn: () => api.get<BorrowerList>(`/borrowers?${search}`),
     enabled,
     // Keep showing the current page while the next one loads, so the table doesn't jump
@@ -40,7 +40,7 @@ export function useOfficers(enabled: boolean) {
 
 export function useBorrowerProfile(borrowerId: string) {
   return useQuery({
-    queryKey: ["borrowers", "profile", borrowerId],
+    queryKey: ["clients", "profile", borrowerId],
     queryFn: () => api.get<BorrowerProfile>(`/borrowers/${encodeURIComponent(borrowerId)}`),
     enabled: !!borrowerId,
   });
@@ -62,7 +62,7 @@ export function useRevealNationalId(borrowerId: string) {
 
 export function useBorrowerLoans(borrowerId: string) {
   return useQuery({
-    queryKey: ["borrowers", "loans", borrowerId],
+    queryKey: ["clients", "loans", borrowerId],
     queryFn: () => api.get<BorrowerLoanHistory>(`/borrowers/${encodeURIComponent(borrowerId)}/loans`),
   });
 }
@@ -81,7 +81,7 @@ export function useDownloadAgreement() {
 
 export function useBorrowerDocuments(borrowerId: string) {
   return useQuery({
-    queryKey: ["borrowers", "documents", borrowerId],
+    queryKey: ["clients", "documents", borrowerId],
     queryFn: () => api.get<BorrowerDocuments>(`/borrowers/${encodeURIComponent(borrowerId)}/documents`),
   });
 }
@@ -135,7 +135,7 @@ export function useUploadDocument(borrowerId: string) {
   });
 }
 
-/** Everything about one borrower (profile, list rows, timeline) plus the audit preview. */
+/** Everything about one client (profile, list rows, timeline) plus the audit preview. */
 function useRefreshBorrower() {
   const queryClient = useQueryClient();
   return () =>
@@ -161,10 +161,10 @@ export function usePhoneChangeDecision(borrowerId: string) {
   });
 }
 
-/** The borrower's timeline, newest first; fetchNextPage loads older events. */
+/** The client's timeline, newest first; fetchNextPage loads older events. */
 export function useBorrowerActivity(borrowerId: string, category: BorrowerActivityCategory | null) {
   return useInfiniteQuery({
-    queryKey: ["borrowers", "activity", borrowerId, category],
+    queryKey: ["clients", "activity", borrowerId, category],
     queryFn: ({ pageParam }) => {
       const search = new URLSearchParams();
       if (category) search.set("category", category);
@@ -177,7 +177,7 @@ export function useBorrowerActivity(borrowerId: string, category: BorrowerActivi
 }
 
 /**
- * Creates a one-time link for the borrower or a guarantor to complete a form online. The officer
+ * Creates a one-time link for the client or a guarantor to complete a form online. The officer
  * copies it into WhatsApp; any earlier link for the same form stops working.
  */
 export function useCreateOnlineLink(borrowerId: string) {

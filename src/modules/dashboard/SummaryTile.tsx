@@ -15,7 +15,7 @@ export interface SummaryTileProps {
   /** Opens a page instead of filtering the worklist */
   href?: string;
   /** Set for Phase 2 features: the tile is shown under the "Coming soon" overlay */
-  upcoming?: { feature: string; module: string };
+  upcoming?: { feature: string };
 }
 
 /** One "Today" box: a count of work, which filters the worklist when selected. */
@@ -49,7 +49,7 @@ export function SummaryTile({ label, icon, value, detail, progress, selected, on
 
   if (!upcoming) return tile;
   return (
-    <ComingSoon feature={upcoming.feature} module={upcoming.module} compact className={styles.upcomingTile}>
+    <ComingSoon feature={upcoming.feature} compact className={styles.upcomingTile}>
       {tile}
     </ComingSoon>
   );

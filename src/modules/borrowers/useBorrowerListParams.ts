@@ -6,7 +6,7 @@ const STATUSES: BorrowerStatus[] = ["active", "in-arrears", "cleared", "applican
 const SORTS: BorrowerSort[] = ["name", "balance"];
 
 /**
- * The borrower list's search, tab, officer filter, sort and page, kept in the address
+ * The client list's search, tab, officer filter, sort and page, kept in the address
  * (e.g. /borrowers?status=in-arrears&page=2) so Back and shared links work.
  */
 export function useBorrowerListParams() {

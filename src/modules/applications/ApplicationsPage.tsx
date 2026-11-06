@@ -14,7 +14,7 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 const TABS: { status: ApplicationStatus; label: string; empty: string }[] = [
   { status: "draft", label: "Drafts", empty: "No drafts. Applications saved as drafts, or sent back by an approver, appear here." },
-  { status: "awaiting-borrower", label: "Waiting for borrower", empty: "No online applications waiting. Ones sent as a link appear here until the borrower submits." },
+  { status: "awaiting-borrower", label: "Waiting for client", empty: "No online applications waiting. Ones sent as a link appear here until the client submits." },
   { status: "submitted", label: "Waiting for approval", empty: "Nothing waiting for approval." },
   { status: "approved", label: "Approved", empty: "No approved applications yet." },
   { status: "rejected", label: "Rejected", empty: "No rejected applications." },
@@ -40,13 +40,13 @@ function statusDetail(item: ApplicationListItem) {
 }
 
 function ApplicationStatusChip({ status, returned }: { status: ApplicationStatus; returned: boolean }) {
-  const label = { draft: returned ? "Sent back" : "Draft", "awaiting-borrower": "Waiting for borrower", submitted: "Waiting for approval", approved: "Approved", rejected: "Rejected" }[status];
+  const label = { draft: returned ? "Sent back" : "Draft", "awaiting-borrower": "Waiting for client", submitted: "Waiting for approval", approved: "Approved", rejected: "Rejected" }[status];
   const tone = { draft: returned ? styles.chipWarning : styles.chipNeutral, "awaiting-borrower": styles.chipInfo, submitted: styles.chipInfo, approved: styles.chipSuccess, rejected: styles.chipDanger }[status];
   return <span className={`${styles.chip} ${tone}`}>{label}</span>;
 }
 
 /**
- * Applications (user flow, phase 4): drafts to finish, online applications waiting for the borrower,
+ * Applications (user flow, phase 4): drafts to finish, online applications waiting for the client,
  * and submitted ones waiting for approval. Officers see their own; approvers see the branch.
  */
 export function ApplicationsPage() {
@@ -94,8 +94,8 @@ export function ApplicationsPage() {
             type="search"
             value={searchInput}
             onChange={(event) => setSearchInput(event.target.value)}
-            placeholder="Search application ID, borrower or phone"
-            aria-label="Search applications by ID, borrower name or phone"
+            placeholder="Search application ID, client or phone"
+            aria-label="Search applications by ID, client name or phone"
             autoComplete="off"
           />
         </label>
@@ -143,7 +143,7 @@ export function ApplicationsPage() {
               <thead>
                 <tr>
                   <th>APPLICATION</th>
-                  <th>BORROWER</th>
+                  <th>CLIENT</th>
                   <th className={styles.numeric}>AMOUNT</th>
                   <th className={styles.statusHeading}>STATUS</th>
                   {branchWide && <th>OFFICER</th>}
@@ -160,7 +160,7 @@ export function ApplicationsPage() {
                       <span className={styles.secondary}>{item.route === "online" ? "Online" : "Paper forms"}</span>
                     </td>
                     <td className={styles.borrowerCell}>
-                      <span className={styles.borrowerName}>{item.borrower.id || item.status !== "awaiting-borrower" ? item.borrower.name : "New borrower"}</span>
+                      <span className={styles.borrowerName}>{item.borrower.id || item.status !== "awaiting-borrower" ? item.borrower.name : "New client"}</span>
                       <span className={styles.secondary}>{item.borrower.id ?? (item.route === "online" && item.status === "awaiting-borrower" ? "Fills in their details online" : "Not registered")}</span>
                     </td>
                     <td className={`${styles.numeric} ${styles.amount}`}>

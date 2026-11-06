@@ -31,24 +31,24 @@ import styles from "./NewApplication.module.css";
 type Route = "paper" | "online";
 type StepId = "borrower" | "terms" | "route" | "details" | "guarantors" | "signed" | "review";
 const STEP_LABELS: Record<StepId, string> = {
-  borrower: "Borrower",
+  borrower: "Client",
   terms: "Loan terms",
   route: "Paper or online",
-  details: "Borrower details",
+  details: "Client details",
   guarantors: "Guarantors",
   signed: "Signed forms",
   review: "Review",
 };
 const PAPER_STEPS: StepId[] = ["borrower", "terms", "route", "details", "guarantors", "signed", "review"];
 const ONLINE_STEPS: StepId[] = ["borrower", "terms", "route"];
-/** Continuing a paper draft: the borrower and the route are already set */
+/** Continuing a paper draft: the client and the route are already set */
 const EDIT_STEPS: StepId[] = ["terms", "details", "guarantors", "signed", "review"];
 const MAX_PDF_BYTES = 5 * 1024 * 1024;
 
-/** A borrower chosen in step 1, or someone new. */
+/** A client chosen in step 1, or someone new. */
 type Chosen = { kind: "existing"; id: string; name: string; phone: string; area: string; status: BorrowerStatus } | { kind: "new" };
 
-/** Why an existing borrower can't start a new application, or null. */
+/** Why an existing client can't start a new application, or null. */
 function blockedReason(borrower: { name: string; status: BorrowerStatus; currentLoanId?: string | null; applicationId?: string | null; applicationStatus?: string }, oneLoanAtATime = true) {
   if (oneLoanAtATime && (borrower.status === "active" || borrower.status === "in-arrears")) return `Still repaying ${borrower.currentLoanId ?? "a loan"}. A new loan can start once it's cleared.`;
   if (borrower.status === "applicant" && borrower.applicationStatus !== "rejected") return `Application ${borrower.applicationId ?? ""} is already in progress.`.replace("  ", " ");
@@ -81,10 +81,10 @@ const latestFirstPayment = (product: LoanProduct | undefined) => {
 const pricingOf = (product: LoanProduct) => ({ productName: product.name, interestRatePercent: product.interest.ratePercent, interestPer: product.interest.per, fee: product.fee });
 
 /**
- * New application (user flow, phase 3). The officer finds the borrower (or starts with someone
+ * New application (user flow, phase 3). The officer finds the client (or starts with someone
  * new), sets the loan terms, and chooses how the forms are completed:
  * - paper: they type in the details from the signed forms and upload the forms as one PDF;
- * - online: the borrower fills in everything and the three people tick a box to agree, through a link the officer sends.
+ * - online: the client fills in everything and the three people tick a box to agree, through a link the officer sends.
  */
 export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {}) {
   const navigate = useNavigate();
@@ -118,7 +118,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
   const [showErrors, setShowErrors] = useState(false);
   const [result, setResult] = useState<NewApplicationResult | null>(null);
 
-  // Started from a borrower's "New loan": skip the search
+  // Started from a client's "New loan": skip the search
   const preset = useBorrowerProfile(presetBorrowerId ?? "");
   const presetApplied = useRef(false);
   useEffect(() => {
@@ -131,7 +131,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
     }
   }, [preset.data, oneLoanAtATime]);
 
-  // The chosen borrower's profile (premises, masked NIN) for the paper route
+  // The chosen client's profile (premises, masked NIN) for the paper route
   const chosenProfile = useBorrowerProfile(chosen?.kind === "existing" ? chosen.id : "");
 
   // Nothing is saved until the officer saves a draft or submits
@@ -165,7 +165,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
   const guarantorFieldErrors = guarantors.map((guarantor, index) => {
     // Paper route: the relationship is on the signed consent, so officers don't type it
     const errors = personErrors(guarantor);
-    const others = [...(isNew ? [{ nationalId: newBorrower.nationalId, who: "the borrower" }] : []), ...(index === 1 ? [{ nationalId: guarantors[0].nationalId, who: "guarantor 1" }] : [])];
+    const others = [...(isNew ? [{ nationalId: newBorrower.nationalId, who: "the client" }] : []), ...(index === 1 ? [{ nationalId: guarantors[0].nationalId, who: "guarantor 1" }] : [])];
     const duplicate = sameAsError(guarantor.nationalId, others);
     return duplicate && !errors.nationalId ? { ...errors, nationalId: duplicate } : errors;
   });
@@ -180,7 +180,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
     signed: !pdfError,
     review: true,
   };
-  // A draft only needs to say who the borrower is
+  // A draft only needs to say who the client is
   const draftReady = !isNew || Object.keys(personErrors(newBorrower)).length === 0;
 
   const steps = draft ? EDIT_STEPS : route === "online" ? ONLINE_STEPS : PAPER_STEPS;
@@ -211,6 +211,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
     secondaryPhone: normalisePhone(borrower.secondaryPhone),
     area: borrower.area.trim(),
     premises: borrower.premises.trim(),
+    occupation: borrower.occupation.trim(),
     nextOfKin: { name: borrower.kinName.trim().replace(/\s+/g, " ") || null, phone: normalisePhone(borrower.kinPhone) },
   });
   const send = (asRoute: Route, submit: boolean) => {
@@ -265,7 +266,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
 
   const saveError = create.error ?? update.error;
   const serverError = saveError instanceof ApiError ? saveError.message : saveError ? "The application couldn't be saved. Try again." : null;
-  const borrowerName = chosen?.kind === "existing" ? chosen.name : newBorrower.fullName.trim() || "New borrower";
+  const borrowerName = chosen?.kind === "existing" ? chosen.name : newBorrower.fullName.trim() || "New client";
 
   if (result?.onlineLink) return <OnlineLinkReady result={result} borrowerName={chosen?.kind === "existing" ? chosen.name : null} />;
 
@@ -351,7 +352,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
             )}
             {summary.payout !== amountValue && (
               <div>
-                <span>Borrower receives</span>
+                <span>Client receives</span>
                 <b>{formatUGX(summary.payout)}</b>
               </div>
             )}
@@ -383,14 +384,14 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
             onSelect={() => setRoute("paper")}
             icon="document"
             title="Paper forms"
-            text="The borrower and guarantors fill in and sign the printed forms. You type in their details and upload the signed forms with their ID copies as one PDF."
+            text="The client and guarantors fill in and sign the printed forms. You type in their details and upload the signed forms with their ID copies as one PDF."
           />
           <RouteOption
             selected={route === "online"}
             onSelect={() => setRoute("online")}
             icon="link"
             title="Online link"
-            text="For a borrower with a smartphone. You send a link (e.g. on WhatsApp); they fill in their own and their guarantors' details, and all three tick a box to agree on the phone."
+            text="For a client with a smartphone. You send a link (e.g. on WhatsApp); they fill in their own and their guarantors' details, and all three tick a box to agree on the phone."
           />
         </div>
         {showErrors && !route && <p className={styles.error}>Choose paper forms or an online link.</p>}
@@ -416,7 +417,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
             <Fact label="Full name">{profile?.name ?? "…"}</Fact>
             <Fact label="National ID">{profile?.nationalIdMasked ?? "…"}</Fact>
             <Fact label="Phone (mobile money)">{profile?.phone ?? "…"}</Fact>
-            <Fact label="Address">{profile?.area ?? "…"}</Fact>
+            <Fact label="Address (Location)">{profile?.area ?? "…"}</Fact>
             <Fact label="Shop / premises">{profile?.premises ?? "…"}</Fact>
           </dl>
           <p className={styles.note}>
@@ -463,7 +464,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
   } else {
     content = (
       <dl className={styles.review}>
-        <ReviewRow title="Borrower" onEdit={() => goTo(isNew ? "details" : "borrower")}>
+        <ReviewRow title="Client" onEdit={() => goTo(isNew ? "details" : "borrower")}>
           <b>{borrowerName}</b>
           {isNew ? (
             <span>
@@ -587,7 +588,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
               )}
               <span className={styles.actionsEnd}>
                 {isPaperDetailStep && step !== "review" && (
-                  <Button variant="secondary" onClick={() => (draftReady ? send("paper", false) : (setShowErrors(true), undefined))} disabled={saving} title={draftReady ? undefined : "Enter the borrower's name, NIN and phone first"}>
+                  <Button variant="secondary" onClick={() => (draftReady ? send("paper", false) : (setShowErrors(true), undefined))} disabled={saving} title={draftReady ? undefined : "Enter the client's name, NIN and phone first"}>
                     Save as draft
                   </Button>
                 )}
@@ -595,13 +596,13 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
               </span>
             </div>
           )}
-          {isPaperDetailStep && !draftReady && showErrors && step !== "details" && <p className={styles.error}>To save a draft, first enter the borrower's name, NIN and phone.</p>}
+          {isPaperDetailStep && !draftReady && showErrors && step !== "details" && <p className={styles.error}>To save a draft, first enter the client's name, NIN and phone.</p>}
         </section>
 
         <aside className={styles.summary} aria-label="Application summary">
           <h2>Summary</h2>
           <dl>
-            <Fact label="Borrower">{chosen ? borrowerName : "—"}</Fact>
+            <Fact label="Client">{chosen ? borrowerName : "—"}</Fact>
             <Fact label="Product">{product?.name ?? "—"}</Fact>
             <Fact label="Amount">{amountValue > 0 ? formatUGX(amountValue) : "—"}</Fact>
             <Fact label="Total to repay">{summary ? formatUGX(summary.totalRepayable) : "—"}</Fact>
@@ -644,8 +645,8 @@ function BorrowerStep({ chosen, onChoose, presetProblem, presetName }: { chosen:
         <input id={id} type="search" value={input} onChange={(event) => setInput(event.target.value)} placeholder="Search full National ID, phone or name" autoComplete="off" autoFocus />
       </label>
       {searching && (
-        <ul className={styles.results} aria-label="Matching borrowers" aria-busy={isFetching}>
-          {results.length === 0 && !isFetching && <li className={styles.noResults}>No registered borrower matches “{query}”.</li>}
+        <ul className={styles.results} aria-label="Matching clients" aria-busy={isFetching}>
+          {results.length === 0 && !isFetching && <li className={styles.noResults}>No registered client matches “{query}”.</li>}
           {results.map((borrower) => {
             const blocked = blockedReason({ name: borrower.name, status: borrower.status, currentLoanId: borrower.currentLoan?.id, applicationId: borrower.application?.id, applicationStatus: borrower.application?.status }, oneLoanAtATime);
             return (
@@ -678,7 +679,7 @@ function BorrowerStep({ chosen, onChoose, presetProblem, presetName }: { chosen:
       <button type="button" className={styles.newBorrower} onClick={() => onChoose({ kind: "new" })}>
         <Icon name="person" size={20} strokeWidth={1.8} />
         <span>
-          <b>New borrower</b>
+          <b>New client</b>
           <span>Not registered yet. Their details come from the paper forms, or they fill them in online.</span>
         </span>
       </button>
@@ -818,7 +819,7 @@ function OnlineLinkReady({ result, borrowerName }: { result: NewApplicationResul
           {result.id} is ready to send
         </h2>
         <p className={styles.stepIntro}>
-          Send this link to {borrowerName ?? "the borrower"}, e.g. on WhatsApp. They fill in their details and their two guarantors', and all three tick a box to agree on the phone.
+          Send this link to {borrowerName ?? "the client"}, e.g. on WhatsApp. They fill in their details and their two guarantors', and all three tick a box to agree on the phone.
         </p>
         <label htmlFor={id} className={styles.linkLabel}>
           Online link
@@ -838,7 +839,7 @@ function OnlineLinkReady({ result, borrowerName }: { result: NewApplicationResul
             </Link>
           ) : (
             <Link className={styles.linkButton} to="/borrowers?status=applicant">
-              Go to borrowers
+              Go to clients
             </Link>
           )}
           <Link className={styles.linkButton} to="/applications/new" state={{ startedAt: Date.now() }}>

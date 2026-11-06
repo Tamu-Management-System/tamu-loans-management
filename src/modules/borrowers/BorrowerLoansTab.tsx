@@ -25,7 +25,7 @@ function RepaymentChip({ loan }: { loan: BorrowerLoanRecord }) {
   );
 }
 
-/** Every loan the borrower has taken, newest first, each with its signed loan application (user flow, phase 8). */
+/** Every loan the client has taken, newest first, each with its signed loan application (user flow, phase 8). */
 export function BorrowerLoansTab({ borrowerId }: { borrowerId: string }) {
   const navigate = useNavigate();
   const showToast = useToast();

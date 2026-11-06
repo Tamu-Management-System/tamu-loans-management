@@ -22,7 +22,7 @@ export interface WorklistGroup {
   /** Word after the group's total, e.g. "UGX 1,240,000 expected"; null = no total */
   amountSuffix: string | null;
   /** Phase 2 groups are previewed under a "Coming soon" overlay */
-  upcoming?: { feature: string; module: string; previewDescription: string };
+  upcoming?: { feature: string; previewDescription: string };
 }
 
 // Order of the "All" overview, as in the approved design
@@ -35,16 +35,15 @@ export const WORKLIST_GROUPS: WorklistGroup[] = [
     amountSuffix: "received",
     upcoming: {
       feature: "Automatic payment matching",
-      module: "Module 4 · Mobile Money reconciliation",
       previewDescription: "Mobile money received, matched to loans automatically",
     },
   },
   { id: "collect", title: "Collect today", description: "Promises to pay and installments due today", tabLabel: "Collect", amountSuffix: "expected" },
-  { id: "follow-up", title: "Follow up overdue loans", description: "Borrowers behind on payments", tabLabel: "Follow up", amountSuffix: "in arrears" },
+  { id: "follow-up", title: "Follow up overdue loans", description: "Clients behind on payments", tabLabel: "Follow up", amountSuffix: "in arrears" },
   { id: "complete", title: "Complete applications", description: "Drafts missing documents before Finance can approve them", tabLabel: "Complete", amountSuffix: "requested" },
   { id: "reversals", title: "Payment reversals", description: "Officers asking to undo a recorded payment", tabLabel: "Reversals", amountSuffix: "to reverse" },
   { id: "approvals", title: "Waiting for approval", description: "Submitted applications not decided yet", tabLabel: "Approvals", amountSuffix: "requested" },
-  { id: "disbursement", title: "Approved, not yet disbursed", description: "Borrowers still waiting for their money", tabLabel: "Disbursement", amountSuffix: "to pay out" },
+  { id: "disbursement", title: "Approved, not yet disbursed", description: "Clients still waiting for their money", tabLabel: "Disbursement", amountSuffix: "to pay out" },
   { id: "access", title: "Users & access", description: "Requests from your team", tabLabel: "Access", amountSuffix: null },
 ];
 

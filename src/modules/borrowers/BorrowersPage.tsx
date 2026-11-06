@@ -33,12 +33,12 @@ function SortButton({ label, column, sort, order, onSort }: { label: string; col
   );
 }
 
-/** Borrowers directory (user flow, phase 8): every client the user can see, with their loan status. */
+/** Clients directory (user flow, phase 8): every client the user can see, with their loan status. */
 export function BorrowersPage() {
   const { can, seesBranch } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  // The profile's "Borrowers" link comes back to this tab, search and page
+  // The profile's "Clients" link comes back to this tab, search and page
   const profileState = { listSearch: location.search };
   const searchId = useId();
   
@@ -65,8 +65,8 @@ export function BorrowersPage() {
     <>
       <div className={styles.header}>
         <div>
-          <h1>Borrowers</h1>
-          <p className={styles.subtitle}>{seesBranch ? "Every borrower in the market" : "Borrowers in your portfolio"}</p>
+          <h1>Clients</h1>
+          <p className={styles.subtitle}>{seesBranch ? "Every client in the market" : "Clients in your portfolio"}</p>
         </div>
         {can("applications.create") && (
           <Link to="/applications/new" className={styles.newApplication}>
@@ -85,7 +85,7 @@ export function BorrowersPage() {
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
               placeholder="Search name, phone, loan ID or full National ID"
-              aria-label="Search borrowers by name, phone, loan or application ID, or full National ID number"
+              aria-label="Search clients by name, phone, loan or application ID, or full National ID number"
               autoComplete="off"
             />
           </label>
@@ -102,7 +102,7 @@ export function BorrowersPage() {
           )}
         </div>
 
-        <div className={styles.tabs} role="tablist" aria-label="Borrower status">
+        <div className={styles.tabs} role="tablist" aria-label="Client status">
           {TABS.map((tab) => (
             <button key={tab.label} role="tab" aria-selected={params.status === tab.status} onClick={() => update({ status: tab.status })}>
               {tab.label} <span className={styles.tabCount}>{data ? data.counts[tab.countKey] : "–"}</span>
@@ -112,18 +112,18 @@ export function BorrowersPage() {
 
         {isError ? (
           <p className={styles.message} role="alert">
-            Borrowers couldn't load.{" "}
+            Clients couldn't load.{" "}
             <button type="button" className={styles.linkButton} onClick={() => refetch()}>
               Try again
             </button>
           </p>
         ) : isPending ? (
-          <div className={styles.loading} aria-busy="true" aria-label="Loading borrowers" />
+          <div className={styles.loading} aria-busy="true" aria-label="Loading clients" />
         ) : data.items.length === 0 ? (
           <p className={styles.message}>
             {params.query ? (
               <>
-                No borrowers match “{params.query}”.{" "}
+                No clients match “{params.query}”.{" "}
                 <button
                   type="button"
                   className={styles.linkButton}
@@ -136,7 +136,7 @@ export function BorrowersPage() {
                 </button>
               </>
             ) : (
-              "No borrowers here yet."
+              "No clients here yet."
             )}
           </p>
         ) : (
@@ -145,7 +145,7 @@ export function BorrowersPage() {
               <thead>
                 <tr>
                   <th aria-sort={ariaSort("name")}>
-                    <SortButton label="BORROWER" column="name" sort={params.sort} order={params.order} onSort={sortBy} />
+                    <SortButton label="CLIENT" column="name" sort={params.sort} order={params.order} onSort={sortBy} />
                   </th>
                   <th>PHONE</th>
                   <th>LOAN</th>
@@ -186,7 +186,7 @@ export function BorrowersPage() {
                 ))}
               </tbody>
             </table>
-            <Pagination page={data.page} pageSize={BORROWERS_PAGE_SIZE} total={data.total} noun="borrowers" onPageChange={(page) => update({ page })} />
+            <Pagination page={data.page} pageSize={BORROWERS_PAGE_SIZE} total={data.total} noun="clients" onPageChange={(page) => update({ page })} />
           </>
         )}
       </div>

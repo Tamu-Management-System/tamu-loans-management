@@ -55,7 +55,7 @@ const queryClient: QueryClient = new QueryClient({
 
 import { SetPasswordPage } from "../modules/set-password/SetPasswordPage";
 
-// The borrowers' online application form: its own bundle, outside the staff app (no sign-in, no menus)
+// The clients' online application form: its own bundle, outside the staff app (no sign-in, no menus)
 import { FormSkeletonPage } from "../modules/online-application/FormSkeleton";
 
 const OnlineApplicationPage = lazy(() => import("../modules/online-application/OnlineApplicationPage").then((module) => ({ default: module.OnlineApplicationPage })));

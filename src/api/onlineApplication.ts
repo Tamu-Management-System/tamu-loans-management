@@ -1,4 +1,4 @@
-// Data hooks for the online loan application form (public: borrowers have no account; the
+// Data hooks for the online loan application form (public: clients have no account; the
 // link's token is the only access, and it stops working once the form is submitted).
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { api } from "./client";

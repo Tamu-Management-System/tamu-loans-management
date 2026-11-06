@@ -229,7 +229,7 @@ function RoleForm({ role, copyOf, roles }: { role: RoleSummary | null; copyOf: R
                   ) : (
                     <Segmented label="Data access" value={dataScope} onChange={setDataScope} options={DATA_SCOPES.map(({ value, label }) => ({ value, label }))} />
                   )}
-                  <p className={styles.formRowHint}>{DATA_SCOPES.find((scope) => scope.value === dataScope)!.description} Applies to borrowers, documents, applications, loans, payments, recovery and reports.</p>
+                  <p className={styles.formRowHint}>{DATA_SCOPES.find((scope) => scope.value === dataScope)!.description} Applies to clients, documents, applications, loans, payments, recovery and reports.</p>
                 </div>
               </div>
               {!role && (

@@ -16,7 +16,7 @@ interface EarlyWarningsCardProps {
   announce: (message: string, undoTaskId?: string | null) => void;
 }
 
-/** Borrowers showing signs of trouble before they fall further behind (Module 3). */
+/** Clients showing signs of trouble before they fall further behind (Module 3). */
 export function EarlyWarningsCard({ warnings, announce }: EarlyWarningsCardProps) {
   const addToWorklist = useAddToWorklist();
   const showToast = useToast();
@@ -37,14 +37,14 @@ export function EarlyWarningsCard({ warnings, announce }: EarlyWarningsCardProps
   return (
     <div className={styles.card}>
       <h3 className={styles.cardTitle}>Early warnings</h3>
-      <p className={styles.cardSubtitle}>Borrowers showing signs of trouble before they fall further behind</p>
+      <p className={styles.cardSubtitle}>Clients showing signs of trouble before they fall further behind</p>
 
       {warnings.items.length === 0 ? (
         <p className={styles.empty}>No warnings right now.</p>
       ) : (
         <>
           <div className={styles.listHeader} aria-hidden="true">
-            <span>BORROWER</span>
+            <span>CLIENT</span>
             <span>ACTION</span>
           </div>
           {warnings.items.map((item) => (

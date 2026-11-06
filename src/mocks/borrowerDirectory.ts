@@ -1,4 +1,4 @@
-// Borrowers: who they are and which officer looks after them. Filled in by the sample data
+// Clients: who they are and which officer looks after them. Filled in by the sample data
 // generator (seed.ts); people registered in the demo are added as they're created.
 import { loans } from "./fixtures";
 
@@ -34,5 +34,5 @@ export function borrowerStatus(borrower: MockBorrower): MockBorrowerStatus {
   return borrower.applicationId ? "applicant" : "cleared";
 }
 
-/** The next borrower number, e.g. "B-0207". */
+/** The next client number, e.g. "B-0207". */
 export const nextBorrowerId = () => `B-${String(Math.max(0, ...borrowers.map((b) => Number(b.id.slice(2)))) + 1).padStart(4, "0")}`;

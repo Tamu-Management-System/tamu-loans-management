@@ -40,7 +40,7 @@ const formatCountdown = (ms: number) => {
 
 /**
  * Signs the user out after the sign-out time in Settings → Security without activity, so an unattended screen doesn't keep
- * showing borrower and payment data. Two minutes before, a warning offers to stay signed in.
+ * showing client and payment data. Two minutes before, a warning offers to stay signed in.
  */
 export function IdleSessionGuard() {
   const queryClient = useQueryClient();

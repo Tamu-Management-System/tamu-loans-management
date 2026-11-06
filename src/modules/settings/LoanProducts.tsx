@@ -207,7 +207,7 @@ function ProductForm({ product, copyOf }: { product: LoanProduct | null; copyOf:
   const scheduleLocked = !!product && product.inUse > 0;
   const unit = SCHEDULES.find((s) => s.value === form.repaymentSchedule)!.unit;
 
-  // A worked example, so the admin sees what a borrower would pay
+  // A worked example, so the admin sees what a client would pay
   const [exampleAmount, setExampleAmount] = useState<number | null>(null);
   const amount = Math.min(form.amount.max, Math.max(form.amount.min, exampleAmount ?? (Math.round((form.amount.min + form.amount.max) / 2 / 100_000) * 100_000 || form.amount.min)));
   const payments = Math.max(1, form.numberOfPayments);
@@ -274,13 +274,13 @@ function ProductForm({ product, copyOf }: { product: LoanProduct | null; copyOf:
       <div className={styles.productLayout}>
         <fieldset className={`${styles.settingsFieldset} ${styles.formLayout}`} disabled={!canEdit}>
           <SettingsGroup title="Product">
-            <SettingRow label="Name" htmlFor={ids.name} description="Officers and borrowers see this.">
+            <SettingRow label="Name" htmlFor={ids.name} description="Officers and clients see this.">
               <input id={ids.name} className={styles.textInput} value={form.name} onChange={(event) => set("name", event.target.value)} maxLength={40} autoComplete="off" autoFocus={!product} />
             </SettingRow>
             <SettingRow label="Who it's for" htmlFor={ids.description}>
               <input id={ids.description} className={styles.textInput} value={form.description} onChange={(event) => set("description", event.target.value)} maxLength={120} placeholder="e.g. Market traders who earn daily" autoComplete="off" />
             </SettingRow>
-            <SettingRow label="Repaid" description={scheduleLocked ? "Fixed while loans use it. Copy the product to change it." : "How often the borrower pays."}>
+            <SettingRow label="Repaid" description={scheduleLocked ? "Fixed while loans use it. Copy the product to change it." : "How often the client pays."}>
               {scheduleLocked ? (
                 <span className={styles.lockedValue}>{scheduleLabel(form.repaymentSchedule)}</span>
               ) : (
@@ -322,7 +322,7 @@ function ProductForm({ product, copyOf }: { product: LoanProduct | null; copyOf:
                 <NumberField id={ids.maxAmount} label="Biggest amount" value={form.amount.max} onChange={(max) => set("amount", { ...form.amount, max })} min={form.amount.min} max={100_000_000} step={50_000} unit="UGX" unitBefore wide />
               </span>
             </SettingRow>
-            <SettingRow label="Loan length" htmlFor={ids.length} description={`The borrower makes ${form.numberOfPayments} ${form.repaymentSchedule} payment${form.numberOfPayments === 1 ? "" : "s"}.`}>
+            <SettingRow label="Loan length" htmlFor={ids.length} description={`The client makes ${form.numberOfPayments} ${form.repaymentSchedule} payment${form.numberOfPayments === 1 ? "" : "s"}.`}>
               <NumberField id={ids.length} value={form.numberOfPayments} onChange={(value) => set("numberOfPayments", value)} min={1} max={365} unit={unit} />
             </SettingRow>
           </SettingsGroup>
@@ -346,7 +346,7 @@ function ProductForm({ product, copyOf }: { product: LoanProduct | null; copyOf:
               </span>
             </SettingRow>
             {form.fee.type !== "none" && (
-              <SettingRow label="Collected" description={form.fee.collection === "deducted" ? "The borrower receives the amount less the fee." : "The borrower receives the full amount and repays the fee with the instalments."}>
+              <SettingRow label="Collected" description={form.fee.collection === "deducted" ? "The client receives the amount less the fee." : "The client receives the full amount and repays the fee with the instalments."}>
                 <Segmented
                   label="Fee collected"
                   value={form.fee.collection}
@@ -422,7 +422,7 @@ function ProductForm({ product, copyOf }: { product: LoanProduct | null; copyOf:
                   </div>
                 )}
                 <div>
-                  <dt>Borrower receives</dt>
+                  <dt>Client receives</dt>
                   <dd>{formatUGX(example.summary.payout)}</dd>
                 </div>
                 <div className={styles.previewTotal}>

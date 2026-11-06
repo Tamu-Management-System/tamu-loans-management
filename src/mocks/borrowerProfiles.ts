@@ -1,4 +1,4 @@
-// Each borrower's profile details and the terms of their current loan. Filled in by the sample
+// Each client's profile details and the terms of their current loan. Filled in by the sample
 // data generator (seed.ts); people registered in the demo are added as they're created.
 import type { RepaymentSchedule } from "../api/types";
 import { paymentDate } from "../lib/repaymentSchedule";
@@ -6,6 +6,8 @@ import { paymentDate } from "../lib/repaymentSchedule";
 export interface MockBorrowerDetails {
   /** Shop / premises, as on the payment agreement */
   premises: string;
+  /** What they do for a living; empty when not given */
+  occupation: string;
   /** Optional alternative contact */
   secondaryPhone: string | null;
   nextOfKin: { name: string | null; phone: string | null; relationship: string | null } | null;

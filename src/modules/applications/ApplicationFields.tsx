@@ -2,7 +2,7 @@ import { useId } from "react";
 import type { BorrowerDraft, FieldErrors, Gender, GuarantorDraft, PersonDraft } from "./applicationValidation";
 import styles from "./ApplicationFields.module.css";
 
-// Fields shared by the officer's New application and the borrower's online form, so both
+// Fields shared by the officer's New application and the client's online form, so both
 // routes collect the same details with the same checks.
 
 export function PersonFields({ person, onChange, errors, phoneLabel }: { person: PersonDraft; onChange: (changes: Partial<PersonDraft>) => void; errors: FieldErrors<PersonDraft>; phoneLabel: string }) {
@@ -22,7 +22,7 @@ export function PersonFields({ person, onChange, errors, phoneLabel }: { person:
   );
 }
 
-/** Gender, other phone, address and next of kin: the rest of a new borrower's details */
+/** Gender, other phone, address and next of kin: the rest of a new client's details */
 export function BorrowerExtraFields({
   borrower,
   onChange,
@@ -32,14 +32,15 @@ export function BorrowerExtraFields({
   borrower: BorrowerDraft;
   onChange: (changes: Partial<BorrowerDraft>) => void;
   errors: FieldErrors<BorrowerDraft>;
-  /** Worded for the borrower filling it in themselves */
+  /** Worded for the client filling it in themselves */
   you?: boolean;
 }) {
   return (
     <>
       <GenderField value={borrower.gender} onChange={(gender) => onChange({ gender })} error={errors.gender} />
       <TextField label="Other phone number (optional)" value={borrower.secondaryPhone} onChange={(secondaryPhone) => onChange({ secondaryPhone })} error={errors.secondaryPhone} hint="Another number to reach them" inputMode="tel" type="tel" />
-      <TextField label="Address" value={borrower.area} onChange={(area) => onChange({ area })} error={errors.area} hint={you ? "Where you live" : "Where they live"} />
+      <TextField label="Address (Location)" value={borrower.area} onChange={(area) => onChange({ area })} error={errors.area} hint={you ? "Where you live" : "Where they live"} />
+      <TextField label="Occupation (optional)" value={borrower.occupation} onChange={(occupation) => onChange({ occupation })} error={errors.occupation} hint={you ? "What you do for a living" : "What they do for a living"} />
       <TextField label="Shop / premises / building / arcade" value={borrower.premises} onChange={(premises) => onChange({ premises })} error={errors.premises} />
       <h3 className={styles.groupHeading}>Next of kin (optional)</h3>
       <TextField label="Full name" value={borrower.kinName} onChange={(kinName) => onChange({ kinName })} error={errors.kinName} />
@@ -48,12 +49,12 @@ export function BorrowerExtraFields({
   );
 }
 
-/** Online form: a guarantor's details, and how they know the borrower */
+/** Online form: a guarantor's details, and how they know the client */
 export function GuarantorFields({ guarantor, onChange, errors }: { guarantor: GuarantorDraft; onChange: (changes: Partial<GuarantorDraft>) => void; errors: FieldErrors<GuarantorDraft> }) {
   return (
     <>
       <PersonFields person={guarantor} onChange={onChange} errors={errors} phoneLabel="Phone number" />
-      <TextField label="Relationship to the borrower" value={guarantor.relationship} onChange={(relationship) => onChange({ relationship })} error={errors.relationship} hint="e.g. sister, friend, landlord, workmate" />
+      <TextField label="Relationship to the client" value={guarantor.relationship} onChange={(relationship) => onChange({ relationship })} error={errors.relationship} hint="e.g. sister, friend, landlord, workmate" />
     </>
   );
 }

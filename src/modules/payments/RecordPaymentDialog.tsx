@@ -11,7 +11,7 @@ import styles from "./RecordPaymentDialog.module.css";
 
 
 interface RecordPaymentDialogProps {
-  /** Pre-selected loan (from a worklist row); omit to let the user pick a borrower */
+  /** Pre-selected loan (from a worklist row); omit to let the user pick a client */
   loanId?: string;
   onClose: () => void;
   /** Called after saving, with a confirmation message and the task that can be undone */
@@ -19,8 +19,8 @@ interface RecordPaymentDialogProps {
 }
 
 /**
- * Records a repayment. Before confirming, the user sees what the borrower owes, the amount being paid and what's
- * left. A payment can't be more than the borrower owes (the server checks too), so a typing mistake like an extra
+ * Records a repayment. Before confirming, the user sees what the client owes, the amount being paid and what's
+ * left. A payment can't be more than the client owes (the server checks too), so a typing mistake like an extra
  * zero can't go in, and nobody ever has to be refunded.
  */
 export function RecordPaymentDialog({ loanId: initialLoanId, onClose, onRecorded }: RecordPaymentDialogProps) {
@@ -49,7 +49,7 @@ export function RecordPaymentDialog({ loanId: initialLoanId, onClose, onRecorded
   const amountText = amountInput ?? (loan?.dueToday ? String(loan.dueToday) : "");
   const amount = Number(amountText);
   const validAmount = amountText !== "" && Number.isFinite(amount) && amount > 0;
-  // The most a payment can be: what the borrower owes now (the balance plus any late fees)
+  // The most a payment can be: what the client owes now (the balance plus any late fees)
   const owed = loan?.owedNow ?? 0;
   const tooMuch = !!loan && validAmount && amount > owed;
   const ready = !!loan && validAmount && !tooMuch && (!referenceNeeded || !!reference.trim()) && paidOn >= earliest && paidOn <= today;
@@ -82,7 +82,7 @@ export function RecordPaymentDialog({ loanId: initialLoanId, onClose, onRecorded
       onClose={onClose}
     >
       {!initialLoanId && (
-        <Field label="Borrower" htmlFor={ids.loan}>
+        <Field label="Client" htmlFor={ids.loan}>
           <Select
             id={ids.loan}
             value={loanId}
@@ -91,7 +91,7 @@ export function RecordPaymentDialog({ loanId: initialLoanId, onClose, onRecorded
               setAmountInput(null);
             }}
             options={loans.map((option) => ({ value: option.id, label: `${option.borrowerName} · ${option.id}`, keywords: option.phone }))}
-            placeholder={loansLoading ? "Loading borrowers…" : "Choose a borrower"}
+            placeholder={loansLoading ? "Loading clients…" : "Choose a client"}
             searchable
             searchPlaceholder="Name, loan ID or phone"
             disabled={loansLoading}
@@ -140,7 +140,7 @@ export function RecordPaymentDialog({ loanId: initialLoanId, onClose, onRecorded
         <SummaryBox
           ariaLabel="Balance after this payment"
           rows={[
-            ["Borrower", `${loan.borrowerName} · ${loan.id}`],
+            ["Client", `${loan.borrowerName} · ${loan.id}`],
             ["Owes now", formatUGX(owed)],
             ["Paying now", formatUGX(amount)],
             ["Left to pay", formatUGX(Math.max(0, owed - amount))],

@@ -25,7 +25,7 @@ const AUDIT_CATEGORIES: { value: AuditCategory; label: string }[] = [
   { value: "money", label: "Money" },
   { value: "decisions", label: "Decisions" },
   { value: "access", label: "Data access" },
-  { value: "borrowers", label: "Borrower changes" },
+  { value: "borrowers", label: "Client changes" },
   { value: "admin", label: "Staff and settings" },
   { value: "signin", label: "Sign-ins" },
 ];
@@ -118,7 +118,7 @@ export function AuditLogPage() {
         <div className={styles.filters}>
           <label className={styles.search} htmlFor={searchId}>
             <Icon name="search" size={17} strokeWidth={1.8} />
-            <input id={searchId} type="search" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Search what happened, loan ID or borrower" aria-label="Search the audit log" autoComplete="off" />
+            <input id={searchId} type="search" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Search what happened, loan ID or client" aria-label="Search the audit log" autoComplete="off" />
           </label>
           <Select
             className={styles.select}

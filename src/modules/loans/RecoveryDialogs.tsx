@@ -21,7 +21,7 @@ interface LoanSummary {
   daysPastDue: number;
 }
 
-/** Hands a loan to the recovery team, with a reason (recorded on the borrower's timeline and in the audit log). */
+/** Hands a loan to the recovery team, with a reason (recorded on the client's timeline and in the audit log). */
 export function SendToRecoveryDialog({ loan, onClose }: { loan: LoanSummary; onClose: () => void }) {
   const noteId = useId();
   const showToast = useToast();
@@ -59,7 +59,7 @@ export function SendToRecoveryDialog({ loan, onClose }: { loan: LoanSummary; onC
           <RadioOption key={option.value} name="reason" value={option.value} checked={reason === option.value} onChange={() => setReason(option.value)} label={option.label} description={option.description} />
         ))}
       </div>
-      <Field label={noteRequired ? "Note" : "Note (optional)"} htmlFor={noteId} hint="The recovery team sees this, e.g. where the borrower was last seen.">
+      <Field label={noteRequired ? "Note" : "Note (optional)"} htmlFor={noteId} hint="The recovery team sees this, e.g. where the client was last seen.">
         <textarea id={noteId} className={styles.note} rows={3} value={note} onChange={(event) => setNote(event.target.value)} />
       </Field>
     </Dialog>

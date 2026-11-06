@@ -15,12 +15,12 @@ import { RejectApplicationDialog } from "./RejectApplicationDialog";
 import styles from "./ApplicationReviewPage.module.css";
 
 const PER = { daily: "daily", weekly: "weekly", monthly: "monthly" } as const;
-const STATUS_LABEL = { draft: "Draft", "awaiting-borrower": "Waiting for borrower", submitted: "Waiting for approval", approved: "Approved", rejected: "Rejected" } as const;
+const STATUS_LABEL = { draft: "Draft", "awaiting-borrower": "Waiting for client", submitted: "Waiting for approval", approved: "Approved", rejected: "Rejected" } as const;
 
 const CHECKS = [
-  { key: "signedPdfMatchesDetails", label: "The signed PDF matches the details: borrower, amount, payments and both guarantors" },
+  { key: "signedPdfMatchesDetails", label: "The signed PDF matches the details: client, amount, payments and both guarantors" },
   { key: "idCopyMatchesNin", label: "The National ID copies (in the signed PDF, or the photos) match the names and NINs" },
-  { key: "guarantorsSigned", label: "The borrower and both guarantors signed (agreement and both consents)" },
+  { key: "guarantorsSigned", label: "The client and both guarantors signed (agreement and both consents)" },
 ] as const;
 type CheckKey = (typeof CHECKS)[number]["key"];
 
@@ -89,7 +89,7 @@ export function ApplicationReviewPage() {
             <span className={`${styles.chip} ${styles[`chip_${a.status.replace("-", "_")}`]}`}>{a.status === "draft" && a.returned ? "Sent back" : STATUS_LABEL[a.status]}</span>
           </div>
           <p className={styles.meta}>
-            {newcomerOnline ? "New borrower" : a.borrower.name} · {a.route === "online" ? "Online" : "Paper forms"} · {a.officer.name} ·{" "}
+            {newcomerOnline ? "New client" : a.borrower.name} · {a.route === "online" ? "Online" : "Paper forms"} · {a.officer.name} ·{" "}
             {a.submittedAt ? `submitted ${formatRelativeDay(a.submittedAt)}` : `started ${formatRelativeDay(a.createdAt)}`}
           </p>
         </div>
@@ -104,7 +104,7 @@ export function ApplicationReviewPage() {
 
       <div className={styles.layout}>
         <div className={styles.column}>
-          <Card title="Borrower">
+          <Card title="Client">
             {a.borrowerDetails ? (
               <dl className={styles.details}>
                 <Row label="Full name">
@@ -117,7 +117,7 @@ export function ApplicationReviewPage() {
                   <span className={styles.hint}>Mobile money: the loan is paid here</span>
                 </Row>
                 <Row label="Shop / premises">{a.borrowerDetails.premises || "—"}</Row>
-                <Row label="Area">{a.borrowerDetails.area || "—"}</Row>
+                <Row label="Address (Location)">{a.borrowerDetails.area || "—"}</Row>
               </dl>
             ) : (
               <p className={styles.empty}>{newcomerOnline ? "They fill in their own details on the online form." : a.borrower.name}</p>
@@ -155,7 +155,7 @@ export function ApplicationReviewPage() {
                 ))}
               </dl>
             ) : (
-              <p className={styles.empty}>{a.route === "online" ? "The borrower fills these in on the online form." : "Not entered yet."}</p>
+              <p className={styles.empty}>{a.route === "online" ? "The client fills these in on the online form." : "Not entered yet."}</p>
             )}
           </Card>
 
@@ -208,7 +208,7 @@ export function ApplicationReviewPage() {
                 <InlinePdf document={signed} title={`Signed loan application ${a.id}`} />
               </>
             ) : (
-              <p className={styles.empty}>{a.status === "awaiting-borrower" ? "It's created when the borrower submits the online form." : "Not uploaded yet."}</p>
+              <p className={styles.empty}>{a.status === "awaiting-borrower" ? "It's created when the client submits the online form." : "Not uploaded yet."}</p>
             )}
           </Card>
         </div>
@@ -254,7 +254,7 @@ function StatusBanner({ application: a }: { application: ApplicationDetail }) {
           <b>
             Approved by {a.decided.by}, {formatRelativeDay(a.decided.at)}.
           </b>{" "}
-          Ready to be paid out to {a.borrowerDetails?.phone ?? "the borrower's mobile money number"}.
+          Ready to be paid out to {a.borrowerDetails?.phone ?? "the client's mobile money number"}.
         </span>
       </p>
     );
@@ -264,7 +264,7 @@ function StatusBanner({ application: a }: { application: ApplicationDetail }) {
       <p className={`${styles.banner} ${styles.bannerInfo}`} role="note">
         <Icon name="link" size={17} strokeWidth={1.9} />
         <span>
-          <b>Online link sent {formatRelativeDay(a.createdAt)}.</b> Waiting for the borrower to fill in the details and sign with both guarantors.
+          <b>Online link sent {formatRelativeDay(a.createdAt)}.</b> Waiting for the client to fill in the details and sign with both guarantors.
         </span>
       </p>
     );

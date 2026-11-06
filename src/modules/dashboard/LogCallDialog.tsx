@@ -19,7 +19,7 @@ interface LogCallDialogProps {
   onLogged: (message: string, undoTaskId: string) => void;
 }
 
-/** Records the outcome of a call to a borrower. */
+/** Records the outcome of a call to a client. */
 export function LogCallDialog({ task, onClose, onPayingNow, onLogged }: LogCallDialogProps) {
   const logCall = useLogCallOutcome();
   const today = new Date();

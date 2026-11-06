@@ -88,7 +88,7 @@ function seedTasks(): Record<string, WorklistTask[]> {
 
 export const worklists = seedTasks();
 
-/** Someone's own tasks (their borrowers, their drafts) */
+/** Someone's own tasks (their clients, their drafts) */
 export const tasksFor = (userId: string): WorklistTask[] => worklists[userId] ?? [];
 
 /** Everything on a person's worklist: their own tasks, plus shared ones their permissions cover (any role, built-in or custom) */

@@ -8,7 +8,7 @@ import styles from "./AppShell.module.css";
 const MOBILE_TABS: { label: string; icon: IconName; to: string; requires?: Permission[] }[] = [
   { label: "Dashboard", icon: "dashboard", to: "/" },
   { label: "Loans", icon: "loans", to: "/loans/all", requires: ["loans.view"] },
-  { label: "Borrowers", icon: "user", to: "/borrowers", requires: ["borrowers.view"] },
+  { label: "Clients", icon: "user", to: "/borrowers", requires: ["borrowers.view"] },
   { label: "Payments", icon: "payments", to: "/payments", requires: ["payments.view"] },
   { label: "More", icon: "menu", to: "/more" },
 ];

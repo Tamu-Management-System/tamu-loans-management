@@ -56,7 +56,7 @@ function seedHistory() {
   for (let daysAgo = 0; daysAgo < 30; daysAgo++)
     for (const member of active) if (random() > 0.15) history.push(entry(member, "signed in", atHour(daysAgo, 7 + Math.floor(random() * 2))));
 
-  // Every repayment recorded, by the borrower's loan officer
+  // Every repayment recorded, by the client's loan officer
   const allLoans = [...loans.map((loan) => ({ id: loan.id, officerId: loan.officerId })), ...pastLoans.map((past) => ({ id: past.id, officerId: borrowers.find((b) => b.id === past.borrowerId)?.officerId ?? "" }))];
   for (const loan of allLoans) {
     const officer = staff.find((member) => member.id === loan.officerId);

@@ -7,7 +7,7 @@ import { useToast } from "../../components/ui/Toast";
 import styles from "./ApplicationReviewPage.module.css";
 
 const REASONS: { value: ApplicationRejectionReason; label: string; description: string }[] = [
-  { value: "signature-missing", label: "Signature missing", description: "The borrower or a guarantor didn't sign somewhere." },
+  { value: "signature-missing", label: "Signature missing", description: "The client or a guarantor didn't sign somewhere." },
   { value: "details-mismatch", label: "Details don't match the forms", description: "What was typed in differs from the signed forms or the ID." },
   { value: "document-unclear", label: "Document unclear or incomplete", description: "Pages missing, or the scan or photo can't be read." },
   { value: "other", label: "Something else to fix", description: "Explain in the note." },
