@@ -40,6 +40,16 @@ export const systemSettings: SystemSettings = {
     referenceRequired: true,
     backdateDays: 3,
   },
+  notifications: {
+    rules: [
+      { event: "online-submitted", title: "A client completes the online form", who: "The officer who sent the link", channels: ["sms"], example: "Tamu Loans: Agnes Nakimera has filled in her loan application APP-312. Open it to check the details." },
+      { event: "submitted", title: "An application is sent for approval", who: "Everyone who can approve", channels: ["sms"], example: "Tamu Loans: APP-311 for Brian Ochieng (UGX 500,000) is waiting for your approval." },
+      { event: "returned", title: "An application is sent back for fixes", who: "The officer who owns it", channels: ["sms"], example: "Tamu Loans: APP-311 was sent back. Reason: a document is unclear. Please fix it and send it again." },
+      { event: "rejected", title: "An application is rejected", who: "The officer who owns it", channels: ["sms"], example: "Tamu Loans: APP-311 for Brian Ochieng was rejected. Open it to see why." },
+      { event: "approved", title: "An application is approved", who: "Everyone who can pay out, and the officer who owns it", channels: ["sms"], example: "Tamu Loans: APP-311 for Brian Ochieng (UGX 500,000) is approved. It is ready to pay out." },
+      { event: "disbursed", title: "A loan is paid out", who: "The officer who owns it", channels: ["sms"], example: "Tamu Loans: TL-0990 for Brian Ochieng (UGX 500,000) has been paid out. Repayments start on the first payment date." },
+    ],
+  },
   security: {
     idleTimeoutMinutes: 15,
     nationalIdVisibleSeconds: 30,
@@ -53,6 +63,7 @@ export const systemSettings: SystemSettings = {
     loanRules: { at: daysAgo(4), by: "Martin Ssempa" },
     payments: null,
     security: null,
+    notifications: null,
   },
 };
 

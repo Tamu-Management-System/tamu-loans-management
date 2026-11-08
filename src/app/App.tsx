@@ -19,6 +19,7 @@ import { AuditLogPage } from "../modules/audit/AuditLogPage";
 import { ReportsPage } from "../modules/reports/ReportsPage";
 import { AccountSettingsPage } from "../modules/account/AccountSettingsPage";
 import { HelpPage } from "../modules/account/HelpPage";
+import { NotificationsPage } from "../modules/account/NotificationsPage";
 import { ProfilePage } from "../modules/account/ProfilePage";
 import { LoansPage } from "../modules/loans/LoansPage";
 import { BorrowerProfilePage } from "../modules/borrowers/BorrowerProfilePage";
@@ -160,6 +161,7 @@ function StaffApp() {
                 </RequirePermission>
               }
             />
+            <Route path="notifications" element={<NotificationsPage />} />
             <Route path="account/profile" element={<ProfilePage />} />
             <Route path="account/settings" element={<AccountSettingsPage />} />
             <Route path="help" element={<HelpPage />} />

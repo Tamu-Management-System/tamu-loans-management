@@ -120,6 +120,8 @@ export interface MockApplication {
   decided?: { by: string; byId?: string; at: string };
   /** Paid out: the loan it became */
   loanId?: string;
+  /** When it was paid out */
+  paidOutAt?: string;
   /** Sent back to the officer as a draft, or rejected for good */
   returned?: { reason: string; note: string | null; by: string; at: string };
 }

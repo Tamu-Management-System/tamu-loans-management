@@ -58,7 +58,7 @@ reports. Roles with any `users.*`, `roles.*` or `settings.*` permission must be 
 | `reports.view` / `reports.export` | Reports | |
 | `users.view` / `users.manage` | Staff accounts | |
 | `roles.manage` | Custom roles | `users.view` |
-| `settings.business`, `settings.products`, `settings.rules`, `settings.payments`, `settings.security` | Each Settings section | |
+| `settings.business`, `settings.products`, `settings.rules`, `settings.payments`, `settings.security`, `settings.notifications` | Each Settings section | |
 | `audit.view` | The audit log | |
 
 When a role is saved, the backend adds whatever the chosen permissions need (the "Needs" column).
@@ -141,6 +141,21 @@ Alerts for the bell in the top bar, chosen by the user's permissions.
   { "id": "repayments-due", "title": "Repayments due today", "detail": "Record them as borrowers pay", "href": "/?worklist=collect", "unread": true }
 ]
 ```
+
+### `GET /notifications/history`
+
+Everything the signed-in person was sent, newest first: the Notifications page (avatar menu). One entry per message per channel, so a step
+sent in-app and by SMS appears twice. Query: `channel` (`in-app`, `sms` or `email`; omit for all) and `page` (20 per page).
+
+```json
+{ "items": [{ "id": "approved-APP-304-sms", "event": "approved", "channel": "sms", "title": "APP-304 for Ivan Okello is approved",
+              "message": "Tamu Loans: APP-304 for Ivan Okello (UGX 250,000) is approved and ready to pay out.",
+              "at": "2026-11-04T08:31:00Z", "delivery": "sent", "href": "/loans/to-disburse" }],
+  "total": 4, "page": 1, "pageSize": 20, "counts": { "all": 4, "in-app": 2, "sms": 2, "email": 0 } }
+```
+
+`delivery` is `sent` or `failed` for SMS and email and `null` for in-app. Store each message when the step sends it (the delivery log);
+a person only ever sees their own.
 
 ### `POST /notifications/mark-read`
 
@@ -984,18 +999,24 @@ Nothing an admin can change is hard-coded in the frontend: it reads these and fo
   "payments": { "repaymentMethods": ["Cash", "MTN MoMo", "Airtel Money"], "payoutMethods": ["MTN MoMo", "Airtel Money"],
                 "referenceRequired": true, "backdateDays": 3 },
   "security": { "idleTimeoutMinutes": 15, "nationalIdVisibleSeconds": 30, "inviteValidHours": 48, "maxFailedSignIns": 5, "lockoutMinutes": 15, "minPasswordLength": 12 },
-  "changed": { "business": { "at": "…", "by": "Martin Ssempa" }, "loanRules": null, "payments": null, "security": null }
+  "notifications": { "rules": [{ "event": "submitted", "title": "An application is sent for approval", "who": "Everyone who can approve",
+                               "example": "Tamu Loans: APP-311 for Brian Ochieng (UGX 500,000) is waiting for your approval.", "channels": ["sms"] }] },
+  "changed": { "business": { "at": "…", "by": "Martin Ssempa" }, "loanRules": null, "payments": null, "security": null, "notifications": null }
 }
 ```
 
-### `PUT /settings/{business|loanRules|payments|security}`
+### `PUT /settings/{business|loanRules|payments|security|notifications}`
 
-The whole section. Requires `settings.business`, `settings.rules`, `settings.payments` or `settings.security`.
+The whole section. Requires `settings.business`, `settings.rules`, `settings.payments`, `settings.security` or `settings.notifications`.
 `200` with the full settings. `422` when a value is out of range (limits in `src/lib/settingLimits.ts`), a
 payout method has no payout account, or no repayment/payout method is left. Business: `branches` (markets, each `{ id, name }`; send `id: null` for a new one) needs at
 least one unique name. A market keeps its `id` when renamed, so the people in it follow the new name; it can't be removed
 while active or invited staff work in it. Loan rules: `paymentAllocationOrder` must list `charges`, `fees`, `interest`
 and `principal` once each (the order a payment clears them; used when building `PaymentAllocation` rows). Audit-log which fields changed.
+
+Notifications: `rules` has one entry per workflow step (below). An admin only changes `channels` (any of `sms`, `email`;
+empty means in-app only); the server owns `title`, `who` and `example` and ignores what the client sends for them. `422` for an unknown step
+or channel. Audit-log each step whose channels changed.
 
 What each setting does on the server:
 - `recoveryMode: "auto"` with `recoveryAfterDaysLate`: a daily job sends loans that late to recovery (by
@@ -1010,6 +1031,19 @@ What each setting does on the server:
   `referenceRequired`; `paidOn` (new, optional on `POST /payments`) may be up to `backdateDays` in the past;
   refuse any amount above what the borrower owes (`owedNow`); amounts must be whole shillings.
 - Security: sign-in lockout, idle timeout, National ID display time and invite lifetime follow these values.
+- Notifications: when a workflow step makes it someone else's turn, the server tells them (steps and recipients below). Each person is always
+  told in-app (the bell, `GET /notifications`); `channels` adds SMS or email to the person's phone / email on file. Sending happens
+  after the step is saved, from a queue with retries and a delivery log, and a failed message never blocks or rolls back the step. Messages
+  carry names, the reference and the amount, never a National ID, a password or a token link.
+
+| `event` | Happens when | Goes to |
+|---|---|---|
+| `online-submitted` | A client submits the online form | The officer who sent the link |
+| `submitted` | An application is sent for approval | Everyone with `applications.approve` (not the person who started it, when `creatorCannotApprove`) |
+| `returned` | An approver sends an application back | The officer who owns it |
+| `rejected` | An approver rejects it | The officer who owns it |
+| `approved` | An approver approves it | Everyone with `loans.disburse` (not the approver, when `approverCannotDisburse`), and the officer who owns it |
+| `disbursed` | A payout is recorded | The officer who owns it |
 
 ### Loan products
 

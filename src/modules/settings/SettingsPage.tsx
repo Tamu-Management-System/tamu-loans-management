@@ -7,6 +7,7 @@ import { ForbiddenPage, NotFoundPage } from "../../pages/PlaceholderPage";
 import { LoanProductEditor, LoanProductsSection } from "./LoanProducts";
 import { RoleEditor } from "./RoleEditor";
 import { BusinessSection, LoanRulesSection, PaymentsSection, SecuritySection } from "./SystemSections";
+import { NotificationsSection } from "./NotificationsSection";
 import { RolesSection } from "./RolesSection";
 import { UsersSection } from "./UsersSection";
 import styles from "./Settings.module.css";
@@ -26,6 +27,7 @@ const SECTIONS: Section[] = [
   { group: "Lending", path: "rules", label: "Loan rules", description: "Checks and recovery", requires: "settings.rules" },
   { group: "Money", path: "payments", label: "Payments", description: "Methods and dates", requires: "settings.payments" },
   { group: "Organisation", path: "business", label: "Business details", description: "Name and accounts", requires: "settings.business" },
+  { group: "Lending", path: "notifications", label: "Notifications", description: "Who is told, and how", requires: "settings.notifications" },
   { group: "Organisation", path: "security", label: "Security & sign-in", description: "Sign-in and sessions", requires: "settings.security" },
 ];
 
@@ -82,6 +84,7 @@ export function SettingsPage() {
             <Route path="rules" element={guard("settings.rules", <LoanRulesSection />)} />
             <Route path="payments" element={guard("settings.payments", <PaymentsSection />)} />
             <Route path="business" element={guard("settings.business", <BusinessSection />)} />
+            <Route path="notifications" element={guard("settings.notifications", <NotificationsSection />)} />
             <Route path="security" element={guard("settings.security", <SecuritySection />)} />
             <Route path="roles" element={guard("roles.manage", <RolesSection />)} />
             <Route path="roles/new" element={guard("roles.manage", <RoleEditor />)} />

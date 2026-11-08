@@ -124,7 +124,7 @@ function GlobalSearch() {
               <span className={styles.mutedText}>{result.subtitle}</span>
             </button>
           ))}
-          {!results.length && !isFetching && <p className={styles.dropdownEmpty}>No borrower, loan ID or phone matches “{query.trim()}”.</p>}
+          {!results.length && !isFetching && <p className={styles.dropdownEmpty}>No client, loan ID or phone matches “{query.trim()}”.</p>}
         </div>
       )}
     </form>
@@ -139,6 +139,8 @@ function ProfileMenu() {
   const close = useCallback(() => setOpen(false), []);
   useDismiss(ref, open, close);
   const roleLine = `${user.role.name} · ${user.branch}`;
+  const { data: notifications = [] } = useNotifications();
+  const unread = notifications.filter((item) => item.unread).length;
 
   return (
     <div className={styles.menuAnchor} ref={ref}>
@@ -158,6 +160,11 @@ function ProfileMenu() {
           <Link role="menuitem" to="/account/profile" onClick={close}>
             <Icon name="user" size={17} strokeWidth={1.8} />
             My profile
+          </Link>
+          <Link role="menuitem" to="/notifications" onClick={close}>
+            <Icon name="bell" size={17} strokeWidth={1.8} />
+            Notifications
+            {unread > 0 && <span className={styles.menuCount} aria-label={`${unread} new`}>{unread > 9 ? "9+" : unread}</span>}
           </Link>
           <Link role="menuitem" to="/account/settings" onClick={close}>
             <Icon name="settings" size={17} strokeWidth={1.8} />
@@ -220,6 +227,9 @@ function Notifications() {
           ) : (
             <p className={styles.dropdownEmpty}>You're all caught up.</p>
           )}
+          <Link to="/notifications" onClick={close} className={styles.notificationsAll}>
+            See all notifications
+          </Link>
         </div>
       )}
     </div>

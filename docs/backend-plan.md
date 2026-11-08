@@ -139,6 +139,10 @@ Each phase leaves the frontend working for the screens it covers (switch screens
    loans list/detail, `POST /payments`, `/payments/list`, recovery, late fees, the recovery job.
 5. **Dashboard and reports:** `/dashboard/today`, `/worklist` and its actions, notifications, badges, search,
    portfolio figures, team performance, `/reports/{name}` (+ PDF/CSV export).
+6. **Workflow notifications (client request, Nov 2026):** each step from the online form to payout tells the next person (in-app, and by
+   SMS / email as set in Settings → Notifications). A queue with retries and a delivery log, plus a messaging provider
+   (SMS and email). Steps, recipients and rules are in `api-contract.md` (Settings → Notifications). Which channel the client wants
+   first, whether clients get messages too, and a reminder when nobody acts are still open questions.
 
 ## 5. Sample data
 
@@ -211,4 +215,4 @@ CommunicationLog / AutomationWorkflow (Module 3). The screens for them show "Com
 - Monthly loans: is one month always the length, or do officers pick 1, 2 or 3 months per loan?
 - Where a payment goes first: admins choose it in Settings → Loan rules (default charges → fees → interest →
   principal). Confirm with Tamu which order they want as the default.
-- Payment matching with MTN/Airtel statements (Module 4) and SMS reminders (Module 3) are Phase 2.
+- Payment matching with MTN/Airtel statements (Module 4) and SMS reminders for late payments (Module 3) are Phase 2. Workflow messages to staff are not: see item 6 above.

@@ -1,7 +1,7 @@
 // Data hooks for the app shell (top bar and sidebar).
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
-import type { NavigationBadges, NotificationItem, RiskSummary, SearchResult } from "./types";
+import type { MessageChannel, NavigationBadges, NotificationHistoryPage, NotificationItem, RiskSummary, SearchResult } from "./types";
 
 export const SEARCH_MIN_LENGTH = 2;
 
@@ -20,6 +20,17 @@ export function useNotifications() {
     queryKey: ["notifications"],
     queryFn: () => api.get<NotificationItem[]>("/notifications"),
     refetchInterval: 60_000,
+  });
+}
+
+/** Everything the signed-in person was sent, newest first, optionally one channel */
+export function useNotificationHistory(channel: MessageChannel | null, page: number) {
+  const search = new URLSearchParams({ page: String(page) });
+  if (channel) search.set("channel", channel);
+  return useQuery({
+    queryKey: ["notifications", "history", channel, page],
+    queryFn: () => api.get<NotificationHistoryPage>(`/notifications/history?${search}`),
+    placeholderData: keepPreviousData,
   });
 }
 

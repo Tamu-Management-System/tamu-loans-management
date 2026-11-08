@@ -1116,14 +1116,64 @@ export interface SecuritySettings {
   minPasswordLength: number;
 }
 
+/** How a person is told it's their turn. In-app alerts (the bell) are always on. */
+export type NotificationChannel = "sms" | "email";
+
+/** The workflow steps that tell the next person it's their turn */
+export type NotificationEvent = "online-submitted" | "submitted" | "returned" | "rejected" | "approved" | "disbursed";
+
+/** Where a message went: the bell (always) and any channel the step is set to use */
+export type MessageChannel = "in-app" | NotificationChannel;
+
+/** One message the signed-in person was sent (GET /notifications/history) */
+export interface NotificationMessage {
+  id: string;
+  event: NotificationEvent;
+  channel: MessageChannel;
+  title: string;
+  /** What the message said */
+  message: string;
+  /** ISO date-time */
+  at: string;
+  /** SMS and email only: whether it reached them */
+  delivery: "sent" | "failed" | null;
+  /** Where the message leads in the app */
+  href: string;
+}
+
+export interface NotificationHistoryPage {
+  items: NotificationMessage[];
+  total: number;
+  page: number;
+  pageSize: number;
+  /** Messages per channel, whatever the filter */
+  counts: Record<MessageChannel | "all", number>;
+}
+
+/** One workflow step. `title`, `who` and `example` come from the server; an admin only chooses the channels. */
+export interface NotificationRule {
+  event: NotificationEvent;
+  title: string;
+  /** Who gets it, in words */
+  who: string;
+  /** A sample of the message */
+  example: string;
+  channels: NotificationChannel[];
+}
+
+export interface NotificationSettings {
+  rules: NotificationRule[];
+}
+
 /** GET /settings (every signed-in user: the app follows these) */
 export interface SystemSettings {
   business: BusinessSettings;
   loanRules: LoanRulesSettings;
   payments: PaymentSettings;
   security: SecuritySettings;
+  notifications: NotificationSettings;
   /** Last change to each section */
-  changed: Record<"business" | "loanRules" | "payments" | "security", { at: string; by: string } | null>;
+  changed: Record<"business" | "loanRules" | "payments" | "security" | "notifications", { at: string; by: string } | null>;
 }
 
 export type SettingsSection = keyof Omit<SystemSettings, "changed">;

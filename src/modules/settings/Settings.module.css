@@ -2176,3 +2176,70 @@ section > .pills {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Notifications: the channels a step is sent by, with a sample of the message */
+.notifyControl {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  max-width: 100%;
+}
+
+.channels {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.channel {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.channel[aria-pressed="true"] {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.channel:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.channel:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.example {
+  max-width: 360px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--color-page);
+  color: var(--color-text-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+@media (max-width: 760px) {
+  .notifyControl {
+    align-items: flex-start;
+  }
+
+  .channels {
+    justify-content: flex-start;
+  }
+}

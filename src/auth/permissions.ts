@@ -34,6 +34,7 @@ export const PERMISSIONS = [
   "settings.rules",
   "settings.payments",
   "settings.security",
+  "settings.notifications",
   "audit.view",
   "audit.export",
 ] as const;
@@ -97,6 +98,7 @@ export const PERMISSION_MODULES: PermissionModule[] = [
   { group: "Administration", name: "Payment settings", description: "Accepted methods, transaction IDs and back-dating" },
   { group: "Administration", name: "Business details", description: "Name, contacts and payout accounts" },
   { group: "Administration", name: "Security", description: "Sign-out time, lockout and passwords" },
+  { group: "Administration", name: "Notifications", description: "Who is told when it's their turn, and how" },
   { group: "Administration", name: "Audit log", description: "Who did what, and when" },
 ];
 
@@ -141,6 +143,7 @@ export const PERMISSION_CATALOG: PermissionInfo[] = [
   { id: "settings.rules", module: "Loan rules", action: "manage", label: "Change loan rules", description: "Two-person checks, guarantors and recovery rules.", sensitive: true },
   { id: "settings.payments", module: "Payment settings", action: "manage", label: "Change payment settings", description: "Accepted methods, references and back-dating.", sensitive: true },
   { id: "settings.security", module: "Security", action: "manage", label: "Change security settings", description: "Sign-out time, lockout and invite links.", sensitive: true },
+  { id: "settings.notifications", module: "Notifications", action: "manage", label: "Change notification settings", description: "Which steps send a message to the next person, and by which channel.", sensitive: true },
 
   { id: "audit.view", module: "Audit log", action: "view", label: "See the audit log", description: "Every sign-in, change, payment and document view." },
   { id: "audit.export", module: "Audit log", action: "export", label: "Export the audit log", description: "Download it as a spreadsheet (CSV). Every export is logged.", sensitive: true, requires: ["audit.view"] },
@@ -174,7 +177,7 @@ export function dependentsOf(id: Permission): Set<Permission> {
   return result;
 }
 
-export const SETTINGS_PERMISSIONS: Permission[] = ["settings.business", "settings.products", "settings.rules", "settings.payments", "settings.security"];
+export const SETTINGS_PERMISSIONS: Permission[] = ["settings.business", "settings.products", "settings.rules", "settings.payments", "settings.security", "settings.notifications"];
 /** Anything that opens Settings */
 export const ANY_SETTINGS_PERMISSION: Permission[] = ["users.view", "roles.manage", ...SETTINGS_PERMISSIONS];
 
@@ -224,6 +227,7 @@ export const BUILT_IN_ROLES: Record<BuiltInRoleId, Role> = {
       "settings.rules",
       "settings.payments",
       "settings.security",
+      "settings.notifications",
       "audit.view",
       "audit.export",
     ],

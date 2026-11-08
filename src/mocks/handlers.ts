@@ -5,6 +5,7 @@ import { http, HttpResponse, delay } from "msw";
 import { formatShortDate, dayCount } from "../lib/format";
 import type {
   ActivityList,
+  NotificationHistoryPage,
   ArrearsBreakdown,
   BorrowerList,
   BorrowerActivityCategory,
@@ -107,6 +108,7 @@ import {
 import { borrowers, borrowerStatus } from "./borrowerDirectory";
 import { arrears, earlyWarnings, officerSummary, par30History, riskNow, teamPerformance, type OfficerFilter } from "./portfolioFigures";
 import { categoryOf, targetOf } from "./auditLog";
+import { notificationHistoryFor } from "./notificationHistory";
 import { buildPdf, type PdfLine } from "./samplePdf";
 import { formatValue } from "../modules/reports/reportFormat";
 import { borrowerDetails, maskNationalId, nextPayment } from "./borrowerProfiles";
@@ -565,8 +567,8 @@ const cleanPermissions = (permissions: unknown[]) => {
   return PERMISSIONS.filter((permission) => granted.has(permission));
 };
 
-const SECTION_PERMISSIONS: Record<SettingsSection, Permission> = { business: "settings.business", loanRules: "settings.rules", payments: "settings.payments", security: "settings.security" };
-const SECTION_NAMES: Record<SettingsSection, string> = { business: "business", loanRules: "loan rule", payments: "payment", security: "security" };
+const SECTION_PERMISSIONS: Record<SettingsSection, Permission> = { business: "settings.business", loanRules: "settings.rules", payments: "settings.payments", security: "settings.security", notifications: "settings.notifications" };
+const SECTION_NAMES: Record<SettingsSection, string> = { business: "business", loanRules: "loan rule", payments: "payment", security: "security", notifications: "notification" };
 
 const inRange = (value: unknown, [min, max]: readonly [number, number]) => Number.isInteger(value) && (value as number) >= min && (value as number) <= max;
 
@@ -617,6 +619,13 @@ function settingsProblem(section: SettingsSection, body: unknown): string | null
     if (!Array.isArray(p.payoutMethods) || p.payoutMethods.length === 0 || p.payoutMethods.some((m) => !["MTN MoMo", "Airtel Money"].includes(m))) return "Choose at least one way to pay out.";
     if (p.payoutMethods.some((m) => !systemSettings.business.payoutAccounts.some((a) => a.method === m))) return "Add a payout account for each payout method (Business details).";
     return limit("backdateDays", "Days a payment can be back-dated", p.backdateDays);
+  }
+  if (section === "notifications") {
+    const n = body as SystemSettings["notifications"];
+    const known = systemSettings.notifications.rules.map((rule) => rule.event);
+    if (!Array.isArray(n.rules) || n.rules.length !== known.length || !known.every((event) => n.rules.some((rule) => rule.event === event))) return "Those notification settings couldn't be read.";
+    if (n.rules.some((rule) => !Array.isArray(rule.channels) || rule.channels.some((channel) => !["sms", "email"].includes(channel)) || new Set(rule.channels).size !== rule.channels.length)) return "Choose SMS or email for each step.";
+    return null;
   }
   const s = body as SystemSettings["security"];
   for (const [key, label] of [
@@ -1143,12 +1152,24 @@ function notificationsFor(user: MockUser): NotificationContent[] {
     const drafts = applications.filter((app) => app.status === "draft" && app.officerId === user.id).length;
     if (drafts > 0) items.push({ id: "drafts-to-complete", title: `${drafts} applications to complete`, detail: "Add the missing documents", href: "/applications?status=draft" });
   }
+  if (isOfficer && hasPermission(user, "applications.create")) {
+    const mine = applications.filter((app) => app.officerId === user.id);
+    const online = mine.filter((app) => app.status === "submitted" && app.route === "online").length;
+    if (online > 0) items.push({ id: "online-forms-in", title: `${online} online ${online === 1 ? "form" : "forms"} filled in`, detail: "Clients finished their application. Check the details", href: "/applications?status=submitted" });
+    const sentBack = mine.filter((app) => app.status === "draft" && app.returned).length;
+    if (sentBack > 0) items.push({ id: "sent-back", title: `${sentBack} ${sentBack === 1 ? "application" : "applications"} sent back`, detail: "Fix what was asked and send again", href: "/applications?status=draft" });
+    const approved = mine.filter((app) => app.status === "approved" && !app.loanId).length;
+    if (approved > 0) items.push({ id: "approved-waiting", title: `${approved} approved, waiting to be paid out`, detail: "Waiting for Finance to pay them out", href: "/applications?status=approved" });
+  }
+  if (hasPermission(user, "loans.disburse")) {
+    const toPay = applications.filter((app) => app.status === "approved" && !app.loanId).length;
+    if (toPay > 0) items.push({ id: "ready-to-pay-out", title: `${toPay} ${toPay === 1 ? "loan" : "loans"} ready to pay out`, detail: "Approved and waiting for the payout", href: "/loans/to-disburse" });
+  }
   if (hasPermission(user, "applications.approve")) {
     const waiting = applications.filter((app) => app.status === "submitted").length;
     items.push({ id: "awaiting-approval", title: `${waiting} applications waiting for approval`, detail: "Approve or reject them", href: "/applications?status=submitted" });
   }
   if (hasPermission(user, "users.manage")) {
-    items.push({ id: "payment-reversals", title: "Payment reversals waiting", detail: "Officers asking to undo a payment", href: "/?worklist=reversals" });
     items.push({ id: "access-requests", title: "Access requests", detail: "Password resets and pending invites", href: "/settings/users" });
   }
   return items;
@@ -1396,6 +1417,7 @@ export const handlers = [
       schedule: { firstPaymentOn, numberOfPayments: terms.numberOfPayments, instalment: summary.instalment },
     };
     app.loanId = loanId;
+    app.paidOutAt = new Date().toISOString();
     usedPayoutReferences.add(reference.toUpperCase());
     markApplicationPaidOut(borrower, app.id, loanId, product);
 
@@ -1986,6 +2008,25 @@ export const handlers = [
     const read = readNotificationIds.get(user.id) ?? new Set<string>();
     const body: NotificationItem[] = notificationsFor(user).map((item) => ({ ...item, unread: !read.has(item.id) }));
     return HttpResponse.json(body);
+  }),
+
+  http.get(`${API_BASE}/notifications/history`, async ({ request }) => {
+    await delay(150);
+    const user = currentDemoUser();
+    const url = new URL(request.url);
+    const channel = url.searchParams.get("channel");
+    const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
+    const pageSize = 20;
+    const all = notificationHistoryFor(user, (permission) => hasPermission(user, permission));
+    const shown = channel && ["in-app", "sms", "email"].includes(channel) ? all.filter((message) => message.channel === channel) : all;
+    const count = (name: string) => all.filter((message) => message.channel === name).length;
+    return HttpResponse.json<NotificationHistoryPage>({
+      items: shown.slice((page - 1) * pageSize, page * pageSize),
+      total: shown.length,
+      page,
+      pageSize,
+      counts: { all: all.length, "in-app": count("in-app"), sms: count("sms"), email: count("email") },
+    });
   }),
 
   http.post(`${API_BASE}/notifications/mark-read`, () => {
@@ -2833,6 +2874,24 @@ export const handlers = [
         const old = current.find((existing) => existing.id === market.id);
         if (old && old.name !== market.name) for (const member of staff) if (member.branch === old.name) member.branch = market.name;
       }
+    }
+    if (section === "notifications") {
+      // An admin chooses the channels; the server owns each step's wording and who gets it
+      const sent = (body as SystemSettings["notifications"]).rules;
+      const current = systemSettings.notifications.rules;
+      const channelsOf = (rule: { channels: string[] }) => (rule.channels.length ? [...rule.channels].sort().join(", ") : "in-app only");
+      const changed = current.flatMap((rule) => {
+        const channels = sent.find((item) => item.event === rule.event)!.channels;
+        const next = { ...rule, channels: (["sms", "email"] as const).filter((channel) => channels.includes(channel)) };
+        const differs = channelsOf(next) !== channelsOf(rule);
+        const line = { label: rule.title, value: `${channelsOf(rule)} → ${channelsOf(next)}` };
+        Object.assign(rule, next);
+        return differs ? [line] : [];
+      });
+      if (changed.length === 0) return HttpResponse.json<SystemSettings>(systemSettings);
+      systemSettings.changed.notifications = { at: new Date().toISOString(), by: user.name };
+      audit(user, `changed notification settings: ${changed.map((line) => line.label).join(", ")}`, changed);
+      return HttpResponse.json<SystemSettings>(systemSettings);
     }
     const before = systemSettings[section] as unknown as Record<string, unknown>;
     const changes = Object.keys(body).filter((key) => JSON.stringify(before[key]) !== JSON.stringify((body as unknown as Record<string, unknown>)[key]));
