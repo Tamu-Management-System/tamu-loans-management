@@ -138,7 +138,7 @@ Each phase leaves the frontend working for the screens it covers (switch screens
 4. **Loans and money:** payout (`/loans/to-disburse`, `/applications/{id}/disburse`) with schedule generation,
    loans list/detail, `POST /payments`, `/payments/list`, recovery, late fees, the recovery job.
 5. **Dashboard and reports:** `/dashboard/today`, `/worklist` and its actions, notifications, badges, search,
-   portfolio figures, team performance, `/reports/{name}` (+ PDF/CSV export).
+   portfolio figures, team performance, `/reports/{name}` (+ PDF/CSV export): portfolio, aged, due, collections, disbursements, cleared, applications, officers.
 6. **Workflow notifications (client request, Nov 2026):** each step from the online form to payout tells the next person (in-app, and by
    SMS / email as set in Settings → Notifications). A queue with retries and a delivery log, plus a messaging provider
    (SMS and email). Steps, recipients and rules are in `api-contract.md` (Settings → Notifications). Which channel the client wants

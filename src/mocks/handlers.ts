@@ -777,7 +777,7 @@ function passwordProblem(password: string, user: MockUser) {
 
 // ---------- Reports ----------
 
-const REPORT_NAMES: ReportName[] = ["portfolio", "collections", "disbursements", "officers"];
+const REPORT_NAMES: ReportName[] = ["portfolio", "aged", "due", "collections", "disbursements", "cleared", "applications", "officers"];
 const DAY = 86_400_000;
 const localDay = (iso: string) => new Date(iso).toLocaleDateString("en-CA");
 
@@ -805,7 +805,16 @@ function bucketsFor(from: string, to: string) {
   return { unit, keys, keyOf, labelOf };
 }
 
-const REPORT_TITLES: Record<ReportName, string> = { portfolio: "Portfolio", collections: "Collections", disbursements: "Disbursements", officers: "Officer performance" };
+const REPORT_TITLES: Record<ReportName, string> = {
+  portfolio: "Portfolio",
+  aged: "Aged loans",
+  due: "Repayments due",
+  collections: "Collections",
+  disbursements: "Disbursements",
+  cleared: "Cleared loans",
+  applications: "Applications",
+  officers: "Officer performance",
+};
 const REPORT_ROWS_PER_PAGE = 48;
 
 /** A report as a printable PDF: title, dates, headline figures, then the table (several pages if needed) */
@@ -813,7 +822,7 @@ function reportPdf(report: Report, user: MockUser) {
   const day = (iso: string) => formatValue(iso, "date");
   const header: PdfLine[] = [
     { text: `${systemSettings.business.name} · ${REPORT_TITLES[report.name]} report`, size: 15, gap: 0 },
-    { text: `${report.name === "portfolio" ? `As of ${day(report.to)}` : `${day(report.from)} to ${day(report.to)}`} · ${report.scope === "branch" ? "Whole market" : `${user.name}'s portfolio`}`, size: 10, gap: 20 },
+    { text: `${report.name === "portfolio" || report.name === "aged" ? `As of ${day(report.to)}` : `${day(report.from)} to ${day(report.to)}`} · ${report.scope === "branch" ? "Whole market" : `${user.name}'s portfolio`}`, size: 10, gap: 20 },
     { text: `Exported by ${user.name} on ${day(new Date().toLocaleDateString("en-CA"))}`, size: 8, gap: 14 },
     ...report.figures.map((figure, index): PdfLine => ({ text: `${figure.label}: ${formatValue(figure.value, figure.format)}`, size: 11, gap: index === 0 ? 26 : 16 })),
     { text: report.table.title, size: 12, gap: 28 },
@@ -843,7 +852,7 @@ function reportPdf(report: Report, user: MockUser) {
   return buildPdf(pages);
 }
 
-/** One of the four reports for this user: their own portfolio, or the branch */
+/** One of the reports for this user: their own portfolio, or the branch */
 function buildReport(user: MockUser, name: string, params: URLSearchParams): { report: Report } | { error: Response } {
   if (!REPORT_NAMES.includes(name as ReportName)) return { error: notFound("That report wasn't found.") };
   if (!hasPermission(user, "reports.view")) return { error: forbidden("You can't view reports.") };
@@ -927,6 +936,226 @@ function buildReport(user: MockUser, name: string, params: URLSearchParams): { r
           ],
           rows: products,
           total: { product: "Total", loans: open.length, outstanding, late: open.filter(({ loan }) => loan.daysPastDue > 0).length, par30: par30(open) },
+        },
+      },
+    };
+  }
+
+  // How late each open loan is, as a snapshot of today (the loans list already knows each loan's days late and overdue amount)
+  if (name === "aged") {
+    const bands = [
+      { label: "Up to date", low: 0, high: 0 },
+      { label: "1–30 days", low: 1, high: 30 },
+      { label: "31–60 days", low: 31, high: 60 },
+      { label: "61–90 days", low: 61, high: 90 },
+      { label: "Over 90 days", low: 91, high: Infinity },
+    ];
+    const live = loanListItems(user).filter((item) => item.status !== "cleared");
+    const inBand = (band: (typeof bands)[number]) => live.filter((item) => item.daysPastDue >= band.low && item.daysPastDue <= band.high);
+    const late = live.filter((item) => item.daysPastDue > 0).sort((a, b) => b.daysPastDue - a.daysPastDue || b.balance - a.balance);
+    const bandOf = (days: number) => bands.find((band) => days >= band.low && days <= band.high)!.label;
+    const lateBalance = late.reduce((t, item) => t + item.balance, 0);
+    const overdue = late.reduce((t, item) => t + item.arrearsAmount, 0);
+    return {
+      report: {
+        ...base,
+        from: to,
+        figures: [
+          { label: "Late loans", value: late.length, format: "count", note: `Of ${live.length} active loans` },
+          { label: "Balance on late loans", value: lateBalance, format: "ugx", note: "Still to be repaid" },
+          { label: "Overdue now", value: overdue, format: "ugx", note: "Instalments already due" },
+          { label: "Longest late", value: late[0]?.daysPastDue ?? 0, format: "count", note: "Days" },
+        ],
+        charts: [
+          { title: "Balance on late loans, by how late", kind: "bars", format: "ugx", series: "Balance", targetSeries: null, ordered: true, points: bands.slice(1).map((band) => ({ label: band.label, value: inBand(band).reduce((t, item) => t + item.balance, 0), target: null })) },
+          { title: "Loans by how late", kind: "donut", format: "count", series: "Loans", targetSeries: null, ordered: true, points: bands.map((band) => ({ label: band.label, value: inBand(band).length, target: null })) },
+        ],
+        table: {
+          title: "Late loans, longest first",
+          columns: [
+            { key: "loan", label: "Loan", format: "text" },
+            { key: "borrower", label: "Client", format: "text" },
+            { key: "phone", label: "Phone", format: "text" },
+            { key: "age", label: "How late", format: "text" },
+            { key: "days", label: "Days late", format: "count" },
+            { key: "overdue", label: "Overdue", format: "ugx" },
+            { key: "balance", label: "Balance", format: "ugx" },
+            ...(branch ? [{ key: "officer", label: "Officer", format: "text" as const }] : []),
+          ],
+          rows: late.map((item) => ({ loan: item.id, borrower: item.borrower.name, phone: item.phone, age: bandOf(item.daysPastDue), days: item.daysPastDue, overdue: item.arrearsAmount, balance: item.balance, officer: item.officer.name })),
+          total: { loan: `${late.length} loans`, borrower: null, phone: null, age: null, days: null, overdue, balance: lateBalance, officer: null },
+        },
+      },
+    };
+  }
+
+  // What falls due from today on (the other reports look back)
+  if (name === "due") {
+    const maxDays = 90;
+    const last = paymentDate(today, "daily", maxDays);
+    const wanted = dateParam("to", paymentDate(today, "daily", 7));
+    const dueTo = wanted < today ? today : wanted > last ? last : wanted;
+    const items = open.flatMap(({ loan, borrower, terms, product }) => {
+      if (!terms.schedule) return [];
+      const { firstPaymentOn, numberOfPayments, instalment } = terms.schedule;
+      const paidSoFar = terms.totalRepayable - loan.outstandingBalance;
+      const next = Math.min(numberOfPayments - 1, Math.floor(paidSoFar / instalment));
+      return Array.from({ length: numberOfPayments - next }, (_, offset) => {
+        const index = next + offset;
+        const day = paymentDate(firstPaymentOn, terms.repaymentSchedule, index);
+        const amount = index === next ? (nextPayment(terms, loan.outstandingBalance)?.amount ?? instalment) : index === numberOfPayments - 1 ? terms.totalRepayable - instalment * index : instalment;
+        return { day, loan: loan.id, borrower: borrower.name, phone: borrower.phone, product: product.name, amount: Math.max(0, amount), officerId: loan.officerId, officer: officerName(loan.officerId) };
+      }).filter((item) => item.day >= today && item.day <= dueTo);
+    });
+    items.sort((a, b) => a.day.localeCompare(b.day) || a.borrower.localeCompare(b.borrower));
+    const total = sum(items);
+    const dueToday = sum(items.filter((item) => item.day === today));
+    const dueBuckets = bucketsFor(today, dueTo);
+    const splitBy = branch ? "officer" : "product";
+    return {
+      report: {
+        ...base,
+        from: today,
+        to: dueTo,
+        figures: [
+          { label: "Due in these dates", value: total, format: "ugx", note: null },
+          { label: "Due today", value: dueToday, format: "ugx", note: null },
+          { label: "Instalments", value: items.length, format: "count", note: null },
+          { label: "Loans", value: new Set(items.map((item) => item.loan)).size, format: "count", note: "With at least one instalment due" },
+        ],
+        charts: [
+          { title: `Due, by ${dueBuckets.unit}`, kind: "trend", format: "ugx", series: "Due", targetSeries: null, points: dueBuckets.keys.map((key) => ({ label: dueBuckets.labelOf(key), value: sum(items.filter((item) => dueBuckets.keyOf(item.day) === key)), target: null })) },
+          {
+            title: branch ? "Due by loan officer" : "Due by loan product",
+            kind: "donut",
+            format: "ugx",
+            series: "Due",
+            targetSeries: null,
+            points: [...new Set(items.map((item) => item[splitBy]))].map((label) => ({ label, value: sum(items.filter((item) => item[splitBy] === label)), target: null })).sort((a, b) => b.value - a.value),
+          },
+        ],
+        table: {
+          title: "Instalments due",
+          columns: [
+            { key: "day", label: "Due on", format: "date" },
+            { key: "loan", label: "Loan", format: "text" },
+            { key: "borrower", label: "Client", format: "text" },
+            { key: "phone", label: "Phone", format: "text" },
+            { key: "amount", label: "Amount", format: "ugx" },
+            ...(branch ? [{ key: "officer", label: "Officer", format: "text" as const }] : []),
+          ],
+          rows: items,
+          total: { day: "Total", loan: `${items.length} instalments`, borrower: null, phone: null, amount: total, officer: null },
+        },
+      },
+    };
+  }
+
+  // Loans repaid in full in the dates
+  if (name === "cleared") {
+    const done = loanListItems(user)
+      .filter((item) => item.status === "cleared" && item.clearedOn && inRange(item.clearedOn))
+      .sort((a, b) => b.clearedOn!.localeCompare(a.clearedOn!));
+    const onTime = done.filter((item) => item.mostDaysLate === 0).length;
+    const repaid = done.reduce((t, item) => t + item.totalRepayable, 0);
+    const clearedBuckets = bucketsFor(from, to);
+    const slice = (low: number, high: number) => done.filter((item) => item.mostDaysLate >= low && item.mostDaysLate <= high).length;
+    return {
+      report: {
+        ...base,
+        figures: [
+          { label: "Loans cleared", value: done.length, format: "count", note: null },
+          { label: "Total repaid", value: repaid, format: "ugx", note: "Principal and interest" },
+          { label: "Cleared on time", value: onTime, format: "count", note: "No instalment paid late" },
+          { label: "On-time share", value: done.length ? Math.round((onTime / done.length) * 1000) / 10 : 0, format: "percent", note: null },
+        ],
+        charts: [
+          { title: `Loans cleared, by ${clearedBuckets.unit}`, kind: "trend", format: "count", series: "Cleared", targetSeries: null, points: clearedBuckets.keys.map((key) => ({ label: clearedBuckets.labelOf(key), value: done.filter((item) => clearedBuckets.keyOf(item.clearedOn!) === key).length, target: null })) },
+          {
+            title: "How punctual they were",
+            kind: "donut",
+            format: "count",
+            series: "Loans",
+            targetSeries: null,
+            ordered: true,
+            points: [
+              { label: "On time", value: slice(0, 0), target: null },
+              { label: "Up to 7 days late", value: slice(1, 7), target: null },
+              { label: "8–30 days late", value: slice(8, 30), target: null },
+              { label: "Over 30 days late", value: slice(31, Infinity), target: null },
+            ],
+          },
+        ],
+        table: {
+          title: "Loans cleared",
+          columns: [
+            { key: "clearedOn", label: "Cleared", format: "date" },
+            { key: "loan", label: "Loan", format: "text" },
+            { key: "borrower", label: "Client", format: "text" },
+            { key: "principal", label: "Lent", format: "ugx" },
+            { key: "repaid", label: "Repaid", format: "ugx" },
+            { key: "late", label: "Most days late", format: "count" },
+            ...(branch ? [{ key: "officer", label: "Officer", format: "text" as const }] : []),
+          ],
+          rows: done.map((item) => ({ clearedOn: item.clearedOn, loan: item.id, borrower: item.borrower.name, principal: item.principal, repaid: item.totalRepayable, late: item.mostDaysLate, officer: item.officer.name })),
+          total: { clearedOn: "Total", loan: `${done.length} loans`, borrower: null, principal: done.reduce((t, item) => t + item.principal, 0), repaid, late: null, officer: null },
+        },
+      },
+    };
+  }
+
+  // Applications started in the dates, and where each one stands now
+  if (name === "applications") {
+    const STAGES = [
+      { key: "draft", label: "Being completed", of: (a: ApplicationListItem) => a.status === "draft" || a.status === "awaiting-borrower" },
+      { key: "submitted", label: "Waiting for approval", of: (a: ApplicationListItem) => a.status === "submitted" },
+      { key: "approved", label: "Approved, not paid out", of: (a: ApplicationListItem) => a.status === "approved" && !a.loanId },
+      { key: "paid", label: "Paid out", of: (a: ApplicationListItem) => !!a.loanId },
+      { key: "rejected", label: "Rejected", of: (a: ApplicationListItem) => a.status === "rejected" },
+    ];
+    const list = applications
+      .filter((app) => canSeeRecord(user, app.officerId) && app.createdAt && inRange(localDay(app.createdAt)))
+      .map(applicationListItem)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const stageOf = (item: ApplicationListItem) => STAGES.find((stage) => stage.of(item))?.label ?? "";
+    const decidedIn = list.filter((item) => item.decided && item.submittedAt).map((item) => (new Date(item.decided!.at).getTime() - new Date(item.submittedAt!).getTime()) / DAY);
+    const averageDays = decidedIn.length ? Math.round((decidedIn.reduce((t, days) => t + Math.max(0, days), 0) / decidedIn.length) * 10) / 10 : 0;
+    const startedBuckets = bucketsFor(from, to);
+    const approvedCount = list.filter((item) => item.decided && item.status !== "rejected").length;
+    return {
+      report: {
+        ...base,
+        figures: [
+          { label: "Applications started", value: list.length, format: "count", note: null },
+          { label: "Approved", value: approvedCount, format: "count", note: "Including those paid out" },
+          { label: "Rejected", value: list.filter((item) => item.status === "rejected").length, format: "count", note: null },
+          { label: "Days to decide", value: averageDays, format: "count", note: "Average, from sent for approval" },
+        ],
+        charts: [
+          { title: `Applications started, by ${startedBuckets.unit}`, kind: "trend", format: "count", series: "Started", targetSeries: null, points: startedBuckets.keys.map((key) => ({ label: startedBuckets.labelOf(key), value: list.filter((item) => startedBuckets.keyOf(localDay(item.createdAt)) === key).length, target: null })) },
+          { title: "Where they stand now", kind: "donut", format: "count", series: "Applications", targetSeries: null, points: STAGES.map((stage) => ({ label: stage.label, value: list.filter(stage.of).length, target: null })) },
+        ],
+        table: {
+          title: "Applications",
+          columns: [
+            { key: "started", label: "Started", format: "date" },
+            { key: "id", label: "Application", format: "text" },
+            { key: "borrower", label: "Client", format: "text" },
+            { key: "amount", label: "Amount", format: "ugx" },
+            { key: "stage", label: "Where it stands", format: "text" },
+            { key: "days", label: "Days to decide", format: "count" },
+            ...(branch ? [{ key: "officer", label: "Officer", format: "text" as const }] : []),
+          ],
+          rows: list.map((item) => ({
+            started: localDay(item.createdAt),
+            id: item.id,
+            borrower: item.borrower.name,
+            amount: item.amount,
+            stage: stageOf(item),
+            days: item.decided && item.submittedAt ? Math.max(0, Math.round((new Date(item.decided.at).getTime() - new Date(item.submittedAt).getTime()) / DAY)) : null,
+            officer: item.officer.name,
+          })),
+          total: { started: "Total", id: `${list.length} applications`, borrower: null, amount: list.reduce((t, item) => t + item.amount, 0), stage: null, days: null, officer: null },
         },
       },
     };

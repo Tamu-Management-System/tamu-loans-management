@@ -1146,5 +1146,16 @@ The client confirmed the fields below; the endpoints above already use them.
   Portfolio: outstanding by product + by how late (donuts); Collections: collected vs expected (trend) + by payment
   method (donut); Disbursements: amount lent (trend) + by product (donut); Officers: collection rate (bars) +
   outstanding by officer (donut).
+  More reports (client request, Nov 2026), same `Report` shape, same export, same scope rules (own or branch):
+  - `aged` (snapshot as of today, like Portfolio): every late loan with days late, overdue amount and balance, longest first.
+    Charts: balance on late loans by how late (bars: 1–30, 31–60, 61–90, over 90 days) + loans by how late (donut, with up to date).
+  - `due` (looks ahead: `from` is today, `to` up to 90 days on; the screen offers Today, Next 7 days, Next 30 days): each unpaid
+    instalment falling due in the dates, from the loan schedules. Charts: due per day (trend) + by loan product (own) or officer (branch).
+  - `cleared`: loans repaid in full in the dates (`clearedOn`), with lent, repaid and the most days any instalment was late.
+    Charts: cleared per day/week/month (trend) + how punctual (donut: on time, up to 7, 8–30, over 30 days late).
+  - `applications`: applications started (`createdAt`) in the dates and where each stands now (being completed, waiting for
+    approval, approved not paid out, paid out, rejected), with the average days from sent-for-approval to decision.
+    Charts: started per day/week/month (trend) + where they stand (donut).
+  Officers still sees only its own loans and applications (`own`); every report is audit-logged on export.
 - **Dashboard** (`GET /dashboard/today`): `activeLoans: { count, outstanding, lateCount }` comes first, then
   `collections`; payment matching (`unmatchedPayments`) is no longer shown.

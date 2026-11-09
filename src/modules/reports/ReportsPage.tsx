@@ -15,15 +15,22 @@ import styles from "./Reports.module.css";
 
 const TABLE_PAGE_SIZE = 25;
 
-const REPORTS: { name: ReportName; label: string; description: string; branchOnly?: boolean }[] = [
-  { name: "portfolio", label: "Portfolio", description: "What's lent out today, and how much of it is late" },
-  { name: "collections", label: "Collections", description: "What was collected against what was due" },
-  { name: "disbursements", label: "Disbursements", description: "Loans paid out" },
-  { name: "officers", label: "Officers", description: "How each loan officer is doing", branchOnly: true },
+/** snapshot: as of today; past: looks back over the dates; ahead: looks forward from today */
+type When = "snapshot" | "past" | "ahead";
+
+const REPORTS: { name: ReportName; label: string; description: string; when: When; branchOnly?: boolean }[] = [
+  { name: "portfolio", label: "Portfolio", description: "What's lent out today, and how much of it is late", when: "snapshot" },
+  { name: "aged", label: "Aged loans", description: "Every late loan, and how long it has been late", when: "snapshot" },
+  { name: "due", label: "Repayments due", description: "What clients are due to pay in the coming days", when: "ahead" },
+  { name: "collections", label: "Collections", description: "What was collected against what was due", when: "past" },
+  { name: "disbursements", label: "Disbursements", description: "Loans paid out", when: "past" },
+  { name: "cleared", label: "Cleared loans", description: "Loans repaid in full", when: "past" },
+  { name: "applications", label: "Applications", description: "Applications started, and where each one stands", when: "past" },
+  { name: "officers", label: "Officers", description: "How each loan officer is doing", when: "past", branchOnly: true },
 ];
 
-type Range = "today" | "week" | "month" | "last-month" | "year" | "custom";
-const RANGES: { value: Range; label: string }[] = [
+type Range = "today" | "week" | "month" | "last-month" | "year" | "custom" | "next-7" | "next-30";
+const PAST_RANGES: { value: Range; label: string }[] = [
   { value: "today", label: "Today" },
   { value: "week", label: "This week" },
   { value: "month", label: "This month" },
@@ -31,11 +38,23 @@ const RANGES: { value: Range; label: string }[] = [
   { value: "year", label: "This year" },
   { value: "custom", label: "Custom" },
 ];
+const AHEAD_RANGES: { value: Range; label: string }[] = [
+  { value: "today", label: "Today" },
+  { value: "next-7", label: "Next 7 days" },
+  { value: "next-30", label: "Next 30 days" },
+];
+const addDays = (date: Date, days: number) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
 
 /** The dates a range covers (local calendar days; weeks start on Monday) */
 function rangeDates(range: Range, from: string | null, to: string | null) {
   const today = new Date();
   const iso = toDateInputValue;
+  if (range === "next-7") return { from: iso(today), to: iso(addDays(today, 7)) };
+  if (range === "next-30") return { from: iso(today), to: iso(addDays(today, 30)) };
   if (range === "today") return { from: iso(today), to: iso(today) };
   if (range === "week") {
     const monday = new Date(today);
@@ -57,11 +76,13 @@ export function ReportsPage() {
   const reports = REPORTS.filter((report) => !report.branchOnly || seesBranch);
   const active = reports.find((report) => report.name === searchParams.get("report")) ?? reports[0];
   const rangeParam = searchParams.get("range") as Range | null;
-  const range: Range = RANGES.some((r) => r.value === rangeParam) ? rangeParam! : "month";
+  const ranges = active.when === "ahead" ? AHEAD_RANGES : PAST_RANGES;
+  const defaultRange: Range = active.when === "ahead" ? "next-7" : "month";
+  const range: Range = ranges.some((r) => r.value === rangeParam) ? rangeParam! : defaultRange;
   const dates = rangeDates(range, searchParams.get("from"), searchParams.get("to"));
   const { data: report, isPending, isError, isFetching, refetch } = useReport(active.name, dates.from, dates.to);
   const exportReport = useExportReport();
-  const snapshot = active.name === "portfolio";
+  const snapshot = active.when === "snapshot";
   // The table's page goes back to 1 when the report or dates change
   const tableKey = `${active.name}|${dates.from}|${dates.to}`;
   const [tablePage, setTablePage] = useState({ key: tableKey, page: 1 });
@@ -104,7 +125,7 @@ export function ReportsPage() {
 
       <div className={styles.tabs} role="tablist" aria-label="Reports">
         {reports.map((item) => (
-          <button key={item.name} type="button" role="tab" aria-selected={item.name === active.name} onClick={() => update({ report: item.name === reports[0].name ? null : item.name })}>
+          <button key={item.name} type="button" role="tab" aria-selected={item.name === active.name} onClick={() => update({ report: item.name === reports[0].name ? null : item.name, range: null, from: null, to: null })}>
             {item.label}
           </button>
         ))}
@@ -117,12 +138,12 @@ export function ReportsPage() {
         ) : (
           <div className={styles.dateControls}>
             <div className={styles.ranges} role="group" aria-label="Dates">
-              {RANGES.map((option) => (
+              {ranges.map((option) => (
                 <button
                   key={option.value}
                   type="button"
                   aria-pressed={range === option.value}
-                  onClick={() => update({ range: option.value === "month" ? null : option.value, ...(option.value === "custom" ? { from: dates.from, to: dates.to } : { from: null, to: null }) })}
+                  onClick={() => update({ range: option.value === defaultRange ? null : option.value, ...(option.value === "custom" ? { from: dates.from, to: dates.to } : { from: null, to: null }) })}
                 >
                   {option.label}
                 </button>

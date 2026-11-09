@@ -1247,7 +1247,7 @@ export interface SupportContacts {
 
 // ---------- Reports ----------
 
-export type ReportName = "portfolio" | "collections" | "disbursements" | "officers";
+export type ReportName = "portfolio" | "aged" | "due" | "collections" | "disbursements" | "cleared" | "applications" | "officers";
 export type ReportValueFormat = "ugx" | "count" | "percent" | "text" | "date";
 
 export interface ReportChart {
@@ -1263,12 +1263,12 @@ export interface ReportChart {
   points: { label: string; value: number; target: number | null }[];
 }
 
-/** GET /reports/{name}?from=&to=: one report, the same shape for all four */
+/** GET /reports/{name}?from=&to=: one report, the same shape for all of them */
 export interface Report {
   name: ReportName;
   /** Whose loans: the signed-in officer's, or the branch */
   scope: "own" | "branch";
-  /** ISO dates; the Portfolio report is a snapshot as of `to` */
+  /** ISO dates; the Portfolio and Aged loans reports are snapshots as of `to`; Repayments due looks ahead from today */
   from: string;
   to: string;
   /** 3–4 headline numbers */
