@@ -132,6 +132,23 @@ Finds loans and applications by borrower name, ID or phone number, for the top-b
 
 `href` is the frontend route the result opens. Phone matching ignores spaces; at least 3 digits are needed.
 
+### `GET /loans/export`
+
+The loan tracker: the loans the Loans screen shows, as a CSV file, one row per loan. Same query as `GET /loans/list` (`status` =
+`active`, `recovery`, `cleared` or `all`; `q`, `officerId`, `late`), no paging. Requires `reports.export`; a person only gets loans they can see
+(own or market). Sorted by loan ID. Audit-logged ("exported the loan tracker"). `Content-Type: text/csv; charset=utf-8`, starts with a
+UTF-8 byte-order mark so Excel reads it correctly, CRLF line ends, numbers unquoted, text quoted, and a text cell that starts with `= + - @` gets a
+leading `'` (spreadsheet formula injection).
+
+The CSV of the **Aged loans** (the late loans, longest first) and **Cleared loans** (cleared in the dates, newest first) reports uses this same layout, one row per loan; their PDF and
+the screen keep the report's own table.
+
+Columns, in this order (it follows the client's own loan tracker sheet): `Loan ID`, `Client Name`, `Phone Number`, `Guarantor 1`,
+`Guarantor 1 Contact`, `Guarantor 2`, `Guarantor 2 Contact`, `Loan Amount`, `Interest Rate (%)` (the product's rate, per its own period),
+`Disbursement Date` (ISO), `Repayment Frequency` (Daily, Weekly, Monthly), `Term (periods)` (number of payments), `Due Date` (the last
+payment), `Total Repayable`, `Amount Paid to Date`, `Balance Outstanding`, `Status` (Active, In arrears, In recovery, Cleared),
+`Days Overdue`, `Loan Officer`. Guarantors are names and phone numbers only, never National IDs.
+
 ### `GET /notifications`
 
 Alerts for the bell in the top bar, chosen by the user's permissions.
@@ -1147,7 +1164,8 @@ The client confirmed the fields below; the endpoints above already use them.
   method (donut); Disbursements: amount lent (trend) + by product (donut); Officers: collection rate (bars) +
   outstanding by officer (donut).
   More reports (client request, Nov 2026), same `Report` shape, same export, same scope rules (own or branch):
-  - `aged` (snapshot as of today, like Portfolio): every late loan with days late, overdue amount and balance, longest first.
+  - `aged` (snapshot as of today, like Portfolio): every late loan with phone, how late, days late, overdue amount and balance, longest first (the guarantors are in its CSV, which
+    uses the loan tracker layout, not in the table).
     Charts: balance on late loans by how late (bars: 1–30, 31–60, 61–90, over 90 days) + loans by how late (donut, with up to date).
   - `due` (looks ahead: `from` is today, `to` up to 90 days on; the screen offers Today, Next 7 days, Next 30 days): each unpaid
     instalment falling due in the dates, from the loan schedules. Charts: due per day (trend) + by loan product (own) or officer (branch).

@@ -1,6 +1,7 @@
 // Data hooks for loans.
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
+import { saveFile } from "../lib/saveFile";
 import type { DisburseRequest, DisburseResult, LoanDetail, LoanList, LoanListTab, LoanToDisburse, ReturnFromRecoveryRequest, SendToRecoveryRequest } from "./types";
 
 /** Approved loans waiting to be paid out. */
@@ -46,6 +47,22 @@ export function useLoanList(params: LoanListParams) {
     queryKey: ["loans", "list", params],
     queryFn: () => api.get<LoanList>(`/loans/list?${search}`),
     placeholderData: keepPreviousData,
+  });
+}
+
+/** Downloads the loans the screen shows (same tab and filters) as the loan tracker CSV. */
+export function useExportLoans() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: LoanListParams) => {
+      const search = new URLSearchParams({ status: params.tab });
+      if (params.query) search.set("q", params.query);
+      if (params.officerId) search.set("officerId", params.officerId);
+      if (params.lateOnly) search.set("late", "true");
+      saveFile(await api.getFile(`/loans/export?${search}`), `loan-tracker-${params.tab}-${new Date().toLocaleDateString("en-CA")}.csv`);
+    },
+    // The export is written to the audit log
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["audit"] }),
   });
 }
 

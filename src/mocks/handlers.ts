@@ -109,8 +109,7 @@ import { borrowers, borrowerStatus } from "./borrowerDirectory";
 import { arrears, earlyWarnings, officerSummary, par30History, riskNow, teamPerformance, type OfficerFilter } from "./portfolioFigures";
 import { categoryOf, targetOf } from "./auditLog";
 import { notificationHistoryFor } from "./notificationHistory";
-import { buildPdf, type PdfLine } from "./samplePdf";
-import { formatValue } from "../modules/reports/reportFormat";
+import { reportPdf } from "./reportPdf";
 import { borrowerDetails, maskNationalId, nextPayment } from "./borrowerProfiles";
 import { pastLoans } from "./loanHistory";
 import { addApplicationSection, addDocumentVersion, markApplicationPaidOut, applicationGuarantors, updateApplicationForms, applicationVersionFor, createOnlineLinkForApplication, borrowerDocumentsResponse, createOnlineLink, describeSlot, documentFile, findDocument, findSlot, ingestOnlineApplications } from "./borrowerDocuments";
@@ -341,6 +340,9 @@ officers
 
 const recoveryOf = (loan: (typeof loans)[number]) => (loan.recovery ? { since: loan.recovery.since, by: loan.recovery.by, reason: loan.recovery.reason, note: loan.recovery.note } : null);
 
+/** One CSV cell: numbers as they are (so a spreadsheet can add them up), text quoted, and nothing that starts like a formula */
+const csvCell = (value: string | number) => (typeof value === "number" ? String(value) : `"${(/^[=+\-@]/.test(value) ? `'${value}` : value).replace(/"/g, '""')}"`);
+
 /** Every loan the user may see, active and cleared, for the Loans lists. */
 function loanListItems(user: MockUser): LoanListItem[] {
   const officerName = (id: string) => officers.find((o) => o.id === id)?.name ?? "";
@@ -396,6 +398,63 @@ function loanListItems(user: MockUser): LoanListItem[] {
     });
   }
   return items;
+}
+
+/** The loan tracker as CSV text, one row per loan, in the client's own sheet layout. Used by the Loans download and the Aged and Cleared loans reports. */
+function trackerCsv(items: LoanListItem[]) {
+  const header = ["Loan ID", "Client Name", "Phone Number", "Guarantor 1", "Guarantor 1 Contact", "Guarantor 2", "Guarantor 2 Contact", "Loan Amount", "Interest Rate (%)", "Disbursement Date", "Repayment Frequency", "Term (periods)", "Due Date", "Total Repayable", "Amount Paid to Date", "Balance Outstanding", "Status", "Days Overdue", "Loan Officer"];
+  const rows = items.map((item) => {
+    const borrower = borrowers.find((b) => b.id === item.borrower.id);
+    const current = borrower ? borrowerDetails.get(borrower.id)?.loanTerms : null;
+    const past = pastLoans.find((p) => p.id === item.id);
+    const schedule = past?.schedule ?? current?.schedule;
+    const frequency = item.repaymentSchedule ?? current?.repaymentSchedule ?? null;
+    const product = findProduct(past?.productId ?? current?.productId) ?? (frequency ? productForSchedule(frequency) : undefined);
+    const guarantors = borrower ? applicationGuarantors(borrower, item.id) : [];
+    return [
+      item.id,
+      item.borrower.name,
+      item.phone,
+      guarantors[0]?.fullName ?? "",
+      guarantors[0]?.phone ?? "",
+      guarantors[1]?.fullName ?? "",
+      guarantors[1]?.phone ?? "",
+      item.principal,
+      product?.interest.ratePercent ?? "",
+      item.disbursedOn,
+      frequency ? frequency.charAt(0).toUpperCase() + frequency.slice(1) : "",
+      schedule?.numberOfPayments ?? "",
+      schedule ? paymentDate(schedule.firstPaymentOn, frequency ?? "daily", schedule.numberOfPayments - 1) : "",
+      item.totalRepayable,
+      Math.max(0, item.totalRepayable - item.balance),
+      item.balance,
+      item.status === "cleared" ? "Cleared" : item.recovery ? "In recovery" : item.status === "in-arrears" ? "In arrears" : "Active",
+      item.daysPastDue,
+      item.officer.name,
+    ];
+  });
+  // A byte-order mark first, so Excel reads names with accents correctly
+  return `\uFEFF${[header, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`;
+}
+
+/** The loans for a tab and its filters (search, officer, late only): what the Loans screen lists and the loan tracker exports. */
+function filterLoans(user: MockUser, params: URLSearchParams) {
+  const tab = (params.get("status") as LoanListTab | null) ?? "active";
+  const query = (params.get("q") ?? "").trim().toLowerCase();
+  const digits = query.replace(/\D/g, "");
+  const officerId = seesBranch(user) ? params.get("officerId") : null;
+  const lateOnly = params.get("late") === "true";
+  const matching = loanListItems(user).filter(
+    (item) =>
+      (!officerId || item.officer.id === officerId) &&
+      (!lateOnly || item.daysPastDue > 0) &&
+      (!query || item.id.toLowerCase() === query || item.borrower.name.toLowerCase().includes(query) || (digits.length >= 3 && item.phone.replace(/\D/g, "").includes(digits))),
+  );
+  const open = matching.filter((item) => item.status !== "cleared");
+  const cleared = matching.filter((item) => item.status === "cleared");
+  const inRecovery = open.filter((item) => item.recovery);
+  const inTab = tab === "active" ? open : tab === "recovery" ? inRecovery : tab === "cleared" ? cleared : matching;
+  return { tab, officerId, matching, open, cleared, inRecovery, inTab };
 }
 
 /** A stored document as the API shows it: never the file itself or how it was signed. */
@@ -805,55 +864,9 @@ function bucketsFor(from: string, to: string) {
   return { unit, keys, keyOf, labelOf };
 }
 
-const REPORT_TITLES: Record<ReportName, string> = {
-  portfolio: "Portfolio",
-  aged: "Aged loans",
-  due: "Repayments due",
-  collections: "Collections",
-  disbursements: "Disbursements",
-  cleared: "Cleared loans",
-  applications: "Applications",
-  officers: "Officer performance",
-};
-const REPORT_ROWS_PER_PAGE = 48;
-
-/** A report as a printable PDF: title, dates, headline figures, then the table (several pages if needed) */
-function reportPdf(report: Report, user: MockUser) {
-  const day = (iso: string) => formatValue(iso, "date");
-  const header: PdfLine[] = [
-    { text: `${systemSettings.business.name} · ${REPORT_TITLES[report.name]} report`, size: 15, gap: 0 },
-    { text: `${report.name === "portfolio" || report.name === "aged" ? `As of ${day(report.to)}` : `${day(report.from)} to ${day(report.to)}`} · ${report.scope === "branch" ? "Whole market" : `${user.name}'s portfolio`}`, size: 10, gap: 20 },
-    { text: `Exported by ${user.name} on ${day(new Date().toLocaleDateString("en-CA"))}`, size: 8, gap: 14 },
-    ...report.figures.map((figure, index): PdfLine => ({ text: `${figure.label}: ${formatValue(figure.value, figure.format)}`, size: 11, gap: index === 0 ? 26 : 16 })),
-    { text: report.table.title, size: 12, gap: 28 },
-  ];
-  // Column positions across the page (numbers right-aligned at the end of their column)
-  const columns = report.table.columns;
-  const width = 595 - 56 * 2;
-  const step = width / columns.length;
-  const cellsOf = (values: (string | number | null)[], bold = false): PdfLine => ({
-    size: 8,
-    gap: bold ? 18 : 13,
-    cells: columns.map((column, index) => {
-      const numeric = !["text", "date"].includes(column.format);
-      const value = values[index];
-      const text = bold && typeof value === "string" ? value : value === null || value === undefined ? "" : formatValue(value, column.format);
-      return { text: text.length > 26 ? `${text.slice(0, 25)}…` : text, x: numeric ? 56 + step * (index + 1) - 6 : 56 + step * index, align: numeric ? "right" : "left" };
-    }),
-  });
-  const headings = cellsOf(columns.map((column) => column.label.toUpperCase()), true);
-  const rows = report.table.rows.map((row) => cellsOf(columns.map((column) => row[column.key] ?? null)));
-  if (report.table.total) rows.push(cellsOf(columns.map((column) => report.table.total![column.key] ?? null)));
-  const pages: PdfLine[][] = [];
-  for (let start = 0; start < Math.max(rows.length, 1); start += REPORT_ROWS_PER_PAGE) {
-    const chunk = rows.slice(start, start + REPORT_ROWS_PER_PAGE);
-    pages.push([...(start === 0 ? header : [{ text: `${REPORT_TITLES[report.name]} report (continued)`, size: 11, gap: 0 }]), headings, ...(chunk.length ? chunk : [{ text: "Nothing in these dates.", size: 9, gap: 16 }])]);
-  }
-  return buildPdf(pages);
-}
-
 /** One of the reports for this user: their own portfolio, or the branch */
-function buildReport(user: MockUser, name: string, params: URLSearchParams): { report: Report } | { error: Response } {
+/** `trackerLoans`: for the reports that are lists of loans (Aged, Cleared), those loans, so their CSV can use the loan tracker layout */
+function buildReport(user: MockUser, name: string, params: URLSearchParams): { report: Report; trackerLoans?: LoanListItem[] } | { error: Response } {
   if (!REPORT_NAMES.includes(name as ReportName)) return { error: notFound("That report wasn't found.") };
   if (!hasPermission(user, "reports.view")) return { error: forbidden("You can't view reports.") };
   const branch = seesBranch(user);
@@ -957,12 +970,13 @@ function buildReport(user: MockUser, name: string, params: URLSearchParams): { r
     const lateBalance = late.reduce((t, item) => t + item.balance, 0);
     const overdue = late.reduce((t, item) => t + item.arrearsAmount, 0);
     return {
+      trackerLoans: late,
       report: {
         ...base,
         from: to,
         figures: [
           { label: "Late loans", value: late.length, format: "count", note: `Of ${live.length} active loans` },
-          { label: "Balance on late loans", value: lateBalance, format: "ugx", note: "Still to be repaid" },
+          { label: "Late balance", value: lateBalance, format: "ugx", note: "Still to be repaid on late loans" },
           { label: "Overdue now", value: overdue, format: "ugx", note: "Instalments already due" },
           { label: "Longest late", value: late[0]?.daysPastDue ?? 0, format: "count", note: "Days" },
         ],
@@ -1061,6 +1075,7 @@ function buildReport(user: MockUser, name: string, params: URLSearchParams): { r
     const clearedBuckets = bucketsFor(from, to);
     const slice = (low: number, high: number) => done.filter((item) => item.mostDaysLate >= low && item.mostDaysLate <= high).length;
     return {
+      trackerLoans: done,
       report: {
         ...base,
         figures: [
@@ -1506,28 +1521,28 @@ export const handlers = [
 
   // ---------- Disbursement (user flow, phase 5) ----------
 
+  // The loan tracker: every loan the Loans screen shows (same tab and filters) as a CSV, one row per loan
+  http.get(`${API_BASE}/loans/export`, async ({ request }) => {
+    applyAutoRecovery();
+    await delay(300);
+    const user = currentDemoUser();
+    if (!hasPermission(user, "reports.export")) return forbidden("You can't export loans.");
+    const { tab, inTab } = filterLoans(user, new URL(request.url).searchParams);
+    const sorted = [...inTab].sort((a, b) => a.id.localeCompare(b.id));
+    const csv = trackerCsv(sorted);
+    audit(user, `exported the loan tracker (${sorted.length} ${sorted.length === 1 ? "loan" : "loans"}, ${tab}) as CSV`);
+    return new HttpResponse(csv, {
+      headers: { "Content-Type": "text/csv; charset=utf-8", "Cache-Control": "no-store", "Content-Disposition": `attachment; filename="loan-tracker-${tab}.csv"` },
+    });
+  }),
+
   http.get(`${API_BASE}/loans/list`, async ({ request }) => {
     applyAutoRecovery();
     await delay(200);
     const user = currentDemoUser();
     const params = new URL(request.url).searchParams;
-    const tab = (params.get("status") as LoanListTab | null) ?? "active";
-    const query = (params.get("q") ?? "").trim().toLowerCase();
-    const digits = query.replace(/\D/g, "");
-    const officerId = seesBranch(user) ? params.get("officerId") : null;
-    const lateOnly = params.get("late") === "true";
     const pageSize = Math.min(100, Number(params.get("pageSize")) || 25);
-
-    const matching = loanListItems(user).filter(
-      (item) =>
-        (!officerId || item.officer.id === officerId) &&
-        (!lateOnly || item.daysPastDue > 0) &&
-        (!query || item.id.toLowerCase() === query || item.borrower.name.toLowerCase().includes(query) || (digits.length >= 3 && item.phone.replace(/\D/g, "").includes(digits))),
-    );
-    const open = matching.filter((item) => item.status !== "cleared");
-    const cleared = matching.filter((item) => item.status === "cleared");
-    const inRecovery = open.filter((item) => item.recovery);
-    const inTab = tab === "active" ? open : tab === "recovery" ? inRecovery : tab === "cleared" ? cleared : matching;
+    const { tab, officerId, matching, open, cleared, inRecovery, inTab } = filterLoans(user, params);
 
     // Active: late first (oldest missed payment first), then by the next payment; cleared: newest first
     const sorted = [...inTab].sort((a, b) => {
@@ -2950,7 +2965,7 @@ export const handlers = [
     if (!hasPermission(user, "reports.export")) return forbidden("You can't export reports.");
     const result = buildReport(user, String(params.name), new URL(request.url).searchParams);
     if ("error" in result) return result.error;
-    const { report } = result;
+    const { report, trackerLoans } = result;
     const cell = (value: string | number | null) => {
       const text = value === null ? "" : String(value);
       return `"${(/^[=+\-@]/.test(text) ? `'${text}` : text).replace(/"/g, '""')}"`;
@@ -2958,8 +2973,13 @@ export const handlers = [
     const pdf = new URL(request.url).searchParams.get("format") === "pdf";
     audit(user, `exported the ${report.name} report as ${pdf ? "PDF" : "CSV"} (${report.from} to ${report.to})`);
     if (pdf)
-      return new HttpResponse(reportPdf(report, user), {
+      return new HttpResponse(reportPdf(report, { businessName: systemSettings.business.name, productName: `${systemSettings.business.shortName} Loans`, exportedBy: user.name, exportedOn: new Date().toLocaleDateString("en-CA") }, report.scope === "branch" ? "Whole market" : `${user.name}'s portfolio`), {
         headers: { "Content-Type": "application/pdf", "Cache-Control": "no-store", "Content-Disposition": `attachment; filename="${report.name}-report.pdf"` },
+      });
+    // Aged and Cleared loans are lists of loans: their CSV is the loan tracker (the client's own sheet layout) for those loans
+    if (trackerLoans)
+      return new HttpResponse(trackerCsv(trackerLoans), {
+        headers: { "Content-Type": "text/csv; charset=utf-8", "Cache-Control": "no-store", "Content-Disposition": `attachment; filename="${report.name}-report.csv"` },
       });
     const rows = [report.table.columns.map((c) => c.label), ...[...report.table.rows, ...(report.table.total ? [report.table.total] : [])].map((row) => report.table.columns.map((c) => row[c.key] ?? null))];
     return new HttpResponse(rows.map((row) => row.map(cell).join(",")).join("\r\n"), {

@@ -1,11 +1,14 @@
 import { useEffect, useId, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useOfficers } from "../../api/borrowers";
-import { LOANS_PAGE_SIZE, useLoanList, type LoanListParams } from "../../api/loans";
+import { ApiError } from "../../api/client";
+import { LOANS_PAGE_SIZE, useExportLoans, useLoanList, type LoanListParams } from "../../api/loans";
 import type { LoanListItem, LoanListTab } from "../../api/types";
 import { useAuth } from "../../auth/AuthContext";
+import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { Pagination } from "../../components/ui/Pagination";
+import { useToast } from "../../components/ui/Toast";
 import { SEARCH_FROM, Select } from "../../components/ui/Select";
 import { formatDate, formatShortDate, formatUGX, dayCount } from "../../lib/format";
 import { ToDisbursePage } from "./ToDisbursePage";
@@ -63,13 +66,20 @@ export function LoansPage({ tab }: { tab: LoansTab }) {
 }
 
 function LoanListPage({ tab }: { tab: LoanListTab }) {
-  const { seesBranch } = useAuth();
+  const { seesBranch, can } = useAuth();
   const navigate = useNavigate();
+  const showToast = useToast();
   const searchId = useId();
   const branchWide = seesBranch;
   const { params, update } = useLoanFilters(tab);
   const { data, isPending, isError, isFetching, refetch } = useLoanList(params);
   const { data: officers = [] } = useOfficers(branchWide);
+  const exportLoans = useExportLoans();
+  const download = () =>
+    exportLoans
+      .mutateAsync(params)
+      .then(() => showToast({ message: "Loan tracker downloaded (CSV)." }))
+      .catch((error) => showToast({ message: error instanceof ApiError ? error.message : "The export didn't work. Try again." }));
 
   // The timer below runs later: it must use the latest update (and so the latest address)
 
@@ -85,9 +95,17 @@ function LoanListPage({ tab }: { tab: LoanListTab }) {
 
   return (
     <>
-      <div className={styles.header}>
-        <h1>{TITLES[tab]}</h1>
-        <p className={styles.subtitle}>{tab === "recovery" ? "Loans handed to the recovery team" : branchWide ? "Every loan in the market" : "Loans in your portfolio"}</p>
+      <div className={`${styles.header} ${styles.headerRow}`}>
+        <div>
+          <h1>{TITLES[tab]}</h1>
+          <p className={styles.subtitle}>{tab === "recovery" ? "Loans handed to the recovery team" : branchWide ? "Every loan in the market" : "Loans in your portfolio"}</p>
+        </div>
+        {can("reports.export") && (
+          <Button variant="secondary" onClick={download} disabled={exportLoans.isPending || !data}>
+            <Icon name="upload" size={16} strokeWidth={1.8} className={styles.exportIcon} />
+            Download CSV
+          </Button>
+        )}
       </div>
 
       <div className={styles.card}>

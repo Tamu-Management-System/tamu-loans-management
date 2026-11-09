@@ -96,7 +96,13 @@ export const api = {
   put: <T>(path: string, body?: unknown) => request<T>("PUT", path, body),
   delete: <T>(path: string) => request<T>("DELETE", path),
   /** A file (e.g. a PDF), fetched with the session like any other request */
-  getFile: async (path: string) => (await send("GET", path)).blob(),
+  getFile: async (path: string) => {
+    const response = await send("GET", path);
+    // A file is never a web page. If one comes back, the request didn't reach the API (the app's own page was served instead),
+    // so refuse it rather than saving a web page as a "report".
+    if ((response.headers.get("Content-Type") ?? "").toLowerCase().includes("text/html")) throw new ApiError(502, "The file couldn't be downloaded. Refresh the page and try again.");
+    return response.blob();
+  },
   /** Multipart upload, e.g. a document with its fields */
   upload: <T>(path: string, form: FormData) => request<T>("POST", path, form),
 };
