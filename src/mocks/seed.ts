@@ -12,7 +12,7 @@ import { borrowers, type MockBorrower } from "./borrowerDirectory";
 import { applications, loans, officers, OFFICER_IDS, type MockApplication } from "./fixtures";
 import { pastLoans } from "./loanHistory";
 import { seedLoanPayments } from "./loanPayments";
-import { loanProducts, pricingOf, systemSettings } from "./systemSettings";
+import { loanProducts, pricingOf } from "./systemSettings";
 
 // ---------- Randomness and dates ----------
 
@@ -383,7 +383,7 @@ planned.forEach(({ plan, draft }, index) => {
     status: plan.status,
     missing: plan.status === "draft" && !plan.returned ? (plan.missing ?? null) : null,
     borrowerId: borrower?.id ?? null,
-    terms: { productId: product.id, amount, purpose: systemSettings.loanRules.loanPurposes[index % (systemSettings.loanRules.loanPurposes.length - 1)], repaymentSchedule: product.repaymentSchedule, firstPaymentOn, numberOfPayments: product.numberOfPayments, pricing: pricingOf(product) },
+    terms: { productId: product.id, amount, repaymentSchedule: product.repaymentSchedule, firstPaymentOn, numberOfPayments: product.numberOfPayments, pricing: pricingOf(product) },
     ...(plan.who === "online-new" ? { route: "online" as const } : {}),
     ...(guarantors ? { guarantors } : {}),
     createdAt,

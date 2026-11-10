@@ -637,8 +637,6 @@ export interface ApplicationTerms {
   /** The loan product chosen; its pricing is copied below so later product changes don't alter this loan */
   productId: string | null;
   amount: number;
-  /** What the loan is for: one of the purposes in Settings → Loan rules */
-  purpose: string;
   repaymentSchedule: RepaymentSchedule;
   /** ISO date */
   firstPaymentOn: string;
@@ -730,8 +728,6 @@ export interface ApplicationList {
 
 /** GET /applications/{id}: everything an approver checks */
 export interface ApplicationDetail extends ApplicationListItem {
-  /** What the loan is for (from Settings); null on applications started before it was asked */
-  purpose: string | null;
   /** How interest and any fee are worked out, copied from the loan product when the application was saved */
   pricing: LoanPricing;
   /** The client as registered (null until someone new completes the online form) */
@@ -1138,8 +1134,6 @@ export interface LoanRulesSettings {
   guarantorMaxActiveLoans: number;
   /** The limits Settings → Loan products can be set within */
   productLimits: ProductLimits;
-  /** What a loan can be for; the officer picks one on the application */
-  loanPurposes: string[];
   /** Days late after which recovery applies (null = off) */
   recoveryAfterDaysLate: number | null;
   /** "suggest": loans that late are marked ready for someone to send; "auto": they're sent to recovery automatically */

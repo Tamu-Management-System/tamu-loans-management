@@ -32,8 +32,6 @@ export const systemSettings: SystemSettings = {
     approvalWaitingWarnHours: 48,
     disbursementWaitingWarnDays: 3,
     promiseToPayDays: 3,
-    // Placeholders until Tamu sends its own list; edited in Settings → Loan rules
-    loanPurposes: ["Business stock", "Business expansion", "School fees", "Rent", "Medical bills", "Other"],
     recoveryAfterDaysLate: 60,
     recoveryMode: "suggest",
     seriouslyLateDays: 30,

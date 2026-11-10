@@ -199,7 +199,7 @@ applications.forEach((app, index) => {
 
 /** The terms, worked out (seeded applications without terms: 26 weekly payments). */
 function termsOf(app: (typeof applications)[number]) {
-  const base = app.terms ?? { productId: null, amount: app.amount, purpose: app.purpose, repaymentSchedule: "weekly" as const, firstPaymentOn: new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10), numberOfPayments: 26 };
+  const base = app.terms ?? { productId: null, amount: app.amount, repaymentSchedule: "weekly" as const, firstPaymentOn: new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10), numberOfPayments: 26 };
   // Seeded applications made before products: the product for their frequency
   const product = findProduct(base.productId) ?? productForSchedule(base.repaymentSchedule);
   const terms = { ...base, productId: product.id, pricing: base.pricing ?? pricingOf(product) };
@@ -268,7 +268,6 @@ function checkTerms(terms: ApplicationTerms | undefined, keepProductId: string |
     return `The first payment must be within ${withinDays} days, from today on.`;
   // The product sets the loan's length
   if (terms.numberOfPayments !== product.numberOfPayments) return `${product.name} runs ${describeLength(product.repaymentSchedule, product.numberOfPayments)}.`;
-  if (!systemSettings.loanRules.loanPurposes.includes(terms.purpose)) return "Choose what the loan is for.";
   terms.pricing = pricingOf(product);
   return null;
 }
@@ -333,7 +332,6 @@ function applicationDetail(app: (typeof applications)[number], user: MockUser): 
   return {
     ...item,
     borrowerDetails: borrower && details ? { nationalIdMasked: maskNationalId(borrower.nin), phone: borrower.phone, email: details.email, premises: details.premises, occupation: details.occupation, area: borrower.area } : null,
-    purpose: app.terms?.purpose || app.purpose || null,
     pricing: terms.pricing,
     guarantors: own?.guarantors ?? [],
     schedule: { firstPaymentOn: terms.firstPaymentOn, lastPaymentOn: summary.lastPaymentOn, interest: summary.interest, totalRepayable: summary.totalRepayable, finalInstalment: summary.finalInstalment },
@@ -572,7 +570,7 @@ function syncNewBorrowerApplications() {
       let numberOfPayments = 1;
       while (paymentDate(terms.firstPaymentOn, terms.repaymentSchedule, numberOfPayments - 1) < terms.lastPaymentOn && numberOfPayments < 400) numberOfPayments++;
       app = { id: entry.form.reference, borrowerName: details.borrower.fullName, phone: details.borrower.phone, amount: terms.amount, purpose: "", officerId: entry.officerId, status: "draft", missing: null, route: "online", createdAt: entry.createdAt,
-        terms: { productId: loanProducts.find((product) => product.name === terms.productName)?.id ?? null, amount: terms.amount, purpose: "", repaymentSchedule: terms.repaymentSchedule, firstPaymentOn: terms.firstPaymentOn, numberOfPayments } };
+        terms: { productId: loanProducts.find((product) => product.name === terms.productName)?.id ?? null, amount: terms.amount, repaymentSchedule: terms.repaymentSchedule, firstPaymentOn: terms.firstPaymentOn, numberOfPayments } };
       applications.push(app);
     }
     Object.assign(app, { borrowerId: borrower.id, borrowerName: details.borrower.fullName, phone: details.borrower.phone, guarantors: details.guarantors });
@@ -712,10 +710,6 @@ function settingsProblem(section: SettingsSection, body: unknown): string | null
       const problem = limit("recoveryAfterDaysLate", "Days late before recovery", r.recoveryAfterDaysLate);
       if (problem) return problem;
     }
-    if (!Array.isArray(r.loanPurposes) || r.loanPurposes.length === 0 || r.loanPurposes.length > 30 || r.loanPurposes.some((purpose) => typeof purpose !== "string" || purpose.trim().length < 2 || purpose.trim().length > 40))
-      return "Add at least one loan purpose, and give each a name.";
-    r.loanPurposes = r.loanPurposes.map((purpose) => purpose.trim().replace(/\s+/g, " "));
-    if (new Set(r.loanPurposes.map((purpose) => purpose.toLowerCase())).size !== r.loanPurposes.length) return "Each loan purpose can only be listed once.";
     const pl = r.productLimits;
     const whole = (value: unknown) => Number.isInteger(value) && (value as number) >= 1;
     const percent = (value: unknown) => typeof value === "number" && value > 0 && value <= 100;

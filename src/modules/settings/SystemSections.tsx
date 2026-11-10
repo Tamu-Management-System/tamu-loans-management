@@ -44,11 +44,7 @@ export function LoanRulesSection() {
       draft={draft as never}
       canEdit={can("settings.rules")}
       validate={() =>
-        rules!.loanPurposes.length === 0 || rules!.loanPurposes.some((purpose) => purpose.trim().length < 2)
-          ? "Add at least one loan purpose, and give each a name."
-          : new Set(rules!.loanPurposes.map((purpose) => purpose.trim().toLowerCase())).size !== rules!.loanPurposes.length
-            ? "Each loan purpose can only be listed once."
-            : rules!.recoveryAfterDaysLate !== null && outside(rules!.recoveryAfterDaysLate, SETTING_LIMITS.recoveryAfterDaysLate)
+        rules!.recoveryAfterDaysLate !== null && outside(rules!.recoveryAfterDaysLate, SETTING_LIMITS.recoveryAfterDaysLate)
           ? `Days late before recovery: ${rangeText(SETTING_LIMITS.recoveryAfterDaysLate, "days")}.`
           : (() => {
               const bad = numbers.find(([key]) => outside(rules![key], SETTING_LIMITS[key]));
@@ -132,27 +128,6 @@ export function LoanRulesSection() {
                 />
               </SettingRow>
             ))}
-          </SettingsGroup>
-
-          <SettingsGroup title="Loan purposes" description="What a loan can be for. The officer picks one on every application.">
-            {rules.loanPurposes.map((purpose, index) => (
-              <div key={index} className={styles.marketRow}>
-                <input
-                  className={styles.textInput}
-                  aria-label={`Loan purpose ${index + 1}`}
-                  value={purpose}
-                  maxLength={40}
-                  onChange={(event) => draft.set("loanPurposes", rules.loanPurposes.map((existing, i) => (i === index ? event.target.value : existing)))}
-                  placeholder="Loan purpose"
-                />
-                <button type="button" className={styles.iconButton} aria-label={`Remove ${purpose || "this"} purpose`} onClick={() => draft.set("loanPurposes", rules.loanPurposes.filter((_, i) => i !== index))}>
-                  <Icon name="close" size={16} strokeWidth={2} />
-                </button>
-              </div>
-            ))}
-            <button type="button" className={styles.addButton} onClick={() => draft.set("loanPurposes", [...rules.loanPurposes, ""])}>
-              + Add purpose
-            </button>
           </SettingsGroup>
 
           <SettingsGroup title="Payments" description="How money paid by a client is applied to what they owe.">

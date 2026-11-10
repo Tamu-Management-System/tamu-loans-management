@@ -612,7 +612,7 @@ New application (user flow, phase 3). `multipart/form-data`: `application` (JSON
 ```json
 {
   "borrowerId": null,
-  "terms": { "productId": "daily", "amount": 1500000, "purpose": "School fees", "repaymentSchedule": "weekly", "firstPaymentOn": "2026-11-08", "numberOfPayments": 20 },
+  "terms": { "productId": "daily", "amount": 1500000, "repaymentSchedule": "weekly", "firstPaymentOn": "2026-11-08", "numberOfPayments": 20 },
   "route": "paper",
   "newBorrower": { "fullName": "Agnes Nakimera", "nationalId": "CF901234567890", "phone": "0782 123 456", "premises": "Owino market, Stall 12", "area": "Kampala Central" },
   "guarantors": [{ "fullName": "Grace Kato", "nationalId": "CM880011223344", "phone": "0701 234 567" }, { … }],
@@ -1043,7 +1043,7 @@ Nothing an admin can change is hard-coded in the frontend: it reads these and fo
   "loanRules": { "approverCannotDisburse": true, "creatorCannotApprove": true, "phoneChangeNeedsApproval": true, "oneOpenLoanPerBorrower": true,
                  "guarantorMaxActiveLoans": 1,
                  "productLimits": { "smallestLoan": 10000, "biggestLoan": 100000000, "maxPayments": 365, "maxFeePercent": 20, "maxLateFeePercent": 20, "maxGraceDays": 30, "maxInterestPercent": { "loan": 100, "day": 5, "week": 20, "month": 30 } }, "firstPaymentWithinDays": { "daily": 7, "weekly": 14, "monthly": 35 },
-                 "approvalWaitingWarnHours": 48, "disbursementWaitingWarnDays": 3, "promiseToPayDays": 3, "loanPurposes": ["Business stock", "School fees", "Rent", "Other"],
+                 "approvalWaitingWarnHours": 48, "disbursementWaitingWarnDays": 3, "promiseToPayDays": 3,
                  "recoveryAfterDaysLate": 60, "recoveryMode": "suggest", "seriouslyLateDays": 30,
                  "par30TargetPercent": 5, "earlyWarningDays": 7, "onlineLinkValidHours": 72,
                  "paymentAllocationOrder": ["charges", "fees", "interest", "principal"] },
@@ -1078,7 +1078,6 @@ What each setting does on the server:
 - `firstPaymentWithinDays` (1 to 120 per way of repaying): the furthest first payment date an officer can set, in days from the application. `422` on an application with a later date.
 - `approvalWaitingWarnHours` (1 to 168): applications waiting this long for a decision are `do-first` on the worklist and shown in red. `disbursementWaitingWarnDays` (1 to 30): approved loans not paid out after this many days are shown in red.
 - `promiseToPayDays` (0 to 30): the date the app suggests when an officer logs a promise to pay (the officer can change it). The "seriously late" red on the worklist and the client page uses `seriouslyLateDays`.
-- `loanPurposes`: what a loan can be for (1 to 30 names, 2 to 40 characters, no duplicates, case-insensitive). `terms.purpose` must be one of them (`422` otherwise); an application keeps the purpose it was saved with even if the list changes later. The list shown is a placeholder until Tamu sends its own.
 - `par30TargetPercent`: the `targetPercent` returned by `/portfolio/risk` and the sidebar risk summary.
 - `earlyWarningDays`: loans at least this late appear in early warnings.
 - `onlineLinkValidHours`: lifetime of a new online application link (existing links keep their expiry).
@@ -1190,9 +1189,7 @@ The client confirmed the fields below; the endpoints above already use them.
 - **Guarantors** (`GuarantorDetails`): `fullName`, `nationalId`, `phone`, and `relationship` (e.g. "Sister"; required
   on the online form, sent empty on the paper route because it is on the signed consent). Guarantors have no gender
   or address: the Person model allows them to be empty and the screens don't ask.
-- **Removed**: work and income (occupation, income, workplace photo).
-- **Loan purpose** (client request, 10 Nov 2026): the application's `terms.purpose` is one of Settings → Loan rules `loanPurposes`. `GET /applications/{id}` returns it as `purpose` (`null` on applications started before it was asked), and `pricing` (the product's interest and fee copied when the application was saved), which the approval page shows instead of a fixed rate.
-  `PATCH /borrowers/{id}` now takes `gender` and an optional `nextOfKin` instead of `work`.
+- **Removed**: work and income (occupation, income, workplace photo) and purpose of the loan. (The client's "loan type" request, 10 Nov 2026, means the loan products: daily, weekly, monthly and any new product an admin adds in Settings → Loan products.)
 - **Interest per period**: `interest.per` is `loan`, `day`, `week` or `month` (the highest rate for each is `loanRules.productLimits.maxInterestPercent`). Interest =
   amount × rate × the number of days, weeks or months the loan runs. Products: Daily 0.6% a day, Weekly 4.5% a
   week, Monthly 18% a month.

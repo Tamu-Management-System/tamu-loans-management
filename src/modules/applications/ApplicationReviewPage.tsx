@@ -131,7 +131,6 @@ export function ApplicationReviewPage() {
               <Row label="Amount">
                 <b>{formatUGX(a.amount)}</b>
               </Row>
-              <Row label="Purpose">{a.purpose || "—"}</Row>
               <Row label="Interest">{formatUGX(a.schedule.interest)} ({describeInterest(a.pricing)})</Row>
               <Row label="Total to repay">
                 <b>{formatUGX(a.schedule.totalRepayable)}</b>
