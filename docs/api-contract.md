@@ -12,9 +12,10 @@ when an endpoint here changes, change its mock handler too.
 - **Money:** whole Ugandan shillings as integers (`1240000`), never formatted strings.
 - **Auth:** the real backend uses a token: sign-in returns `idToken`, and every request carries `Authorization: Bearer <idToken>`. The frontend keeps the token in memory only (`src/api/client.ts`). A `Refresh` cookie renews it. (The mock API still uses a session cookie.) An unauthenticated request returns `401`.
 - **Matching the backend that exists** (`loan-app-rest-api`, see [backend-mapping.md](backend-mapping.md)):
-  - **Reads are `POST` with a JSON body.** Wherever this document shows `GET /x?y=z`, send `POST /x` with `{ "query": { "y": "z" } }`
-    (filters in the body keep names, phones and National IDs out of the address, logs and browser history). Real `GET`s are only
-    for downloads and the import template.
+  - **Reads are `POST` with a JSON body.** Every read in this document is `POST <path>/query` with the filters in `{ "query": { … } }`
+    (for example `POST /borrowers/query` with `{ "query": { "q": "ann", "page": 1 } }`). Filters in the body keep names, phones and National IDs
+    out of the address, logs and browser history. The `/query` ending keeps a read apart from a route that creates something at the same path
+    (`POST /loans` and `POST /loans/query` are different routes). Real `GET`s are only for downloads and `GET /me`.
   - **List answers** are `{ "page": { "count": 120, "content": [ … ] }, "success": true, "message": "…" }`; a single record is
     `{ "content": { … }, "success": true, "message": "…" }`. The mock API still answers with the shapes shown below; the frontend maps between them.
   - **Sign-in** is `POST /api/public/account/login` (see below). The frontend sends `Authorization: Bearer <idToken>` and keeps the token in
@@ -89,11 +90,11 @@ with a clear `message`.
 
 ## Endpoints
 
-**What the `GET` headings are.** A heading that says `GET` is a **read**: it shows what a screen asks for (the parameters in the heading) and what comes back.
-It is written that way because it is the plainest way to describe a read. On the wire the backend's rule applies: a read is a `POST` with the
-filters in a JSON `query` body (see Conventions), so names, phones and National IDs never appear in an address. The method is
-fixed; the route names for these named reads are not final (his generic routes use names like `/find-all/`), so the backend dev picks them.
-Only the downloads (`/loans/export`, a document's file, `/loans/{id}/application-pdf`, `/audit/export`) and `GET /me` stay real `GET`s.
+**Reads and downloads.** A heading that says `POST <path>/query` is a **read**: the body is `{ "query": { … } }` with the parameters named under the
+heading, and nothing sensitive goes in the address. The `/query` ending separates a read from a route that creates or changes something at the same
+path. Only the downloads (`/loans/export`, a document's file, `/loans/{id}/application-pdf`, `/audit/export`, `/reports/{name}/export`) and
+`GET /me` stay real `GET`s. The mock API (`src/mocks/handlers.ts`) still answers these reads at their old `GET` paths while the real backend is
+not ready; when the frontend switches to the real backend it sends the `POST` form described here.
 
 Each route below is what the **screen needs**. [backend-mapping.md](backend-mapping.md) says which of them the backend already covers
 with its generic routes and which still have to be built.
@@ -152,7 +153,9 @@ permission keys below are the frontend's own list (see `src/auth/permissions.ts`
 - `photoUrl` may be `null`; the frontend then shows initials.
 - `401` if not signed in.
 
-### `GET /search?q={text}`
+### `POST /search/query`
+
+Body `{ "query": { "q" } }`. A read: nothing in the address.
 
 Finds loans and applications by borrower name, ID or phone number, for the top-bar search.
 
@@ -171,7 +174,7 @@ Finds loans and applications by borrower name, ID or phone number, for the top-b
 
 ### `GET /loans/export`
 
-The loan tracker: the loans the Loans screen shows, as a CSV file, one row per loan. Same query as `GET /loans/list` (`status` =
+The loan tracker: the loans the Loans screen shows, as a CSV file, one row per loan. Same query as `POST /loans/list/query` (`status` =
 `active`, `recovery`, `cleared` or `all`; `q`, `officerId`, `late`), no paging. Requires `loans.export`; a person only gets loans they can see
 (own or market). Sorted by loan ID. Audit-logged ("exported the loan tracker"). `Content-Type: text/csv; charset=utf-8`, starts with a
 UTF-8 byte-order mark so Excel reads it correctly, CRLF line ends, numbers unquoted, text quoted, and a text cell that starts with `= + - @` gets a
@@ -186,7 +189,9 @@ Columns, in this order (it follows the client's own loan tracker sheet): `Loan I
 payment), `Total Repayable`, `Amount Paid to Date`, `Balance Outstanding`, `Status` (Active, In arrears, In recovery, Cleared),
 `Days Overdue`, `Loan Officer`. Guarantors are names and phone numbers only, never National IDs.
 
-### `GET /notifications`
+### `POST /notifications/query`
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 Alerts for the bell in the top bar, chosen by the user's permissions.
 
@@ -196,7 +201,9 @@ Alerts for the bell in the top bar, chosen by the user's permissions.
 ]
 ```
 
-### `GET /notifications/history`
+### `POST /notifications/history/query`
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 Everything the signed-in person was sent, newest first: the Notifications page (avatar menu). One entry per message per channel, so a step
 sent in-app and by SMS appears twice. Query: `channel` (`in-app`, `sms` or `email`; omit for all) and `page` (20 per page).
@@ -215,7 +222,9 @@ a person only ever sees their own.
 
 Marks all of the user's current notifications as read (the frontend calls it when the bell is opened). Returns `204`.
 
-### `GET /navigation/badges`
+### `POST /navigation/badges/query`
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 Counts shown next to menu items.
 
@@ -226,7 +235,9 @@ Counts shown next to menu items.
 - `applications`: for users with `applications.approve` or branch data access, applications waiting for approval;
   otherwise, the user's own drafts that still need documents.
 
-### `GET /portfolio/risk-summary`
+### `POST /portfolio/risk-summary/query`
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 PAR30 for the sidebar risk card. Part of the arrears engine (Module 3, Phase 2), but the frontend already shows it under a "Coming soon" overlay.
 
@@ -234,9 +245,11 @@ PAR30 for the sidebar risk card. Part of the arrears engine (Module 3, Phase 2),
 { "scope": "own", "par30Percent": 4.1, "targetPercent": 5, "loansOver30Days": 4 }
 ```
 
-- `scope`: the role's data access (`own` or `branch`). Calculated as in `GET /portfolio/risk`.
+- `scope`: the role's data access (`own` or `branch`). Calculated as in `POST /portfolio/risk/query`.
 
-### `GET /dashboard/today`
+### `POST /dashboard/today/query`
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 Numbers behind the dashboard's "Today" boxes. Include only the sections that apply to the user;
 the frontend shows one box per section. Shape: `DashboardToday` in `src/api/types.ts`.
@@ -262,9 +275,11 @@ the frontend shows one box per section. Shape: `DashboardToday` in `src/api/type
 | `approvedNotDisbursed` | `loans.disburse` (to pay out) or `users.manage` |
 | `accessRequests` | `users.manage` |
 - Payment matching and payment reversals are not in the MVP (`unmatchedPayments`, `paymentReversals` aren't sent).
-- Must stay consistent with `GET /worklist`: e.g. `collections.dueCount` = open instalment and promise tasks.
+- Must stay consistent with `POST /worklist/query`: e.g. `collections.dueCount` = open instalment and promise tasks.
 
-### `GET /worklist`
+### `POST /worklist/query`
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 Today's tasks for the signed-in user, open and done: their own tasks (their borrowers and drafts) plus shared
 tasks their permissions cover: `awaiting-approval` → `applications.approve` or `users.manage`,
@@ -292,7 +307,9 @@ type (see `WorklistTask` in `src/api/types.ts`). Common fields:
 Priority rules used in the mock (confirm with the client): promises due today, loans more than 30 days late,
 loans with a warning and applications waiting over 48 hours are `do-first` or `do-today`.
 
-### `GET /loans`
+### `POST /loans/query`
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 Loans the user can see that still have a balance, for pickers such as Record payment. Same scope rule as search.
 
@@ -321,7 +338,7 @@ Records a repayment. Requires `payments.record`.
 ```
 
 - **A payment can never be more than the borrower owes** (the loan's balance plus any unpaid late fees, the `owedNow` in
-  `GET /loans`). Refuse anything above it with `422` and a message like "That's more than Aisha owes. The most you can record
+  `POST /loans/query`). Refuse anything above it with `422` and a message like "That's more than Aisha owes. The most you can record
   is UGX 2,400,000." There are no overpayments, so there is no surplus to hold and nothing to refund: `Payment.surplus` is
   always 0 and the borrower-credit ledger stays empty. The screen checks this too, so a typing mistake (an extra zero) can't go in.
 - The payment counts towards the loan's open worklist task (`taskId`). Partly paid tasks stay open with a note.
@@ -346,7 +363,7 @@ Response `200`: `{ "paymentId": "PAY-1001", "loanId": "TL-1042", "balanceBefore"
 - The payment keeps **every** change in `edits` (`from`, `to`, `by`, `at`, `reason`); nothing is overwritten or deleted. The loan's balance is
   recalculated (a loan that the payment had cleared becomes active again if the amount is lowered). Audit-log it (category `money`, "changed
   payment PAY-… on TL-… from UGX 200,000 to UGX 20,000") with the reason, and add it to the client's activity.
-- Payments are listed with `edits` and `canEdit` (`GET /payments/list` and `payments` in `GET /loans/{id}`): `canEdit` is true when the signed-in
+- Payments are listed with `edits` and `canEdit` (`POST /payments/list/query` and `payments` in `POST /loans/{id}/query`): `canEdit` is true when the signed-in
   person could make this change now, so the screen shows "Edit payment" only then.
 
 ### `POST /worklist/{taskId}/call-outcome`
@@ -378,7 +395,7 @@ longer be undone. The screen no longer offers Undo after recording a payment: mo
 
 ## Portfolio section ("My portfolio" / "Market portfolio")
 
-**Who sees it:** anyone with `loans.view`. `own` scope gets "My portfolio" (early warnings + `GET /portfolio/summary`,
+**Who sees it:** anyone with `loans.view`. `own` scope gets "My portfolio" (early warnings + `POST /portfolio/summary/query`,
 which must work for any own-scope user, not only built-in officers); `branch` scope gets "Market portfolio" (recent
 activity if they have `audit.view`, team performance).
 
@@ -388,7 +405,9 @@ in [backend-plan.md](backend-plan.md#calculations) and the mock's `src/mocks/por
 PAR, arrears and early warnings belong to the arrears engine (Module 3, Phase 2); the frontend already shows them
 under a "Coming soon" overlay, so the endpoints can arrive with Phase 2.
 
-### `GET /portfolio/risk` (Phase 2)
+### `POST /portfolio/risk/query` (Phase 2)
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 ```json
 {
@@ -402,7 +421,9 @@ under a "Coming soon" overlay, so the endpoints can arrive with Phase 2.
 
 The frontend shows 3, 6 or 12 months; the change chip compares today with the first month shown.
 
-### `GET /portfolio/arrears` (Phase 2)
+### `POST /portfolio/arrears/query` (Phase 2)
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 ```json
 {
@@ -413,7 +434,9 @@ The frontend shows 3, 6 or 12 months; the change chip compares today with the fi
 }
 ```
 
-### `GET /portfolio/early-warnings?limit=5` (Phase 2)
+### `POST /portfolio/early-warnings/query` (Phase 2)
+
+Body `{ "query": { "limit" } }`. A read: nothing in the address.
 
 ```json
 {
@@ -436,15 +459,19 @@ Most serious first. `worklistTask` is the loan's task on the user's worklist tod
 Adds an overdue loan to the user's worklist as an `overdue` task. `201` with the task; `409` if it's already on
 today's list; `422` if the loan isn't overdue. `POST /worklist/{taskId}/undo` removes it again.
 
-### `GET /portfolio/summary` (loan officers)
+### `POST /portfolio/summary/query` (loan officers)
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 ```json
 { "outstandingBalance": 96000000, "activeLoans": 41, "disbursedThisMonth": { "amount": 6400000, "count": 5 }, "clearedThisMonth": 3, "dueThisWeek": 2100000 }
 ```
 
-"Collected today" on this card comes from `GET /dashboard/today` (`collections`), so the two always agree.
+"Collected today" on this card comes from `POST /dashboard/today/query` (`collections`), so the two always agree.
 
-### `GET /activity?limit=5` (requires `audit.view`)
+### `POST /activity/query` (requires `audit.view`)
+
+Body `{ "query": { "limit" } }`. A read: nothing in the address.
 
 Audit log preview, newest first.
 
@@ -452,7 +479,9 @@ Audit log preview, newest first.
 { "total": 6, "items": [{ "id": "act-1", "actor": { "name": "Moses Okot", "role": "Finance", "photoUrl": null }, "description": "approved APP-309 · UGX 800,000", "at": "2026-10-31T06:42:00Z" }] }
 ```
 
-### `GET /team/performance` (branch data access)
+### `POST /team/performance/query` (branch data access)
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 ```json
 [{ "officerId": "u-ruth", "name": "Ruth Atim", "photoUrl": null, "portfolioAmount": 67500000, "loanCount": 34, "par30Percent": 13.2, "collectedToday": 0, "expectedToday": 380000 }]
@@ -462,7 +491,9 @@ Sorted by PAR30, highest first. The frontend shows 5 and links to Reports for th
 
 ## Borrowers
 
-### `GET /borrowers`
+### `POST /borrowers/query`
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 Borrower directory (user flow phase 8). Requires `borrowers.view`.
 
@@ -495,7 +526,9 @@ Borrower directory (user flow phase 8). Requires `borrowers.view`.
 - `counts` respect `q` and `officerId` but not `status`, so the tabs show how many are in each.
 - A borrower in arrears is one whose current loan has `daysPastDue > 0`; `applicant` means no loan yet, only an application.
 
-### `GET /officers` (branch data access)
+### `POST /officers/query` (branch data access)
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 Loan officers, for the officer filter. `403` without the permission.
 
@@ -503,7 +536,9 @@ Loan officers, for the officer filter. `403` without the permission.
 [{ "id": "u-joel", "name": "Joel Okello" }]
 ```
 
-### `GET /borrowers/{id}`
+### `POST /borrowers/{id}/query`
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 The borrower profile. Same scope rule as the list: an officer asking for another officer's borrower gets
 `404` (not `403`), so the endpoint can't be used to find out who else is a borrower.
@@ -554,7 +589,9 @@ Returns the full National ID number so the profile can show it for a short time.
 - The frontend keeps the number only in component state (never in the query cache or storage) and masks it again
   after `visibleForSeconds`, when the user hides it, or as soon as the tab is hidden.
 
-### `GET /borrowers/{id}/loans`
+### `POST /borrowers/{id}/loans/query`
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 Every loan the borrower has taken, newest first, with their track record. Same scope rule (`404` outside the
 user's portfolio).
@@ -593,7 +630,9 @@ signed and merged into one document. It comes in one of two ways:
 - **Online:** the officer sends a one-time link (copied into WhatsApp); the borrower completes it
   online (each of the three people ticks a consent box; no drawn signatures), and the server generates the merged PDF. Paper stays for people without a smartphone.
 
-### `GET /borrowers/{id}/documents`
+### `POST /borrowers/{id}/documents/query`
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 Grouped: `identity` (the borrower's National ID copy; the original is seen in person), `work` (optional
 workplace photo), then one section per open application and loan, newest first. Same scope rule (`404`
@@ -672,7 +711,9 @@ New application (user flow, phase 3). `multipart/form-data`: `application` (JSON
   portfolio, when they submit (matched to an existing borrower if the NIN is already registered).
 - The borrower, guarantors and terms are stored as data; the PDF is proof. Record everything in the audit log.
 
-### `GET /applications?status=&q=&page=`
+### `POST /applications/query`
+
+Body `{ "query": { "status", "q", "page" } }`. A read: nothing in the address.
 
 The Applications list. `status`: `draft`, `awaiting-borrower` (online link sent), `submitted` (waiting for
 approval), `approved` or `rejected`. Officers get their own applications; users with `applications.approve` or
@@ -681,7 +722,9 @@ borrower `{ id | null, name }`, amount, terms (`repaymentSchedule`, `numberOfPay
 (drafts), `returned` (`{ reason, note, by, at }` when sent back or rejected), officer, `createdAt`, `submittedAt`,
 `decided` (`{ by, at }`). Newest activity first.
 
-### `GET /applications/{id}`
+### `POST /applications/{id}/query`
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 Everything an approver checks: the list item plus `borrowerDetails` (masked NIN, phone, premises, area),
 `guarantors` (masked NINs), `schedule` (first and last payment, interest, total, last instalment),
@@ -702,8 +745,8 @@ the check on save: create, draft save, online submit and approve each run it aga
   is on and the officer sends `guarantorWaiver: { "reason": "…" }` (create and draft save, paper route; max 500 characters).
   The application is then saved and submitted normally and stores the waiver (reason, who asked, when).
   The public online form never gets a waiver: it is still blocked with a message to ask the loan officer.
-- `GET /applications/{id}` returns `guarantorWaiver: { reason, requestedBy, requestedAt, guarantors: [{ name,
-  nationalIdMasked, loanIds }], grantedBy }` (or `null`). `GET /applications/{id}/draft` returns `guarantorWaiver: { reason }`.
+- `POST /applications/{id}/query` returns `guarantorWaiver: { reason, requestedBy, requestedAt, guarantors: [{ name,
+  nationalIdMasked, loanIds }], grantedBy }` (or `null`). `POST /applications/{id}/draft/query` returns `guarantorWaiver: { reason }`.
 - **Granting:** an approver (`applications.approve`) grants it by approving with `"guarantorWaiverGranted": true`.
   If a guarantor is blocked at approval time, the application must have a waiver (`409` if not) and the flag must be
   `true` (`422` if not). Record who granted it in `grantedBy` and the audit log ("granted a guarantor waiver on APP-…").
@@ -739,7 +782,9 @@ Closes an application that was sent back and can't be fixed: `status` becomes `r
 for anyone but its officer. A closed application can't be reopened; the officer starts a new one. Log it in the
 audit log and on the client's activity.
 
-### `GET /applications/{id}/draft` (the officer who owns it)
+### `POST /applications/{id}/draft/query` (the officer who owns it)
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 A **paper draft** for its officer to continue, including one an approver sent back: borrower, `terms`,
 `guarantors` **with full NINs** (they entered them and may need to correct them), the current
@@ -758,7 +803,9 @@ optionally a new `signedApplication` PDF (a new version; the old one is kept). S
   submitted yet: …". On success the status becomes `submitted` (`returned` cleared) and the timeline records
   "Fixed and resubmitted … (sent back for: …)" when it had been sent back.
 
-### `GET /loans/list?status=active|cleared|all&q=&officerId=&late=true&page=`
+### `POST /loans/list/query`
+
+Body `{ "query": { "status", "q", "officerId", "late", "page" } }`. A read: nothing in the address.
 
 The Loans tabs. Officers get their own loans; branch data access gets the branch (`officerId` filters by officer,
 ignored for officers). `q`: loan ID (exact), borrower name, or phone (3+ digits). `late=true`: only loans behind on
@@ -772,7 +819,9 @@ payments.
 - `counts` for the tabs (`toDisburse`, `active`, `cleared`, `all`) and `totals` for the strip (`loans`,
   `outstanding`, `late`, `overdue`, `repaid`) cover everything matching the filters, not just the page.
 
-### `GET /loans/{id}`
+### `POST /loans/{id}/query`
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 One loan, for the loan page. Same scope rule (`404` outside the user's portfolio).
 
@@ -791,7 +840,7 @@ One loan, for the loan page. Same scope rule (`404` outside the user's portfolio
 
 Loans handed to Tamu's recovery department, which follows up borrowers in the field. **Manual for now**:
 the automatic rule ("send to recovery after N days late", in Settings → Loan rules and later per loan product)
-waits for Tamu to set N. `GET /loans/list?status=recovery` lists them (newest hand-over first); every loan
+waits for Tamu to set N. `POST /loans/list/query` with `status=recovery` lists them (newest hand-over first); every loan
 item, and the borrower's `currentLoan`, carries `recovery: { since, by, reason, note } | null`.
 
 #### `POST /loans/{id}/recovery`
@@ -808,7 +857,9 @@ payment plan agreed). `note` required; `409` if not in recovery.
 Open with the client: the day limit, who confirms hand-overs, how recovery charges are worked out (the agreement
 says the recovery team adds them), and whether recovery staff need logins.
 
-### `GET /payments/list?from=&to=&q=&officerId=&method=&page=`
+### `POST /payments/list/query`
+
+Body `{ "query": { "from", "to", "q", "officerId", "method", "page" } }`. A read: nothing in the address.
 
 The Payments page: every repayment, newest first. Officers get their own borrowers' payments; branch data access
 gets the branch. `from`/`to` are inclusive local dates; `q` matches borrower, loan ID (exact), phone (3+ digits)
@@ -817,7 +868,9 @@ or transaction ID; `method`: `MTN MoMo`, `Airtel Money` or `Cash`.
 Items: `id`, `paidAt`, `amount`, `method`, `reference`, `recordedBy`, `loanId`, `borrower`, `officer`.
 `totals`: collected, number of payments, and collected by method, over everything matching.
 
-### `GET /loans/to-disburse`
+### `POST /loans/to-disburse/query`
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 Approved applications waiting to be paid out, longest-waiting first. Officers get their own; branch-wide users
 all. Each: `applicationId`, `borrower`, `payTo` (the mobile money number), `amount`, `terms`, `officer`,
@@ -854,7 +907,7 @@ two endpoints sit outside the session (no `401`, no CSRF cookie; the token does 
 borrower; on it they fill in their own details and both guarantors' details, add photos of their National ID,
 and all three people tick to agree and sign with a finger.
 
-#### `GET /public/forms/{token}`
+#### `POST /public/forms/{token}/query`
 
 ```json
 {
@@ -879,7 +932,7 @@ and all three people tick to agree and sign with a finger.
 
 `201 { "reference": "APP-311" }`. Then, **in one transaction**:
 
-1. Mark the token used: **it never works again** (`410 used` on any later GET or POST).
+1. Mark the token used: **it never works again** (`410 used` on any later request).
 2. Validate everything again: full names, NINs (`C[MF]` + 12 characters, three different people), Ugandan mobile
    numbers, premises and area, real image types from the bytes, and that all three `consent` values are `true`
    (`422` otherwise).
@@ -954,7 +1007,9 @@ or `+2567…`). The backend stores them as E.164 (`+256772418230`) and **returns
 - **reject:** someone with `borrowers.phoneApprove` rejects it, or the person who asked withdraws it.
 - `409` if the change was already approved, rejected or replaced.
 
-### `GET /borrowers/{id}/activity?category=&before=`
+### `POST /borrowers/{id}/activity/query`
+
+Body `{ "query": { "category", "before" } }`. A read: nothing in the address.
 
 The borrower's timeline, newest first, 15 at a time. `category`: `money`, `contact`, `changes` or `access` (omit
 for all). Pass `nextBefore` from the previous page as `before` for older events.
@@ -979,7 +1034,9 @@ for all). Pass `nextBefore` from the previous page as `before` for older events.
 Settings → Users (`users.manage`) and Settings → Roles & permissions (`roles.manage`). Record every change below
 in the audit log (who, what, before and after). Accounts and roles that anyone has used are never deleted.
 
-### `GET /staff` (requires `users.manage`)
+### `POST /staff/query` (requires `users.manage`)
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 Every staff account, active first, then invited, then switched off.
 
@@ -998,7 +1055,9 @@ Every staff account, active first, then invited, then switched off.
 - `branch` / `branchId`: the market they work in, by name and by id (the id of a `Region`; one of
   `settings.business.branches`; the screens say "Market").
 
-### `GET /roles` (requires `users.manage` or `roles.manage`)
+### `POST /roles/query` (requires `users.manage` or `roles.manage`)
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 Built-in roles first, then custom ones by name:
 `[{ "id", "name", "description", "builtIn", "permissions": [...], "userCount" }]`. `userCount` counts active and
@@ -1015,14 +1074,14 @@ no gender or address: the Person model allows them to be empty.
   used by any account (including switched-off ones: turn that account back on instead). `422` if `branchId` isn't one
   of the markets in business settings.
 
-### Set your password: `GET` and `POST /public/invites/{token}` (public)
+### Set your password: `POST /public/invites/{token}/query` and `POST /public/invites/{token}` (public)
 
 The page behind the emailed link `https://<app>/set-password/<token>`. It is used for a new account (an invite, from
 `POST /staff/invites`, resend or turning an account back on) and for a password reset (the worklist action
 `send-reset-link`). These two requests sit outside the session (no `401`, no CSRF cookie): **the token is the only
 access**, so treat it like a password.
 
-`GET` returns what the page shows: `{ "name", "email", "purpose": "invite" | "reset", "minPasswordLength", "expiresAt" }`.
+`POST …/query` returns what the page shows: `{ "name", "email", "purpose": "invite" | "reset", "minPasswordLength", "expiresAt" }`.
 `minPasswordLength` is the Settings → Security value, so the page shows the rule the server enforces.
 
 `POST` takes `{ "password": "…" }` and returns `204`:
@@ -1091,7 +1150,9 @@ history shows the role name).
 
 Nothing an admin can change is hard-coded in the frontend: it reads these and follows them.
 
-### `GET /settings` (any signed-in user)
+### `POST /settings/query` (any signed-in user)
+
+Body `{ "query": { } }`. A read: nothing in the address.
 
 ```json
 {
@@ -1148,7 +1209,7 @@ What each setting does on the server:
   `editWindowHours` (0 to 168): how long after recording the person who recorded a payment can change its amount (`PATCH /payments/{id}`); 0 = never.
 - Security: sign-in lockout, idle timeout, National ID display time and invite lifetime follow these values.
 - Notifications: when a workflow step makes it someone else's turn, the server tells them (steps and recipients below). Each person is always
-  told in-app (the bell, `GET /notifications`); `channels` adds SMS or email to the person's phone / email on file. Sending happens
+  told in-app (the bell, `POST /notifications/query`); `channels` adds SMS or email to the person's phone / email on file. Sending happens
   after the step is saved, from a queue with retries and a delivery log, and a failed message never blocks or rolls back the step. Messages
   carry names, the reference and the amount, never a National ID, a password or a token link.
 
@@ -1163,7 +1224,7 @@ What each setting does on the server:
 
 ### Loan products
 
-`GET /loan-products` (any signed-in user), `POST /loan-products`, `PUT /loan-products/{id}`,
+`POST /loan-products/query` (any signed-in user), `POST /loan-products`, `PUT /loan-products/{id}`,
 `POST /loan-products/{id}/archive` and `/restore` (require `settings.products`).
 
 ```json
@@ -1189,7 +1250,9 @@ What each setting does on the server:
 Append-only: nothing in it can be edited or deleted (see [security.md](security.md)). Every endpoint above that
 says "audit-log" writes here, plus sign-ins, failed sign-ins and exports.
 
-### `GET /audit?from=&to=&actorId=&category=&q=&page=` (requires `audit.view`)
+### `POST /audit/query` (requires `audit.view`)
+
+Body `{ "query": { "from", "to", "actorId", "category", "q", "page" } }`. A read: nothing in the address.
 
 `from`/`to`: ISO dates, inclusive (local days). `category`: `money`, `decisions`, `access`, `borrowers`,
 `admin` or `signin`. `q` searches the description and the person's name. 30 a page, newest first.
@@ -1219,7 +1282,7 @@ spreadsheet can't run them as formulas. The export itself is logged ("exported t
 
 ## My account (any signed-in user, their own account only)
 
-- `GET /me/profile`: `{ id, name, email, phone, photoUrl, branch, role, recentSignIns: [{ at, device, success }] }`
+- `POST /me/profile/query`: `{ id, name, email, phone, photoUrl, branch, role, recentSignIns: [{ at, device, success }] }`
   (the last 4 sign-ins, including failed attempts).
 - `PATCH /me/profile` `{ phone }`: a Ugandan mobile number (`422` otherwise). Name, email and role are admin-only.
 - `POST /me/photo` (multipart `photo`): JPEG or PNG, up to 2 MB, checked from the file's bytes; `DELETE /me/photo`.
@@ -1227,8 +1290,8 @@ spreadsheet can't run them as formulas. The export itself is logged ("exported t
   the lockout); `422` if the new one is shorter than Settings → Security's `minPasswordLength`, common/breached, or
   contains the person's name or email. On success, **end every other session** of the account. No character-type
   rules (NIST SP 800-63B).
-- `GET /me/sessions`: `[{ id, device, location, lastActiveAt, current }]`; `POST /me/sessions/sign-out-others`.
-- `GET /support/contacts`: `{ admins: [{ name, phone, email }], business: { name, phone, email } }` for the
+- `POST /me/sessions/query`: `[{ id, device, location, lastActiveAt, current }]`; `POST /me/sessions/sign-out-others`.
+- `POST /support/contacts/query`: `{ admins: [{ name, phone, email }], business: { name, phone, email } }` for the
   Help page (active people with `users.manage`).
 
 All of these are audit-logged.
@@ -1255,7 +1318,7 @@ The client confirmed the fields below; the endpoints above already use them.
 - **Payout consent**: the payout is confirmed in a second step in the app before `POST /applications/{id}/disburse`.
 - **Reports** for every role (own portfolio or branch): Today / This week / This month / Last month / This year /
   custom; `GET /reports/{name}/export?format=pdf|csv` (`reports.export`, now on all built-in roles).
-  `GET /reports/{name}?from=&to=` returns `Report` (`src/api/types.ts`): `figures`, **`charts`** (1–2 `ReportChart`s:
+  `POST /reports/{name}/query` with `from=&to=` returns `Report` (`src/api/types.ts`): `figures`, **`charts`** (1–2 `ReportChart`s:
   `kind` `trend` = values per day/week/month with an optional dashed `target` series, `donut` = how a total
   splits, `bars` = one bar per category; `ordered: true` for bands like days late) and a `table`. Charts per report:
   Portfolio: outstanding by product + by how late (donuts); Collections: collected vs expected (trend) + by payment
@@ -1273,5 +1336,5 @@ The client confirmed the fields below; the endpoints above already use them.
     approval, approved not paid out, paid out, rejected), with the average days from sent-for-approval to decision.
     Charts: started per day/week/month (trend) + where they stand (donut).
   Officers still sees only its own loans and applications (`own`); every report is audit-logged on export.
-- **Dashboard** (`GET /dashboard/today`): `activeLoans: { count, outstanding, lateCount }` comes first, then
+- **Dashboard** (`POST /dashboard/today/query`): `activeLoans: { count, outstanding, lateCount }` comes first, then
   `collections`; payment matching (`unmatchedPayments`) is no longer shown.
