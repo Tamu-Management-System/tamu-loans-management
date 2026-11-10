@@ -1,11 +1,12 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router";
-import { useApplication, useApproveApplication } from "../../api/applications";
+import { useApplication, useApproveApplication, useCloseApplication } from "../../api/applications";
 import { useAuth } from "../../auth/AuthContext";
 import { useDocumentPreview } from "../../api/borrowers";
 import { ApiError } from "../../api/client";
 import type { ApplicationDetail, DocumentFile } from "../../api/types";
 import { Button } from "../../components/ui/Button";
+import { Dialog } from "../../components/ui/Dialog";
 import { Icon } from "../../components/ui/Icon";
 import { useToast } from "../../components/ui/Toast";
 import { formatLongDate, formatRelativeDay, formatUGX } from "../../lib/format";
@@ -34,6 +35,7 @@ export function ApplicationReviewPage() {
   const { user, can } = useAuth();
   const { data: application, isPending, error, refetch } = useApplication(applicationId);
   const [viewing, setViewing] = useState<{ title: string; document: DocumentFile; isForm: boolean } | null>(null);
+  const [closing, setClosing] = useState(false);
 
   const breadcrumb = (
     <nav aria-label="Breadcrumb" className={styles.breadcrumb}>
@@ -87,7 +89,7 @@ export function ApplicationReviewPage() {
         <div>
           <div className={styles.titleRow}>
             <h1>{a.id}</h1>
-            <span className={`${styles.chip} ${styles[`chip_${a.status.replace("-", "_")}`]}`}>{a.status === "draft" && a.returned ? "Sent back" : STATUS_LABEL[a.status]}</span>
+            <span className={`${styles.chip} ${styles[`chip_${a.status.replace("-", "_")}`]}`}>{a.status === "draft" && a.returned ? "Sent back" : a.status === "rejected" && a.closed ? "Closed" : STATUS_LABEL[a.status]}</span>
           </div>
           <p className={styles.meta}>
             {newcomerOnline ? "New client" : a.borrower.name} · {a.route === "online" ? "Online" : "Paper forms"} · {a.officer.name} ·{" "}
@@ -95,9 +97,16 @@ export function ApplicationReviewPage() {
           </p>
         </div>
         {canContinue && (
-          <Link to={`/applications/${a.id}/edit`} className={styles.primaryLink}>
-            {a.returned ? "Fix and resubmit" : "Continue application"}
-          </Link>
+          <div className={styles.headerActions}>
+            {a.returned && (
+              <Button variant="secondary" onClick={() => setClosing(true)}>
+                Close application
+              </Button>
+            )}
+            <Link to={`/applications/${a.id}/edit`} className={styles.primaryLink}>
+              {a.returned ? "Fix and resubmit" : "Continue application"}
+            </Link>
+          </div>
         )}
       </div>
 
@@ -144,6 +153,7 @@ export function ApplicationReviewPage() {
             </dl>
           </Card>
 
+          {a.guarantorWaiver && <WaiverCard waiver={a.guarantorWaiver} />}
           <Card title="Guarantors">
             {a.guarantors.length ? (
               <dl className={styles.details}>
@@ -216,6 +226,7 @@ export function ApplicationReviewPage() {
         </div>
       </div>
 
+      {closing && <CloseApplicationDialog application={a} onClose={() => setClosing(false)} />}
       {viewing && <DocumentPreviewDialog title={viewing.title} document={viewing.document} isForm={viewing.isForm} onClose={() => setViewing(null)} />}
     </>
   );
@@ -231,6 +242,20 @@ function StatusBanner({ application: a }: { application: ApplicationDetail }) {
             Sent back by {a.returned.by}, {formatRelativeDay(a.returned.at)}: {a.returned.reason}.
           </b>
           {a.returned.note && <> {a.returned.note}</>}
+        </span>
+      </p>
+    );
+  }
+  if (a.status === "rejected" && a.closed) {
+    return (
+      <p className={`${styles.banner} ${styles.bannerDanger}`} role="note">
+        <Icon name="warning" size={17} strokeWidth={1.9} />
+        <span>
+          <b>
+            Closed by {a.closed.by}, {formatRelativeDay(a.closed.at)}.
+          </b>{" "}
+          It was sent back by {a.returned?.by ?? "an approver"}{a.returned ? `: ${a.returned.reason}.` : "."}
+          {a.returned?.note && <> {a.returned.note}</>}
         </span>
       </p>
     );
@@ -289,8 +314,10 @@ function DecisionCard({ application: a }: { application: ApplicationDetail }) {
   const showToast = useToast();
   const approve = useApproveApplication(a.id);
   const [checks, setChecks] = useState<Record<CheckKey, boolean>>({ signedPdfMatchesDetails: false, idCopyMatchesNin: false, guarantorsSigned: false });
+  const [waiverGranted, setWaiverGranted] = useState(false);
   const [rejecting, setRejecting] = useState(false);
-  const allChecked = CHECKS.every((check) => checks[check.key]);
+  const needsWaiver = !!a.guarantorWaiver;
+  const allChecked = CHECKS.every((check) => checks[check.key]) && (!needsWaiver || waiverGranted);
 
   if (!a.decision.allowed) {
     return (
@@ -312,6 +339,16 @@ function DecisionCard({ application: a }: { application: ApplicationDetail }) {
           </label>
         ))}
       </div>
+      {a.guarantorWaiver && (
+        <div className={styles.checks}>
+          <label className={styles.check}>
+            <input type="checkbox" checked={waiverGranted} onChange={(event) => setWaiverGranted(event.target.checked)} />
+            <span>
+              I grant the guarantor waiver: {a.guarantorWaiver.guarantors.map((g) => g.name).join(" and ")} {a.guarantorWaiver.guarantors.length === 1 ? "is" : "are"} already on an active loan. To refuse, send the application back.
+            </span>
+          </label>
+        </div>
+      )}
       {error && (
         <p className={styles.error} role="alert">
           {error}
@@ -319,24 +356,76 @@ function DecisionCard({ application: a }: { application: ApplicationDetail }) {
       )}
       <div className={styles.decisionActions}>
         <Button variant="secondary" onClick={() => setRejecting(true)} disabled={approve.isPending}>
-          Send back or reject
+          Send back
         </Button>
         <Button
           // The panel disappears once approved, so confirm from the request itself (mutate's own callbacks wouldn't run)
           onClick={() =>
             approve
-              .mutateAsync({ checks })
+              .mutateAsync({ checks, ...(needsWaiver ? { guarantorWaiverGranted: waiverGranted } : {}) })
               .then(() => showToast({ message: `${a.id} approved. It's ready to be paid out.` }))
               .catch(() => undefined /* shown in the panel */)
           }
           disabled={!allChecked || approve.isPending}
-          title={allChecked ? undefined : "Tick all three checks first"}
+          title={allChecked ? undefined : needsWaiver ? "Tick the checks and decide on the waiver first" : "Tick all three checks first"}
         >
           {approve.isPending ? "Approving…" : `Approve ${formatUGX(a.amount)}`}
         </Button>
       </div>
       {rejecting && <RejectApplicationDialog application={a} onClose={() => setRejecting(false)} />}
     </Card>
+  );
+}
+
+/** A guarantor already on an active loan: who, which loans, and why the officer asks to accept them. */
+function WaiverCard({ waiver }: { waiver: NonNullable<ApplicationDetail["guarantorWaiver"]> }) {
+  return (
+    <Card title="Guarantor waiver">
+      <p className={styles.decisionIntro}>
+        {waiver.requestedBy} asks to accept {waiver.guarantors.length === 1 ? "a guarantor who is" : "guarantors who are"} already on an active loan.{" "}
+        {waiver.grantedBy ? `Granted by ${waiver.grantedBy}.` : "An approver decides when approving."}
+      </p>
+      <dl className={styles.details}>
+        {waiver.guarantors.map((guarantor) => (
+          <Row key={guarantor.nationalIdMasked} label={guarantor.name}>
+            ID {guarantor.nationalIdMasked}
+            <span className={styles.hint}>Already on {guarantor.loanIds.join(", ")}</span>
+          </Row>
+        ))}
+        <Row label="Reason">{waiver.reason}</Row>
+      </dl>
+    </Card>
+  );
+}
+
+/** Closes an application an approver sent back, when it can't be fixed. */
+function CloseApplicationDialog({ application, onClose }: { application: ApplicationDetail; onClose: () => void }) {
+  const showToast = useToast();
+  const close = useCloseApplication(application.id);
+  const error = close.error instanceof ApiError ? close.error.message : close.error ? "That didn't go through. Try again." : null;
+  return (
+    <Dialog
+      title={`Close ${application.id}`}
+      subtitle={application.borrower.name}
+      submitLabel="Close application"
+      submittingLabel="Closing…"
+      submitting={close.isPending}
+      error={error}
+      onSubmit={() =>
+        close
+          .mutateAsync()
+          .then(() => {
+            showToast({ message: `${application.id} closed.` });
+            onClose();
+          })
+          .catch(() => undefined /* shown in the dialog */)
+      }
+      onClose={onClose}
+    >
+      <p>
+        {application.returned ? `${application.returned.by} sent it back: ${application.returned.reason}. ` : ""}Closing it ends this application. Nobody can reopen it, but you can start a new one.
+      </p>
+    </Dialog>
   );
 }
 

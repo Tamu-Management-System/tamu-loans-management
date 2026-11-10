@@ -119,6 +119,8 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
   const [newBorrower, setNewBorrower] = useState<BorrowerDraft>(EMPTY_BORROWER);
   const [guarantors, setGuarantors] = useState<[GuarantorDraft, GuarantorDraft]>(draft ? draftGuarantors(draft) : [{ ...EMPTY_GUARANTOR }, { ...EMPTY_GUARANTOR }]);
   const [signedPdf, setSignedPdf] = useState<File | null>(null);
+  // Why a guarantor already on an active loan should still be accepted (an approver decides)
+  const [waiverReason, setWaiverReason] = useState(draft?.guarantorWaiver?.reason ?? "");
   const [showErrors, setShowErrors] = useState(false);
   const [result, setResult] = useState<NewApplicationResult | null>(null);
 
@@ -179,6 +181,11 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
     useGuarantorCheck(normaliseNationalId(guarantors[1].nationalId), Object.keys(personErrors(guarantors[1])).every((key) => key !== "nationalId")),
   ];
   const guarantorBlocks = guarantorChecks.map((check) => (check.data && !check.data.canGuarantee ? check.data.message : null));
+  const anyBlocked = guarantorBlocks.some(Boolean);
+  const waiverAllowed = guarantorChecks.some((check) => check.data && !check.data.canGuarantee && check.data.waiverAllowed);
+  // With a reason given, the application can go ahead; the approver grants or refuses the waiver
+  const waiverActive = anyBlocked && waiverAllowed && waiverReason.trim().length > 0;
+  const guarantorWaiver = waiverActive ? { reason: waiverReason.trim() } : null;
   // A draft may keep the signed PDF it already has
   const pdfError = !signedPdf && draft?.signedApplication ? undefined : !signedPdf ? "Upload the signed forms as one PDF." : signedPdf.type !== "application/pdf" ? "This isn't a PDF." : signedPdf.size > MAX_PDF_BYTES ? "The PDF is larger than 5 MB." : undefined;
   const stepValid: Record<StepId, boolean> = {
@@ -186,7 +193,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
     terms: termsValid,
     route: !!route,
     details: !isNew || Object.keys(detailErrors).length === 0,
-    guarantors: guarantorFieldErrors.every((errors) => Object.keys(errors).length === 0) && guarantorBlocks.every((block) => !block),
+    guarantors: guarantorFieldErrors.every((errors) => Object.keys(errors).length === 0) && (!anyBlocked || waiverActive),
     signed: !pdfError,
     review: true,
   };
@@ -234,6 +241,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
           application: {
             terms: { productId, amount: amountValue, repaymentSchedule: schedule, firstPaymentOn, numberOfPayments: paymentsValue },
             guarantors: guarantors.filter((g) => Object.keys(personErrors(g)).length === 0).map(cleanGuarantor),
+            guarantorWaiver,
             submit,
           },
           signedApplication: signedPdf && !pdfError ? signedPdf : null,
@@ -256,6 +264,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
             ? {
                 newBorrower: isNew ? cleanBorrower(newBorrower) : undefined,
                 guarantors: guarantors.filter((g) => Object.keys(personErrors(g)).length === 0).map(cleanGuarantor),
+                guarantorWaiver,
               }
             : {}),
         },
@@ -465,11 +474,28 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
                   })
                 }
                 // The "already on an active loan" warning shows as soon as the ID is complete, under the ID number
-                errors={{ ...(showErrors ? guarantorFieldErrors[index] : {}), ...(guarantorBlocks[index] ? { nationalId: guarantorBlocks[index]! } : {}) }}
+                errors={{ ...(showErrors ? guarantorFieldErrors[index] : {}), ...(guarantorBlocks[index] && !waiverActive ? { nationalId: guarantorBlocks[index]! } : {}) }}
               />
             </section>
           ))}
         </div>
+        {anyBlocked && waiverAllowed && (
+          <section className={styles.waiver} aria-labelledby="waiver-heading">
+            <h3 id="waiver-heading" className={styles.guarantorHeading}>
+              Ask an approver for a waiver
+            </h3>
+            <p className={styles.waiverText}>
+              {waiverActive
+                ? "The application can go ahead. An approver decides on the waiver when they approve it, or sends it back."
+                : "A guarantor is already on an active loan. An approver can allow it. Say why, or choose another guarantor."}
+            </p>
+            {waiverActive && guarantorBlocks.map((block, index) => block && <p key={index} className={styles.waiverText}>Guarantor {index + 1}: {block}</p>)}
+            <label className={styles.waiverLabel} htmlFor="waiver-reason">
+              Why should they be accepted?
+            </label>
+            <textarea id="waiver-reason" className={styles.waiverReason} rows={3} maxLength={500} value={waiverReason} onChange={(event) => setWaiverReason(event.target.value)} />
+          </section>
+        )}
       </>
     );
   } else if (step === "signed") {
@@ -508,6 +534,12 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
             </span>
           </ReviewRow>
         ))}
+        {guarantorWaiver && (
+          <ReviewRow title="Guarantor waiver" onEdit={() => goTo("guarantors")}>
+            <b>Asked of an approver</b>
+            <span>{guarantorWaiver.reason}</span>
+          </ReviewRow>
+        )}
         <ReviewRow title="Signed forms" onEdit={() => goTo("signed")}>
           <b>{signedPdf?.name ?? (draft?.signedApplication ? "Current signed PDF (kept)" : "")}</b>
           <span>One PDF · {signedPdf ? `${Math.max(1, Math.round(signedPdf.size / 1024))} KB` : draft?.signedApplication ? `uploaded by ${draft.signedApplication.uploadedBy}` : ""}</span>

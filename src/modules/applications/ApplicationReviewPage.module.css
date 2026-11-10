@@ -458,3 +458,9 @@
     flex: 1;
   }
 }
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}

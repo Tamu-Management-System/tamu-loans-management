@@ -29,6 +29,8 @@ export function useCreateApplication() {
 
 export interface GuarantorCheck {
   canGuarantee: boolean;
+  /** Settings allow an officer to ask an approver for a waiver */
+  waiverAllowed: boolean;
   /** Why not, naming the active loan; null when they can */
   message: string | null;
 }
@@ -85,6 +87,18 @@ function useApplicationDecision<T>(applicationId: string, action: "approve" | "r
 
 export const useApproveApplication = (applicationId: string) => useApplicationDecision<ApproveApplicationRequest>(applicationId, "approve");
 export const useRejectApplication = (applicationId: string) => useApplicationDecision<RejectApplicationRequest>(applicationId, "reject");
+
+/** The officer closes an application that was sent back and can't be fixed. */
+export function useCloseApplication(applicationId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<ApplicationDetail>(`/applications/${encodeURIComponent(applicationId)}/close`, {}),
+    onSuccess: (detail) => {
+      queryClient.setQueryData(["applications", "detail", applicationId], detail);
+      return Promise.all([["applications", "list"], ["borrowers"], ["navigation-badges"], ["dashboard"], ["worklist"], ["activity"]].map((queryKey) => queryClient.invalidateQueries({ queryKey })));
+    },
+  });
+}
 
 /** A paper draft for its officer to continue (includes the guarantors' full NINs; the server logs each opening). */
 export function useApplicationDraft(applicationId: string) {

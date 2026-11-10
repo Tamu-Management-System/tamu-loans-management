@@ -679,8 +679,26 @@ export interface NewApplicationRequest {
   newBorrower?: NewBorrowerDetails;
   /** Paper route */
   guarantors?: GuarantorDetails[];
+  /** Paper route: asks an approver to let a guarantor who is already on an active loan guarantee this one too */
+  guarantorWaiver?: GuarantorWaiverRequest | null;
   /** Paper route: false saves a draft (anything may be missing except who the client is) */
   submit: boolean;
+}
+
+/** Why a guarantor who is already on an active loan should still be accepted. The approver decides. */
+export interface GuarantorWaiverRequest {
+  reason: string;
+}
+
+/** A waiver as the approver sees it */
+export interface GuarantorWaiver {
+  reason: string;
+  requestedBy: string;
+  requestedAt: string;
+  /** The guarantors who are already on active loans */
+  guarantors: { name: string; nationalIdMasked: string; loanIds: string[] }[];
+  /** Set once an approver approved the application with the waiver */
+  grantedBy: string | null;
 }
 
 export interface NewApplicationResult {
@@ -713,6 +731,8 @@ export interface ApplicationListItem {
   createdAt: string;
   submittedAt: string | null;
   decided: { by: string; at: string } | null;
+  /** The officer closed it after it was sent back (nobody can fix it any more) */
+  closed: { by: string; at: string } | null;
   /** Paid out: the loan it became */
   loanId: string | null;
 }
@@ -730,6 +750,8 @@ export interface ApplicationList {
 export interface ApplicationDetail extends ApplicationListItem {
   /** How interest and any fee are worked out, copied from the loan product when the application was saved */
   pricing: LoanPricing;
+  /** A guarantor already on an active loan, with the officer's reason: the approver grants it by approving, or sends the application back */
+  guarantorWaiver: GuarantorWaiver | null;
   /** The client as registered (null until someone new completes the online form) */
   borrowerDetails: { nationalIdMasked: string; phone: string; email: string | null; premises: string; area: string; occupation: string } | null;
   guarantors: Guarantor[];
@@ -739,12 +761,14 @@ export interface ApplicationDetail extends ApplicationListItem {
   decision: { allowed: boolean; reason: string | null };
 }
 
-/** Why an approver doesn't approve. not-eligible closes the application; the others send it back to the officer. */
+/** Why an approver doesn't approve. Every reason sends the application back to the officer (the previous stage), who fixes it or closes it. */
 export type ApplicationRejectionReason = "signature-missing" | "details-mismatch" | "document-unclear" | "other" | "not-eligible";
 
 /** POST /applications/{id}/approve: the approver confirms they checked these */
 export interface ApproveApplicationRequest {
   checks: { signedPdfMatchesDetails: boolean; idCopyMatchesNin: boolean; guarantorsSigned: boolean };
+  /** Required when the application has a guarantor waiver: the approver grants it by approving. To refuse it, send the application back instead. */
+  guarantorWaiverGranted?: boolean;
 }
 
 /** POST /applications/{id}/reject */
@@ -766,6 +790,8 @@ export interface ApplicationDraft {
   signedApplication: DocumentFile | null;
   /** Both sides of the client's ID copy are on file */
   idCopyComplete: boolean;
+  /** The waiver the officer asked for, if any */
+  guarantorWaiver: GuarantorWaiverRequest | null;
   missing: string | null;
   returned: { reason: string; note: string | null; by: string; at: string } | null;
 }
@@ -774,6 +800,7 @@ export interface ApplicationDraft {
 export interface UpdateApplicationRequest {
   terms: ApplicationTerms;
   guarantors: GuarantorDetails[];
+  guarantorWaiver?: GuarantorWaiverRequest | null;
   /** true submits it for approval (everything must be complete); false saves the draft */
   submit: boolean;
 }
@@ -1130,6 +1157,8 @@ export interface LoanRulesSettings {
   phoneChangeNeedsApproval: boolean;
   /** A client can't get a new loan while one is open */
   oneOpenLoanPerBorrower: boolean;
+  /** An officer can ask an approver to let a guarantor already at the limit guarantee one more loan */
+  guarantorWaiversAllowed: boolean;
   /** How many active loans one person can guarantee at once (1: a guarantor on an active loan can't guarantee another) */
   guarantorMaxActiveLoans: number;
   /** The limits Settings → Loan products can be set within */

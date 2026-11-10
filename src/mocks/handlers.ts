@@ -38,6 +38,7 @@ import type {
   ApproveApplicationRequest,
   RejectApplicationRequest,
   ApplicationStatus,
+  GuarantorWaiverRequest,
   NewApplicationRequest,
   NewApplicationResult,
   DocumentFile,
@@ -244,13 +245,26 @@ function guaranteeLimit(nationalId: string) {
 const guaranteeMessage = (limit: { loanIds: string[]; max: number }, who = "This person") =>
   `${who} already guarantees active ${limit.loanIds.length === 1 ? "loan" : "loans"} ${limit.loanIds.join(", ")}. A guarantor can be on ${limit.max === 1 ? "one active loan" : `${limit.max} active loans`} at a time, so they can guarantee another once ${limit.loanIds.length === 1 ? "it is" : "those are"} repaid.`;
 
-/** The first guarantor who can't guarantee another loan, as a message for the officer. */
-function guarantorBlocked(guarantors: { fullName: string; nationalId: string }[]) {
-  for (const guarantor of guarantors) {
+/** The guarantors who can't guarantee another loan, with the active loans they are already on. */
+function blockedGuarantors(guarantors: { fullName: string; nationalId: string }[]) {
+  return guarantors.flatMap((guarantor) => {
     const limit = guaranteeLimit(guarantor.nationalId);
-    if (limit) return guaranteeMessage(limit, guarantor.fullName.trim() || "This guarantor");
-  }
-  return null;
+    return limit ? [{ guarantor, limit }] : [];
+  });
+}
+
+/**
+ * A guarantor already at the limit needs a waiver: the officer's reason, if Settings allow waivers.
+ * The waiver is granted by an approver when they approve the application, or the application is sent back.
+ */
+function guarantorWaiverFor(user: MockUser, guarantors: { fullName: string; nationalId: string }[], request: GuarantorWaiverRequest | null | undefined) {
+  const blocked = blockedGuarantors(guarantors);
+  if (!blocked.length) return { error: null, waiver: undefined };
+  const allowed = systemSettings.loanRules.guarantorWaiversAllowed;
+  const reason = request?.reason?.trim();
+  if (allowed && reason) return { error: null, waiver: { reason: reason.slice(0, 500), requestedBy: user.name, requestedAt: new Date().toISOString() } };
+  const { guarantor, limit } = blocked[0];
+  return { error: guaranteeMessage(limit, guarantor.fullName.trim() || "This guarantor") + (allowed ? " Ask for a waiver and say why: an approver decides." : ""), waiver: undefined };
 }
 
 function checkTerms(terms: ApplicationTerms | undefined, keepProductId: string | null = null): string | null {
@@ -292,6 +306,7 @@ function applicationListItem(app: (typeof applications)[number]): ApplicationLis
     createdAt: app.createdAt!,
     submittedAt: app.submittedAt ?? null,
     decided: app.decided ? { by: app.decided.by, at: app.decided.at } : null,
+    closed: app.closed ?? null,
     loanId: app.loanId ?? null,
   };
 }
@@ -333,6 +348,15 @@ function applicationDetail(app: (typeof applications)[number], user: MockUser): 
     ...item,
     borrowerDetails: borrower && details ? { nationalIdMasked: maskNationalId(borrower.nin), phone: borrower.phone, email: details.email, premises: details.premises, occupation: details.occupation, area: borrower.area } : null,
     pricing: terms.pricing,
+    guarantorWaiver: app.guarantorWaiver
+      ? {
+          reason: app.guarantorWaiver.reason,
+          requestedBy: app.guarantorWaiver.requestedBy,
+          requestedAt: app.guarantorWaiver.requestedAt,
+          guarantors: blockedGuarantors(app.guarantors ?? (borrower ? applicationGuarantors(borrower, app.id) : [])).map(({ guarantor, limit }) => ({ name: guarantor.fullName, nationalIdMasked: maskNationalId(guarantor.nationalId), loanIds: limit.loanIds })),
+          grantedBy: app.guarantorWaiver.grantedBy ?? null,
+        }
+      : null,
     guarantors: own?.guarantors ?? [],
     schedule: { firstPaymentOn: terms.firstPaymentOn, lastPaymentOn: summary.lastPaymentOn, interest: summary.interest, totalRepayable: summary.totalRepayable, finalInstalment: summary.finalInstalment },
     documents: {
@@ -710,6 +734,7 @@ function settingsProblem(section: SettingsSection, body: unknown): string | null
       const problem = limit("recoveryAfterDaysLate", "Days late before recovery", r.recoveryAfterDaysLate);
       if (problem) return problem;
     }
+    if (typeof r.guarantorWaiversAllowed !== "boolean") return "Choose whether guarantor waivers are allowed.";
     const pl = r.productLimits;
     const whole = (value: unknown) => Number.isInteger(value) && (value as number) >= 1;
     const percent = (value: unknown) => typeof value === "number" && value > 0 && value <= 100;
@@ -1894,6 +1919,7 @@ export const handlers = [
       guarantors: (app.guarantors ?? applicationGuarantors(borrower, app.id)).map((g) => ({ ...g, relationship: g.relationship ?? "" })),
       signedApplication: sections.find((section) => section.id === app.id)?.slots[0]?.file ?? null,
       idCopyComplete: identity.every((slot) => !!slot.file),
+      guarantorWaiver: app.guarantorWaiver ? { reason: app.guarantorWaiver.reason } : null,
       missing: app.missing,
       returned: app.returned ?? null,
     });
@@ -1919,13 +1945,14 @@ export const handlers = [
     const guarantors = (body.guarantors ?? []).filter((g) => g?.fullName?.trim() && NATIONAL_ID.test(g.nationalId ?? "") && normalisePhone(g.phone ?? ""));
     if (guarantors.some((g) => g.nationalId === borrower.nin) || (guarantors.length === 2 && guarantors[0].nationalId === guarantors[1].nationalId))
       return invalid("The client and the two guarantors must be three different people.");
-    const blocked = guarantorBlocked(guarantors);
-    if (blocked) return HttpResponse.json({ message: blocked }, { status: 409 });
+    const waiverResult = guarantorWaiverFor(user, guarantors, body.guarantorWaiver);
+    if (waiverResult.error) return HttpResponse.json({ message: waiverResult.error }, { status: 409 });
     const signed = form.get("signedApplication");
     const signedFile = signed instanceof File && signed.size > 0 ? signed : null;
     if (signedFile && (signedFile.size > MAX_UPLOAD_BYTES || (await sniffDocumentType(signedFile)) !== "application/pdf")) return HttpResponse.json({ message: "The signed application must be one PDF, up to 5 MB." }, { status: 415 });
 
     app.terms = terms;
+    app.guarantorWaiver = waiverResult.waiver;
     app.amount = terms.amount;
     app.guarantors = guarantors.map((g) => ({ fullName: g.fullName.trim().replace(/\s+/g, " "), nationalId: g.nationalId, phone: normalisePhone(g.phone)!, relationship: g.relationship?.trim() ?? "" }));
     if (signedFile) {
@@ -1960,7 +1987,7 @@ export const handlers = [
     const { nationalId } = (await request.json()) as { nationalId?: string };
     if (!NATIONAL_ID.test(nationalId ?? "")) return HttpResponse.json({ message: "Check the National ID number." }, { status: 422 });
     const limit = guaranteeLimit(nationalId!);
-    return HttpResponse.json({ canGuarantee: !limit, message: limit ? guaranteeMessage(limit) : null });
+    return HttpResponse.json({ canGuarantee: !limit, waiverAllowed: systemSettings.loanRules.guarantorWaiversAllowed, message: limit ? guaranteeMessage(limit) : null });
   }),
 
   http.post(`${API_BASE}/applications/:applicationId/approve`, async ({ params, request }) => {
@@ -1972,12 +1999,18 @@ export const handlers = [
     if (app.status !== "submitted") return HttpResponse.json({ message: "This application isn't waiting for approval any more." }, { status: 409 });
     if (!detail.decision.allowed) return HttpResponse.json({ message: detail.decision.reason }, { status: 403 });
     if (!detail.documents.signedApplication) return HttpResponse.json({ message: "There's no signed application to check." }, { status: 422 });
-    const { checks } = (await request.json()) as ApproveApplicationRequest;
+    const { checks, guarantorWaiverGranted } = (await request.json()) as ApproveApplicationRequest;
     if (!checks?.signedPdfMatchesDetails || !checks.idCopyMatchesNin || !checks.guarantorsSigned) return HttpResponse.json({ message: "Confirm all three checks before approving." }, { status: 422 });
     // A guarantor may have joined another loan since this was submitted
     const applicant = detail.borrower.id ? borrowers.find((b) => b.id === detail.borrower.id) : undefined;
-    const blockedAtApproval = guarantorBlocked(app.guarantors ?? (applicant ? applicationGuarantors(applicant, app.id) : []));
-    if (blockedAtApproval) return HttpResponse.json({ message: blockedAtApproval }, { status: 409 });
+    const blockedAtApproval = blockedGuarantors(app.guarantors ?? (applicant ? applicationGuarantors(applicant, app.id) : []));
+    if (blockedAtApproval.length) {
+      // Only an application with a waiver can go ahead, and only if the approver grants it
+      if (!app.guarantorWaiver) return HttpResponse.json({ message: guaranteeMessage(blockedAtApproval[0].limit, blockedAtApproval[0].guarantor.fullName.trim()) }, { status: 409 });
+      if (guarantorWaiverGranted !== true) return HttpResponse.json({ message: "A guarantor is already on an active loan. Grant the waiver, or send the application back." }, { status: 422 });
+      app.guarantorWaiver.grantedBy = user.name;
+      audit(user, `granted a guarantor waiver on ${app.id}: ${app.guarantorWaiver.reason}`);
+    }
 
     app.status = "approved";
     app.decided = { by: user.name, byId: user.id, at: new Date().toISOString() };
@@ -2003,19 +2036,30 @@ export const handlers = [
     const at = new Date().toISOString();
     app.returned = { reason: REJECTION_REASONS[reason], note: note?.trim() || null, by: user.name, at };
     const borrower = detail.borrower.id ? borrowers.find((b) => b.id === detail.borrower.id) : undefined;
-    if (reason === "not-eligible") {
-      // Closed for good; a client with earlier loans goes back to their history, a newcomer stays on record
-      app.status = "rejected";
-      app.decided = { by: user.name, at };
-      if (borrower && borrower.clearedLoans > 0) borrower.applicationId = null;
-    } else {
-      // Back to the officer to fix and resubmit
-      app.status = "draft";
-      app.missing = null;
-    }
-    const verb = reason === "not-eligible" ? "Rejected" : "Sent back";
-    if (borrower) recordBorrowerEvent(borrower, "changes", `${verb} application ${app.id}: ${REJECTION_REASONS[reason]}${note?.trim() ? ` (${note.trim()})` : ""}`, actorOf(user));
-    audit(user, `${verb.toLowerCase()} ${app.id}: ${REJECTION_REASONS[reason]}`);
+    // Every rejection goes back to the officer (the previous stage) with the reason, to fix it or to close it
+    app.status = "draft";
+    app.missing = null;
+    if (borrower) recordBorrowerEvent(borrower, "changes", `Sent back application ${app.id}: ${REJECTION_REASONS[reason]}${note?.trim() ? ` (${note.trim()})` : ""}`, actorOf(user));
+    audit(user, `sent back ${app.id}: ${REJECTION_REASONS[reason]}`);
+    return HttpResponse.json<ApplicationDetail>(applicationDetail(app, user));
+  }),
+
+  // The officer closes an application an approver sent back, when it can't be fixed
+  http.post(`${API_BASE}/applications/:applicationId/close`, async ({ params }) => {
+    await delay(350);
+    const user = currentDemoUser();
+    const app = applications.find((a) => a.id === String(params.applicationId));
+    if (!app || app.officerId !== user.id || !hasPermission(user, "applications.create")) return HttpResponse.json({ message: "That application wasn't found." }, { status: 404 });
+    if (app.status !== "draft" || !app.returned) return HttpResponse.json({ message: "Only an application that was sent back can be closed." }, { status: 409 });
+    const at = new Date().toISOString();
+    app.status = "rejected";
+    app.closed = { by: user.name, at };
+    app.decided = { by: user.name, at };
+    const borrower = app.borrowerId ? borrowers.find((b) => b.id === app.borrowerId) : borrowers.find((b) => b.applicationId === app.id);
+    // A client with earlier loans goes back to their history, a newcomer stays on record
+    if (borrower && borrower.clearedLoans > 0) borrower.applicationId = null;
+    if (borrower) recordBorrowerEvent(borrower, "changes", `Closed application ${app.id} after it was sent back: ${app.returned.reason}`, actorOf(user));
+    audit(user, `closed ${app.id} after it was sent back: ${app.returned.reason}`);
     return HttpResponse.json<ApplicationDetail>(applicationDetail(app, user));
   }),
 
@@ -2067,8 +2111,8 @@ export const handlers = [
     if (guarantors.some((g) => g.nationalId === borrowerNin) || (guarantors.length === 2 && guarantors[0].nationalId === guarantors[1].nationalId))
       return invalid("The client and the two guarantors must be three different people.");
     if (submit && guarantors.length !== 2) return invalid("Enter both guarantors' details.");
-    const blocked = guarantorBlocked(guarantors);
-    if (blocked) return HttpResponse.json({ message: blocked }, { status: 409 });
+    const waiverResult = guarantorWaiverFor(user, guarantors, body.guarantorWaiver);
+    if (waiverResult.error) return HttpResponse.json({ message: waiverResult.error }, { status: 409 });
 
     // Files (paper route)
     const signed = form.get("signedApplication");
@@ -2110,6 +2154,7 @@ export const handlers = [
       terms,
       route: body.route,
       guarantors: guarantors.map((g) => ({ fullName: g.fullName.trim(), nationalId: g.nationalId, phone: normalisePhone(g.phone)!, relationship: g.relationship?.trim() ?? "" })),
+      ...(waiverResult.waiver ? { guarantorWaiver: waiverResult.waiver } : {}),
       createdAt: new Date().toISOString(),
       ...(submit ? { submittedAt: new Date().toISOString() } : {}),
     };

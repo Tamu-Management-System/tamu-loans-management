@@ -657,14 +657,26 @@ Everything an approver checks: the list item plus `borrowerDetails` (masked NIN,
 
 Asked while an officer types a guarantor's National ID, so the screen can warn before the form is saved.
 Body `{ "nationalId": "CM1234567890AB" }` → `{ "canGuarantee": false, "message": "This person already guarantees active loan TL-0548. …" }`
-(`canGuarantee: true` and `message: null` when they are free). `422` if the ID isn't a valid NIN. The check counts the
+(`canGuarantee: true` and `message: null` when they are free), plus `waiverAllowed` (Settings `guarantorWaiversAllowed`). `422` if the ID isn't a valid NIN. The check counts the
 loans still being repaid that have this National ID as a guarantor, against `guarantorMaxActiveLoans`. It never replaces
 the check on save: create, draft save, online submit and approve each run it again.
 
+**Guarantor waiver** (client answer, Nov 2026: "in case of a need for waiver for the guarantor it should go through an approver"):
+- A guarantor at the `guarantorMaxActiveLoans` limit blocks the save with `409`, unless Settings `guarantorWaiversAllowed`
+  is on and the officer sends `guarantorWaiver: { "reason": "…" }` (create and draft save, paper route; max 500 characters).
+  The application is then saved and submitted normally and stores the waiver (reason, who asked, when).
+  The public online form never gets a waiver: it is still blocked with a message to ask the loan officer.
+- `GET /applications/{id}` returns `guarantorWaiver: { reason, requestedBy, requestedAt, guarantors: [{ name,
+  nationalIdMasked, loanIds }], grantedBy }` (or `null`). `GET /applications/{id}/draft` returns `guarantorWaiver: { reason }`.
+- **Granting:** an approver (`applications.approve`) grants it by approving with `"guarantorWaiverGranted": true`.
+  If a guarantor is blocked at approval time, the application must have a waiver (`409` if not) and the flag must be
+  `true` (`422` if not). Record who granted it in `grantedBy` and the audit log ("granted a guarantor waiver on APP-…").
+  To refuse it, the approver sends the application back (`/reject`) with the reason.
+
 ### `POST /applications/{id}/approve` (requires `applications.approve`)
 
-`{ "checks": { "signedPdfMatchesDetails": true, "idCopyMatchesNin": true, "guarantorsSigned": true } }` → the
-updated application.
+`{ "checks": { "signedPdfMatchesDetails": true, "idCopyMatchesNin": true, "guarantorsSigned": true }, "guarantorWaiverGranted": true }` → the
+updated application. `guarantorWaiverGranted` is only needed when the application has a guarantor waiver (see above).
 
 - Only while `submitted` (`409` otherwise); all three checks must be `true` (`422`); a signed application must exist.
 - **Two people:** whoever created the application can't approve it (`403`), even with a role that has both
@@ -678,8 +690,18 @@ updated application.
 
 - Same rules as approving (only while `submitted`, not one's own). `note` is required for `other` and
   `not-eligible`.
-- `not-eligible` closes it for good (`rejected`). Any other reason **sends it back** to the officer as a `draft`
-  with `returned` set, to fix and submit again.
+- **Every reason sends it back** to the officer as a `draft` with `returned` set (reason, note, who, when), to fix and
+  submit again (client answer, Nov 2026: "when workflow process is REJECTED should be sent back to the Originator /
+  Previous Stage for action as necessary"). `not-eligible` no longer closes it: the officer sees why and decides.
+  When the staged workflow (Loan Exec, Approver 1, Approver 2, Disbursement) is built, a rejection goes back to the
+  previous stage, and only the first stage's rejection reaches the officer.
+
+### `POST /applications/{id}/close` (the officer who owns it; requires `applications.create`)
+
+Closes an application that was sent back and can't be fixed: `status` becomes `rejected`, with `closed: { by, at }`
+(also on the list items as `closed`; `null` otherwise). Only a `draft` that has `returned` (`409` otherwise); `404`
+for anyone but its officer. A closed application can't be reopened; the officer starts a new one. Log it in the
+audit log and on the client's activity.
 
 ### `GET /applications/{id}/draft` (the officer who owns it)
 
@@ -1041,7 +1063,7 @@ Nothing an admin can change is hard-coded in the frontend: it reads these and fo
                 "payoutAccounts": [{ "method": "MTN MoMo", "number": "0772 900 410", "accountName": "Tamu Cleaning Services" }],
                 "branches": [{ "id": "mkt-kampala", "name": "Kampala Central" }, { "id": "mkt-mbarara", "name": "Mbarara" }] },
   "loanRules": { "approverCannotDisburse": true, "creatorCannotApprove": true, "phoneChangeNeedsApproval": true, "oneOpenLoanPerBorrower": true,
-                 "guarantorMaxActiveLoans": 1,
+                 "guarantorWaiversAllowed": true, "guarantorMaxActiveLoans": 1,
                  "productLimits": { "smallestLoan": 10000, "biggestLoan": 100000000, "maxPayments": 365, "maxFeePercent": 20, "maxLateFeePercent": 20, "maxGraceDays": 30, "maxInterestPercent": { "loan": 100, "day": 5, "week": 20, "month": 30 } }, "firstPaymentWithinDays": { "daily": 7, "weekly": 14, "monthly": 35 },
                  "approvalWaitingWarnHours": 48, "disbursementWaitingWarnDays": 3, "promiseToPayDays": 3,
                  "recoveryAfterDaysLate": 60, "recoveryMode": "suggest", "seriouslyLateDays": 30,
@@ -1073,6 +1095,7 @@ What each setting does on the server:
 - `recoveryMode: "auto"` with `recoveryAfterDaysLate`: a daily job sends loans that late to recovery (by
   "Automatic (Loan rules)"); a loan a person brought back isn't sent again automatically. `"suggest"` only flags them.
 - `oneOpenLoanPerBorrower`: `409` on a new application while the borrower has a loan to repay.
+- `guarantorWaiversAllowed` (boolean): whether an officer can ask an approver for a guarantor waiver (see `POST /guarantors/check`).
 - `guarantorMaxActiveLoans` (1 to 5): how many active loans (still being repaid) one person can guarantee at once, matched by National ID. At 1, a guarantor on an active loan can't guarantee another loan until it is repaid. Enforced on create, on saving a draft, on the online submit and again on approve: `409` with a message naming the active loan(s) (the public online form only says that person already guarantees an active loan, never which one). See `POST /guarantors/check`.
 - `productLimits`: the furthest a loan product can be set (`POST /loan-products`, `PUT /loan-products/{id}`): smallest and biggest loan, most payments, highest fee % and late fee %, most grace days, and the highest interest rate for each charging basis (`loan`, `day`, `week`, `month`). Whole numbers, biggest ≥ smallest, percentages up to 100. The example values are only starting points; the client can change them.
 - `firstPaymentWithinDays` (1 to 120 per way of repaying): the furthest first payment date an officer can set, in days from the application. `422` on an application with a later date.

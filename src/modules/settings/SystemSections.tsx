@@ -75,6 +75,9 @@ export function LoanRulesSection() {
             <SettingRow label="Online application links work for" htmlFor={ids.link} description="The link sent to a client stops working after this, or as soon as they submit.">
               <NumberField id={ids.link} value={rules.onlineLinkValidHours} onChange={(value) => draft.set("onlineLinkValidHours", value)} min={SETTING_LIMITS.onlineLinkValidHours[0]} max={SETTING_LIMITS.onlineLinkValidHours[1]} unit="hours" />
             </SettingRow>
+            <SettingRow label="Allow guarantor waivers" description="An officer can ask an approver to accept a guarantor who is already at that limit. The approver grants it by approving, or sends the application back.">
+              <Switch label="Allow guarantor waivers" checked={rules.guarantorWaiversAllowed} onChange={(value) => draft.set("guarantorWaiversAllowed", value)} />
+            </SettingRow>
             <SettingRow label="Active loans one guarantor can be on" htmlFor={ids.guarantor} description="At 1, a guarantor on an active loan can't guarantee another loan until it is repaid.">
               <NumberField id={ids.guarantor} value={rules.guarantorMaxActiveLoans} onChange={(value) => draft.set("guarantorMaxActiveLoans", value)} min={SETTING_LIMITS.guarantorMaxActiveLoans[0]} max={SETTING_LIMITS.guarantorMaxActiveLoans[1]} unit="loans" />
             </SettingRow>

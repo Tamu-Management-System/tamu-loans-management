@@ -11,18 +11,17 @@ const REASONS: { value: ApplicationRejectionReason; label: string; description: 
   { value: "details-mismatch", label: "Details don't match the forms", description: "What was typed in differs from the signed forms or the ID." },
   { value: "document-unclear", label: "Document unclear or incomplete", description: "Pages missing, or the scan or photo can't be read." },
   { value: "other", label: "Something else to fix", description: "Explain in the note." },
-  { value: "not-eligible", label: "Not eligible", description: "Closes the application for good. The officer can't resubmit it." },
+  { value: "not-eligible", label: "Not eligible", description: "The officer sees why and decides whether to close the application." },
 ];
 
-/** Sends the application back to the officer to fix, or, if not eligible, rejects it for good. */
+/** Sends the application back to the officer with the reason. They fix it and resubmit it, or close it. */
 export function RejectApplicationDialog({ application, onClose }: { application: ApplicationDetail; onClose: () => void }) {
   const noteId = useId();
   const showToast = useToast();
   const reject = useRejectApplication(application.id);
   const [reason, setReason] = useState<ApplicationRejectionReason | null>(null);
   const [note, setNote] = useState("");
-  const final = reason === "not-eligible";
-  const noteRequired = reason === "other" || final;
+  const noteRequired = reason === "other" || reason === "not-eligible";
 
   const submit = () => {
     if (!reason || (noteRequired && !note.trim())) return;
@@ -30,7 +29,7 @@ export function RejectApplicationDialog({ application, onClose }: { application:
     reject
       .mutateAsync({ reason, note: note.trim() || null })
       .then(() => {
-        showToast({ message: final ? `${application.id} rejected.` : `${application.id} sent back to ${application.officer.name}.` });
+        showToast({ message: `${application.id} sent back to ${application.officer.name}.` });
         onClose();
       })
       .catch(() => undefined /* shown in the dialog */);
@@ -39,10 +38,10 @@ export function RejectApplicationDialog({ application, onClose }: { application:
   const error = reject.error instanceof ApiError ? reject.error.message : reject.error ? "That didn't go through. Try again." : null;
   return (
     <Dialog
-      title={final ? `Reject ${application.id}` : `Send back ${application.id}`}
+      title={`Send back ${application.id}`}
       subtitle={`${application.borrower.name} · ${application.officer.name}`}
-      submitLabel={final ? "Reject for good" : "Send back"}
-      submittingLabel={final ? "Rejecting…" : "Sending back…"}
+      submitLabel="Send back"
+      submittingLabel="Sending back…"
       submitting={reject.isPending}
       submitDisabled={!reason || (noteRequired && !note.trim())}
       error={error}
@@ -57,7 +56,7 @@ export function RejectApplicationDialog({ application, onClose }: { application:
       <Field
         label={noteRequired ? "Note" : "Note (optional)"}
         htmlFor={noteId}
-        hint={final ? "The officer sees this. The application is closed." : `${application.officer.name} sees this and can fix the application and submit it again.`}
+        hint={`${application.officer.name} sees the reason and this note. They fix the application and submit it again, or close it.`}
       >
         <textarea id={noteId} className={styles.note} rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="e.g. Guarantor 2 didn't sign the consent page" />
       </Field>

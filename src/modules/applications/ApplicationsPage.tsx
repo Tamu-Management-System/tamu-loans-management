@@ -35,12 +35,12 @@ function statusDetail(item: ApplicationListItem) {
       if (item.loanId) return `Paid out as ${item.loanId}`;
       return item.decided ? `By ${item.decided.by}, ${formatRelativeDay(item.decided.at)}` : "";
     case "rejected":
-      return item.returned ? `${item.returned.reason} · ${item.returned.by}` : "";
+      return item.closed ? `Closed by ${item.closed.by}` : item.returned ? `${item.returned.reason} · ${item.returned.by}` : "";
   }
 }
 
-function ApplicationStatusChip({ status, returned }: { status: ApplicationStatus; returned: boolean }) {
-  const label = { draft: returned ? "Sent back" : "Draft", "awaiting-borrower": "Waiting for client", submitted: "Waiting for approval", approved: "Approved", rejected: "Rejected" }[status];
+function ApplicationStatusChip({ status, returned, closed }: { status: ApplicationStatus; returned: boolean; closed: boolean }) {
+  const label = { draft: returned ? "Sent back" : "Draft", "awaiting-borrower": "Waiting for client", submitted: "Waiting for approval", approved: "Approved", rejected: closed ? "Closed" : "Rejected" }[status];
   const tone = { draft: returned ? styles.chipWarning : styles.chipNeutral, "awaiting-borrower": styles.chipInfo, submitted: styles.chipInfo, approved: styles.chipSuccess, rejected: styles.chipDanger }[status];
   return <span className={`${styles.chip} ${tone}`}>{label}</span>;
 }
@@ -170,7 +170,7 @@ export function ApplicationsPage() {
                       </span>
                     </td>
                     <td className={styles.status}>
-                      <ApplicationStatusChip status={item.status} returned={!!item.returned} />
+                      <ApplicationStatusChip status={item.status} returned={!!item.returned} closed={!!item.closed} />
                       <span className={`${styles.secondary} ${item.status === "draft" && (item.missing || item.returned) ? styles.attention : ""}`}>{statusDetail(item)}</span>
                     </td>
                     {branchWide && <td className={styles.officer}>{item.officer.name}</td>}

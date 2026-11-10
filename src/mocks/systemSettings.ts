@@ -26,6 +26,7 @@ export const systemSettings: SystemSettings = {
     creatorCannotApprove: true,
     phoneChangeNeedsApproval: true,
     oneOpenLoanPerBorrower: true,
+    guarantorWaiversAllowed: true,
     guarantorMaxActiveLoans: 1,
     productLimits: { smallestLoan: 10_000, biggestLoan: 100_000_000, maxPayments: 365, maxFeePercent: 20, maxLateFeePercent: 20, maxGraceDays: 30, maxInterestPercent: { loan: 100, day: 5, week: 20, month: 30 } },
     firstPaymentWithinDays: { daily: 7, weekly: 14, monthly: 35 },

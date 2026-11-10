@@ -118,11 +118,15 @@ export interface MockApplication {
   submittedAt?: string;
   /** Approved or rejected; byId for the approver-can't-disburse rule */
   decided?: { by: string; byId?: string; at: string };
+  /** A guarantor already on an active loan: the officer's reason; grantedBy is set when an approver approves with it */
+  guarantorWaiver?: { reason: string; requestedBy: string; requestedAt: string; grantedBy?: string };
+  /** The officer closed it after it was sent back */
+  closed?: { by: string; at: string };
   /** Paid out: the loan it became */
   loanId?: string;
   /** When it was paid out */
   paidOutAt?: string;
-  /** Sent back to the officer as a draft, or rejected for good */
+  /** Sent back to the officer as a draft (kept if the officer then closes it) */
   returned?: { reason: string; note: string | null; by: string; at: string };
 }
 
