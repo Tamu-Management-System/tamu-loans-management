@@ -1,7 +1,16 @@
 // The only place the app talks to the backend. Screens call these helpers
 // (usually through TanStack Query), never fetch() directly, so switching from
 // the mock API to the real one is a config change: set VITE_API_URL.
+import { backendPath, type BackendEnvelope, type BackendModel, type BackendPageEnvelope, type BackendQuery, type BackendReadAction } from "./backend";
+
 const BASE_URL = import.meta.env.VITE_API_URL ?? "/api";
+
+// The real backend signs people in with a token (the login answer's idToken) sent as `Authorization: Bearer`.
+// It is kept in memory only: never in localStorage or a cookie the page can read, so a script injected into the page can't copy it.
+let accessToken: string | null = null;
+export const setAccessToken = (token: string | null) => {
+  accessToken = token;
+};
 
 export class ApiError extends Error {
   readonly status: number;
@@ -61,6 +70,7 @@ async function send(method: string, path: string, body?: unknown, options: Reque
   if (options.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
   // Uploads: the browser sets the multipart Content-Type (with its boundary) itself
   if (body !== undefined && !isUpload) headers["Content-Type"] = "application/json";
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   const csrfToken = SAFE_METHODS.includes(method) ? null : readCookie(CSRF_COOKIE);
   if (csrfToken) headers[CSRF_HEADER] = csrfToken;
 
@@ -95,6 +105,14 @@ export const api = {
   patch: <T>(path: string, body?: unknown, options?: RequestOptions) => request<T>("PATCH", path, body, options),
   put: <T>(path: string, body?: unknown) => request<T>("PUT", path, body),
   delete: <T>(path: string) => request<T>("DELETE", path),
+  /** The real backend's reads: POST with { query } to /private/<Model>/<action>/. Filters travel in the body, never in the address. */
+  read: async <T>(model: BackendModel, action: BackendReadAction, query: BackendQuery = {}) =>
+    (await request<BackendEnvelope<T>>("POST", backendPath(model, action), { query })).content,
+  /** A list from the real backend, with its total (find-and-count-all) */
+  readPage: async <T>(model: BackendModel, query: BackendQuery = {}) => {
+    const { page } = await request<BackendPageEnvelope<T>>("POST", backendPath(model, "find-and-count-all"), { query });
+    return { items: page.content, total: page.count };
+  },
   /** A file (e.g. a PDF), fetched with the session like any other request */
   getFile: async (path: string) => {
     const response = await send("GET", path);

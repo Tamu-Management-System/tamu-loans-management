@@ -12,7 +12,8 @@ Use it with [api-contract.md](api-contract.md) (what the screens need) and [back
 - **Reads are `POST` with a body** `{ "query": { … } }`. Query keys: `id`, `advancedFilters` (`[{ fieldName, value, operator,
   conjunction, childrenFilterParts }]`), `sort` (`[{ sortProperty, sortDirection }]`), `page` and `size`, `cursor`, `populate`,
   `projections`, `excludedProjections`, `includeSoftDeletedEntries`. Operators: `equals`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`,
-  `like`, `iLike`, `startsWith`, `endsWith`, `contains`, `between`, `isNull` and more.
+  `like`, `iLike`, `startsWith`, `endsWith`, `contains`, `between`, `isNull` and more. `like` and `iLike` add the `%` signs themselves,
+  and a dotted name such as `person.fullNames` filters a joined table (the relation must be in `populate`).
 - **Answers:** one record `{ content, success, message }`; a list `{ page: { count, content }, success, message }`; by cursor the
   same plus `nextCursor`.
 - **Permissions (CASL):** each route has `@CheckPolicies({ action, subject })`. Subject = the table name (`Borrower`), actions =
@@ -29,7 +30,7 @@ Use it with [api-contract.md](api-contract.md) (what the screens need) and [back
 
 | Area | Covered by the generic routes | Missing (the screens need it) |
 |---|---|---|
-| Sign in | login, logout, change password | `POST` refresh-token route (the cookie is set, nothing reads it); forgot password and reset (service methods exist, no routes); set a password from an invite link; a route that returns the user **with their CASL rules**; lockout count and minutes from Settings, not fixed in code; idle-timeout value |
+| Sign in | login, logout, change password, find-account (the staff account and its person) | `POST` refresh-token route (the cookie is set, nothing reads it); forgot password and reset (service methods exist, no routes); set a password from an invite link; a route that returns the user **with their CASL rules**; lockout count and minutes from Settings, not fixed in code; idle-timeout value |
 | Clients | `Borrower`, `Person`, `TelephoneNumber` CRUD | an optional **email** on the client (`Person` has none); reveal the full National ID (audit-logged, short-lived); phone change **approval** (`PhoneChangeRequest` exists, no rule or route); a client profile summary (loans, balance, status) |
 | Applications | `LoanApplication`, `ApplicationGuarantor`, `OnlineApplicationLink` CRUD | submit; **approve**, **send back** (every rejection goes back to the officer, with a reason) and **close** (could map to `CANCELLED`); creator cannot approve; the guarantor check and **waiver** (one active loan per guarantor, an approver may waive); the online form (public, by token, with ID photos); signed-application PDF upload and **private** download |
 | Loan products | `LoanProduct` CRUD | pricing copied onto the application so later edits don't change a loan; product limits and the other limits from Settings |
@@ -44,7 +45,7 @@ Use it with [api-contract.md](api-contract.md) (what the screens need) and [back
 
 - Reads become `POST` with `{ query }`; list answers are read from `page.content` and `page.count`.
 - The token is sent as a `Bearer` header and kept in memory only, with the `Refresh` cookie used to renew it.
-- Sign-in sends `username`; the screen label stays "Email" until the backend dev says which field staff use.
+- Sign-in sends the staff email as `username` (his login looks the account up by email, lower-cased), so the screen keeps its "Email" label.
 - Every business action keeps its named route in [api-contract.md](api-contract.md) until the backend has it.
 
 ## Not checked yet
