@@ -11,6 +11,16 @@ when an endpoint here changes, change its mock handler too.
 - **Format:** JSON request and response bodies. Dates as ISO 8601 strings (`2026-10-31T09:42:00Z`).
 - **Money:** whole Ugandan shillings as integers (`1240000`), never formatted strings.
 - **Auth:** session cookie (`credentials: "include"`). An unauthenticated request returns `401`.
+- **Matching the backend that exists** (`loan-app-rest-api`, see [backend-mapping.md](backend-mapping.md)):
+  - **Reads are `POST` with a JSON body.** Wherever this document shows `GET /x?y=z`, send `POST /x` with `{ "query": { "y": "z" } }`
+    (filters in the body keep names, phones and National IDs out of the address, logs and browser history). Real `GET`s are only
+    for downloads and the import template.
+  - **List answers** are `{ "page": { "count": 120, "content": [ … ] }, "success": true, "message": "…" }`; a single record is
+    `{ "content": { … }, "success": true, "message": "…" }`. The mock API still answers with the shapes shown below; the frontend maps between them.
+  - **Sign-in** is `POST /api/public/account/login` → `{ "content": { "idToken", "user", "accounts" } }`. The frontend sends
+    `Authorization: Bearer <idToken>` and keeps the token in memory only; the `Refresh` cookie renews it.
+  - Where the backend already has a generic route for plain data (`/api/private/<Models>/find-all/` and the like), the frontend uses
+    it. The named routes below are for what the generic routes cannot do safely (approve, pay out, record a payment, reports…).
 - **CSRF:** the backend sets a readable `XSRF-TOKEN` cookie; every `POST`/`PATCH`/`PUT`/`DELETE` carries the same
   value in the `X-XSRF-TOKEN` header, which the backend must check (`403` if missing or wrong).
 - **Idempotency:** `POST /payments` and `POST /applications/{id}/disburse` carry an `Idempotency-Key` header (a UUID,
