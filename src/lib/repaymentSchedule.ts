@@ -3,16 +3,13 @@
 // from the first payment date. The backend must use the same rules (docs/api-contract.md).
 import type { InterestBasis, LatePenalty, LoanPricing, RepaymentSchedule } from "../api/types";
 
-/** Older loans, made before loan products: 18% on the amount borrowed, no fee */
-export const LEGACY_PRICING: LoanPricing = { productName: "Standard loan", interestRatePercent: 18, interestPer: "loan", fee: { type: "none", value: 0, collection: "added" } };
-
 export interface LoanTermsInput {
   amount: number;
   repaymentSchedule: RepaymentSchedule;
   /** ISO date (YYYY-MM-DD) */
   firstPaymentOn: string;
   numberOfPayments: number;
-  pricing?: LoanPricing;
+  pricing: LoanPricing;
 }
 
 export interface LoanTermsSummary {
@@ -43,9 +40,6 @@ const DAYS_PER_PAYMENT: Record<RepaymentSchedule, number> = { daily: 1, weekly: 
 const DAYS_PER_PERIOD: Record<Exclude<InterestBasis, "loan">, number> = { day: 1, week: 7, month: 30 };
 const SCHEDULE_PERIOD: Record<RepaymentSchedule, Exclude<InterestBasis, "loan">> = { daily: "day", weekly: "week", monthly: "month" };
 
-/** The highest rate each basis allows (the screens and the API use the same limits) */
-export const INTEREST_LIMITS: Record<InterestBasis, number> = { loan: 100, day: 5, week: 20, month: 30 };
-
 /**
  * How many times the rate is charged: once for "loan"; otherwise the days, weeks or months the loan runs
  * (e.g. 4.5% a week on a 4-week loan is charged 4 times). When the basis and the schedule differ, the loan's
@@ -63,7 +57,7 @@ export function feeAmount(amount: number, fee: LoanPricing["fee"]) {
   return 0;
 }
 
-export function summariseTerms({ amount, repaymentSchedule, firstPaymentOn, numberOfPayments, pricing = LEGACY_PRICING }: LoanTermsInput): LoanTermsSummary {
+export function summariseTerms({ amount, repaymentSchedule, firstPaymentOn, numberOfPayments, pricing }: LoanTermsInput): LoanTermsSummary {
   const periods = interestPeriods(repaymentSchedule, numberOfPayments, pricing.interestPer);
   const interest = Math.round((amount * pricing.interestRatePercent * periods) / 100);
   const fee = feeAmount(amount, pricing.fee);
@@ -79,9 +73,6 @@ export function summariseTerms({ amount, repaymentSchedule, firstPaymentOn, numb
     lastPaymentOn: paymentDate(firstPaymentOn, repaymentSchedule, numberOfPayments - 1),
   };
 }
-
-/** The latest first payment an officer can set: about one period after the application, with some slack */
-export const FIRST_PAYMENT_WITHIN_DAYS: Record<RepaymentSchedule, number> = { daily: 7, weekly: 14, monthly: 35 };
 
 /** The default loan length, one month, in payments: 30 daily, 4 weekly or 1 monthly (admins can change it per product) */
 export const ONE_MONTH_OF_PAYMENTS: Record<RepaymentSchedule, number> = { daily: 30, weekly: 4, monthly: 1 };

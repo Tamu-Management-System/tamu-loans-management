@@ -12,7 +12,7 @@ import { borrowers, type MockBorrower } from "./borrowerDirectory";
 import { applications, loans, officers, OFFICER_IDS, type MockApplication } from "./fixtures";
 import { pastLoans } from "./loanHistory";
 import { seedLoanPayments } from "./loanPayments";
-import { loanProducts, pricingOf } from "./systemSettings";
+import { loanProducts, pricingOf, systemSettings } from "./systemSettings";
 
 // ---------- Randomness and dates ----------
 
@@ -71,6 +71,8 @@ function newPerson() {
     nin: nin(gender),
     phone: phone(),
     secondaryPhone: random() < 0.45 ? phone() : null,
+    // Made up from the name (no random draw, so the rest of the sample data stays the same); example.com is reserved for examples
+    email: (name.length * 7) % 5 < 3 ? `${name.toLowerCase().replace(/[^a-z ]/g, "").replace(/ +/g, ".")}@example.com` : null,
     area: pick(ADDRESSES),
     premises: pick(PREMISES).replace("{n}", String(between(1, 60))),
     occupation: random() < 0.85 ? pick(OCCUPATIONS) : "",
@@ -334,7 +336,7 @@ for (const draft of registered) {
       schedule: { firstPaymentOn: loan.firstPaymentOn, numberOfPayments: loan.numberOfPayments, instalment: loan.instalment, paidAtStart: loan.paid },
     };
   }
-  borrowerDetails.set(id, { premises: person.premises, occupation: person.occupation, secondaryPhone: person.secondaryPhone, nextOfKin: person.nextOfKin, gender: person.gender, loanTerms });
+  borrowerDetails.set(id, { premises: person.premises, occupation: person.occupation, secondaryPhone: person.secondaryPhone, email: person.email, nextOfKin: person.nextOfKin, gender: person.gender, loanTerms });
 
   for (const loan of draft.history)
     pastLoans.push({
@@ -381,7 +383,7 @@ planned.forEach(({ plan, draft }, index) => {
     status: plan.status,
     missing: plan.status === "draft" && !plan.returned ? (plan.missing ?? null) : null,
     borrowerId: borrower?.id ?? null,
-    terms: { productId: product.id, amount, repaymentSchedule: product.repaymentSchedule, firstPaymentOn, numberOfPayments: product.numberOfPayments, pricing: pricingOf(product) },
+    terms: { productId: product.id, amount, purpose: systemSettings.loanRules.loanPurposes[index % (systemSettings.loanRules.loanPurposes.length - 1)], repaymentSchedule: product.repaymentSchedule, firstPaymentOn, numberOfPayments: product.numberOfPayments, pricing: pricingOf(product) },
     ...(plan.who === "online-new" ? { route: "online" as const } : {}),
     ...(guarantors ? { guarantors } : {}),
     createdAt,

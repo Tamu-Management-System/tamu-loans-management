@@ -9,6 +9,7 @@ import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { useToast } from "../../components/ui/Toast";
 import { formatLongDate, formatRelativeDay, formatUGX } from "../../lib/format";
+import { describeInterest } from "../../lib/repaymentSchedule";
 import { describeFile } from "../borrowers/documents/documentFormat";
 import { DocumentPreviewDialog } from "../borrowers/documents/DocumentPreviewDialog";
 import { RejectApplicationDialog } from "./RejectApplicationDialog";
@@ -116,6 +117,7 @@ export function ApplicationReviewPage() {
                   {a.borrowerDetails.phone}
                   <span className={styles.hint}>Mobile money: the loan is paid here</span>
                 </Row>
+                <Row label="Email">{a.borrowerDetails.email || "—"}</Row>
                 <Row label="Shop / premises">{a.borrowerDetails.premises || "—"}</Row>
                 <Row label="Address (Location)">{a.borrowerDetails.area || "—"}</Row>
               </dl>
@@ -129,7 +131,8 @@ export function ApplicationReviewPage() {
               <Row label="Amount">
                 <b>{formatUGX(a.amount)}</b>
               </Row>
-              <Row label="Interest">{formatUGX(a.schedule.interest)} (18%)</Row>
+              <Row label="Purpose">{a.purpose || "—"}</Row>
+              <Row label="Interest">{formatUGX(a.schedule.interest)} ({describeInterest(a.pricing)})</Row>
               <Row label="Total to repay">
                 <b>{formatUGX(a.schedule.totalRepayable)}</b>
               </Row>

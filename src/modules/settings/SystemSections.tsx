@@ -25,12 +25,16 @@ const orderKey = (order: AllocationPart[]) => order.join(">");
 export function LoanRulesSection() {
   const { can } = useAuth();
   const draft = useSettingsDraft("loanRules");
-  const ids = { recovery: useId(), late: useId(), target: useId(), warning: useId(), link: useId(), order: useId() };
+  const ids = { recovery: useId(), late: useId(), target: useId(), warning: useId(), link: useId(), order: useId(), guarantor: useId(), within: useId(), waiting: useId(), payoutWait: useId(), promise: useId() };
   const numbers = [
     ["seriouslyLateDays", "Days late shown in red", "days"],
     ["par30TargetPercent", "PAR30 target", "%"],
     ["earlyWarningDays", "Early warning", "days"],
     ["onlineLinkValidHours", "Online link lifetime", "hours"],
+    ["guarantorMaxActiveLoans", "Active loans a guarantor can be on", "loans"],
+    ["approvalWaitingWarnHours", "Approval waiting warning", "hours"],
+    ["disbursementWaitingWarnDays", "Payout waiting warning", "days"],
+    ["promiseToPayDays", "Promise to pay suggestion", "days"],
   ] as const;
   const rules = draft.values;
   return (
@@ -40,11 +44,17 @@ export function LoanRulesSection() {
       draft={draft as never}
       canEdit={can("settings.rules")}
       validate={() =>
-        rules!.recoveryAfterDaysLate !== null && outside(rules!.recoveryAfterDaysLate, SETTING_LIMITS.recoveryAfterDaysLate)
+        rules!.loanPurposes.length === 0 || rules!.loanPurposes.some((purpose) => purpose.trim().length < 2)
+          ? "Add at least one loan purpose, and give each a name."
+          : new Set(rules!.loanPurposes.map((purpose) => purpose.trim().toLowerCase())).size !== rules!.loanPurposes.length
+            ? "Each loan purpose can only be listed once."
+            : rules!.recoveryAfterDaysLate !== null && outside(rules!.recoveryAfterDaysLate, SETTING_LIMITS.recoveryAfterDaysLate)
           ? `Days late before recovery: ${rangeText(SETTING_LIMITS.recoveryAfterDaysLate, "days")}.`
           : (() => {
               const bad = numbers.find(([key]) => outside(rules![key], SETTING_LIMITS[key]));
-              return bad ? `${bad[1]}: ${rangeText(SETTING_LIMITS[bad[0]], bad[2])}.` : null;
+              if (bad) return `${bad[1]}: ${rangeText(SETTING_LIMITS[bad[0]], bad[2])}.`;
+              const badWindow = (["daily", "weekly", "monthly"] as const).find((schedule) => outside(rules!.firstPaymentWithinDays[schedule], SETTING_LIMITS.firstPaymentWithinDays));
+              return badWindow ? `Latest first payment, ${badWindow} loans: ${rangeText(SETTING_LIMITS.firstPaymentWithinDays, "days")}.` : null;
             })()
       }
     >
@@ -69,6 +79,80 @@ export function LoanRulesSection() {
             <SettingRow label="Online application links work for" htmlFor={ids.link} description="The link sent to a client stops working after this, or as soon as they submit.">
               <NumberField id={ids.link} value={rules.onlineLinkValidHours} onChange={(value) => draft.set("onlineLinkValidHours", value)} min={SETTING_LIMITS.onlineLinkValidHours[0]} max={SETTING_LIMITS.onlineLinkValidHours[1]} unit="hours" />
             </SettingRow>
+            <SettingRow label="Active loans one guarantor can be on" htmlFor={ids.guarantor} description="At 1, a guarantor on an active loan can't guarantee another loan until it is repaid.">
+              <NumberField id={ids.guarantor} value={rules.guarantorMaxActiveLoans} onChange={(value) => draft.set("guarantorMaxActiveLoans", value)} min={SETTING_LIMITS.guarantorMaxActiveLoans[0]} max={SETTING_LIMITS.guarantorMaxActiveLoans[1]} unit="loans" />
+            </SettingRow>
+            {(["daily", "weekly", "monthly"] as const).map((schedule) => (
+              <SettingRow key={schedule} label={`Latest first payment, ${schedule} loans`} description="The furthest date an officer can set for the first payment, counted from the application.">
+                <NumberField
+                  value={rules.firstPaymentWithinDays[schedule]}
+                  onChange={(value) => draft.set("firstPaymentWithinDays", { ...rules.firstPaymentWithinDays, [schedule]: value })}
+                  min={SETTING_LIMITS.firstPaymentWithinDays[0]}
+                  max={SETTING_LIMITS.firstPaymentWithinDays[1]}
+                  unit="days"
+                  label={`Latest first payment, ${schedule} loans`}
+                />
+              </SettingRow>
+            ))}
+          </SettingsGroup>
+
+          <SettingsGroup title="Loan product limits" description="The furthest a loan product can be set. It stops typing mistakes, such as an extra zero in an amount or a fee of 200%.">
+            {(
+              [
+                ["Smallest loan a product can offer", "smallestLoan", "UGX"],
+                ["Biggest loan a product can offer", "biggestLoan", "UGX"],
+                ["Most payments in one loan", "maxPayments", "payments"],
+                ["Highest fee", "maxFeePercent", "%"],
+                ["Highest late fee", "maxLateFeePercent", "%"],
+                ["Most grace days", "maxGraceDays", "days"],
+              ] as const
+            ).map(([label, key, unit]) => (
+              <SettingRow key={key} label={label}>
+                <NumberField
+                  label={label}
+                  value={rules.productLimits[key]}
+                  onChange={(value) => draft.set("productLimits", { ...rules.productLimits, [key]: value })}
+                  min={key === "maxGraceDays" ? 0 : 1}
+                  max={unit === "%" ? 100 : Number.MAX_SAFE_INTEGER}
+                  unit={unit}
+                  allowDecimal={unit === "%"}
+                />
+              </SettingRow>
+            ))}
+            {(["loan", "day", "week", "month"] as const).map((basis) => (
+              <SettingRow key={basis} label={`Highest interest rate ${basis === "loan" ? "on the whole loan" : `a ${basis}`}`}>
+                <NumberField
+                  label={`Highest interest rate ${basis}`}
+                  value={rules.productLimits.maxInterestPercent[basis]}
+                  onChange={(value) => draft.set("productLimits", { ...rules.productLimits, maxInterestPercent: { ...rules.productLimits.maxInterestPercent, [basis]: value } })}
+                  min={0.1}
+                  max={100}
+                  unit="%"
+                  allowDecimal
+                />
+              </SettingRow>
+            ))}
+          </SettingsGroup>
+
+          <SettingsGroup title="Loan purposes" description="What a loan can be for. The officer picks one on every application.">
+            {rules.loanPurposes.map((purpose, index) => (
+              <div key={index} className={styles.marketRow}>
+                <input
+                  className={styles.textInput}
+                  aria-label={`Loan purpose ${index + 1}`}
+                  value={purpose}
+                  maxLength={40}
+                  onChange={(event) => draft.set("loanPurposes", rules.loanPurposes.map((existing, i) => (i === index ? event.target.value : existing)))}
+                  placeholder="Loan purpose"
+                />
+                <button type="button" className={styles.iconButton} aria-label={`Remove ${purpose || "this"} purpose`} onClick={() => draft.set("loanPurposes", rules.loanPurposes.filter((_, i) => i !== index))}>
+                  <Icon name="close" size={16} strokeWidth={2} />
+                </button>
+              </div>
+            ))}
+            <button type="button" className={styles.addButton} onClick={() => draft.set("loanPurposes", [...rules.loanPurposes, ""])}>
+              + Add purpose
+            </button>
           </SettingsGroup>
 
           <SettingsGroup title="Payments" description="How money paid by a client is applied to what they owe.">
@@ -98,6 +182,15 @@ export function LoanRulesSection() {
           <SettingsGroup title="Late loans">
             <SettingRow label="Show as seriously late after" htmlFor={ids.late} description="Late loans turn red from this day in lists and on the loan page.">
               <NumberField id={ids.late} value={rules.seriouslyLateDays} onChange={(value) => draft.set("seriouslyLateDays", value)} min={SETTING_LIMITS.seriouslyLateDays[0]} max={SETTING_LIMITS.seriouslyLateDays[1]} unit="days late" />
+            </SettingRow>
+            <SettingRow label="Show a waiting approval in red after" htmlFor={ids.waiting} description="An application nobody has decided on turns red on the dashboard from this many hours.">
+              <NumberField id={ids.waiting} value={rules.approvalWaitingWarnHours} onChange={(value) => draft.set("approvalWaitingWarnHours", value)} min={SETTING_LIMITS.approvalWaitingWarnHours[0]} max={SETTING_LIMITS.approvalWaitingWarnHours[1]} unit="hours" />
+            </SettingRow>
+            <SettingRow label="Show an unpaid approved loan in red after" htmlFor={ids.payoutWait} description="An approved loan not yet paid out turns red on the dashboard from this many days.">
+              <NumberField id={ids.payoutWait} value={rules.disbursementWaitingWarnDays} onChange={(value) => draft.set("disbursementWaitingWarnDays", value)} min={SETTING_LIMITS.disbursementWaitingWarnDays[0]} max={SETTING_LIMITS.disbursementWaitingWarnDays[1]} unit="days" />
+            </SettingRow>
+            <SettingRow label="Suggest a promise to pay in" htmlFor={ids.promise} description="When an officer logs that a client promised to pay, this date is suggested. They can change it.">
+              <NumberField id={ids.promise} value={rules.promiseToPayDays} onChange={(value) => draft.set("promiseToPayDays", value)} min={SETTING_LIMITS.promiseToPayDays[0]} max={SETTING_LIMITS.promiseToPayDays[1]} unit="days" />
             </SettingRow>
             <SettingRow
               label="Recovery"

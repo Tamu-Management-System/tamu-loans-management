@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router";
 import type { WorklistAction, WorklistTask } from "../../api/types";
+import { useSystemSettings } from "../../api/settings";
 import { useFeatureFlags } from "../../app/featureFlags";
 import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../../components/ui/Button";
@@ -108,7 +109,7 @@ function RowActions({ task, handlers }: { task: WorklistTask; handlers: Worklist
 /** One task in the worklist: priority bar, subject, status, amount and actions. */
 export function WorklistRow({ task, handlers }: { task: WorklistTask; handlers: WorklistRowHandlers }) {
   const subject = describeSubject(task);
-  const status = describeStatus(task);
+  const status = describeStatus(task, useSystemSettings().data?.loanRules);
   const amount = taskAmount(task);
   const label = amountLabel(task);
   const warning = "warning" in task ? task.warning : undefined;

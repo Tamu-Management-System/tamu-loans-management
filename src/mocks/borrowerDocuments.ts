@@ -8,8 +8,8 @@ import type { BorrowerDocuments, DocumentFile, DocumentSlot, Guarantor, LoanPric
 import type { MockBorrower } from "./borrowerDirectory";
 import { borrowerDetails, maskNationalId } from "./borrowerProfiles";
 import { formatDate } from "../lib/format";
-import { describeInterest, LEGACY_PRICING, paymentDate, summariseTerms } from "../lib/repaymentSchedule";
-import { findProduct, pricingOf, systemSettings } from "./systemSettings";
+import { describeInterest, paymentDate, summariseTerms } from "../lib/repaymentSchedule";
+import { findProduct, LEGACY_PRICING, pricingOf, systemSettings, withPricing } from "./systemSettings";
 import { applications, loans, officers, type MockApplication } from "./fixtures";
 import { pastLoans } from "./loanHistory";
 import { addOnlineApplication, hasOnlineApplicationFor, openOnlineApplicationFor, revokeOnlineApplications, submittedOnlineApplicationsFor, type MockOnlineApplication, type OnlineSubmission, type StoredImage } from "./onlineApplications";
@@ -164,7 +164,7 @@ export function documentSectionsFor(borrower: MockBorrower): MockSection[] {
         amount: application.amount,
         dateBorrowed: (application.createdAt ?? new Date().toISOString()).slice(0, 10),
         schedule: terms?.repaymentSchedule ?? "weekly",
-        ...(terms ? { firstPaymentOn: terms.firstPaymentOn, lastPaymentOn: summariseTerms(terms).lastPaymentOn, numberOfPayments: terms.numberOfPayments, pricing: terms.pricing } : {}),
+        ...(terms ? { firstPaymentOn: terms.firstPaymentOn, lastPaymentOn: summariseTerms(withPricing(terms)).lastPaymentOn, numberOfPayments: terms.numberOfPayments, pricing: terms.pricing } : {}),
       },
       borrower.registeredOn, application.missing === "Guarantor consent missing", ["Signed application PDF missing", "Guarantor details missing"].includes(application.missing ?? "") || !!application.returned,
       application.missing === "Guarantor details missing", application.guarantors);
@@ -308,7 +308,7 @@ function applicationForms(app: MockApplication): MockLoanForms {
     dateBorrowed: new Date().toISOString().slice(0, 10),
     schedule: terms.repaymentSchedule,
     firstPaymentOn: terms.firstPaymentOn,
-    lastPaymentOn: summariseTerms(terms).lastPaymentOn,
+    lastPaymentOn: summariseTerms(withPricing(terms)).lastPaymentOn,
     numberOfPayments: terms.numberOfPayments,
     pricing: terms.pricing,
     guarantors: (app.guarantors ?? []).map((g) => ({ name: g.fullName, phone: g.phone, nin: g.nationalId, nationalIdMasked: maskNationalId(g.nationalId), relationship: g.relationship ?? null })),
@@ -440,7 +440,7 @@ export function updateApplicationForms(borrower: MockBorrower, app: MockApplicat
       amount: app.terms.amount,
       schedule: app.terms.repaymentSchedule,
       firstPaymentOn: app.terms.firstPaymentOn,
-      lastPaymentOn: summariseTerms(app.terms).lastPaymentOn,
+      lastPaymentOn: summariseTerms(withPricing(app.terms)).lastPaymentOn,
       numberOfPayments: app.terms.numberOfPayments,
     });
   }

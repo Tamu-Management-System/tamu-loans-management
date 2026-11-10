@@ -27,6 +27,23 @@ export function useCreateApplication() {
   });
 }
 
+export interface GuarantorCheck {
+  canGuarantee: boolean;
+  /** Why not, naming the active loan; null when they can */
+  message: string | null;
+}
+
+/** Whether a guarantor (by National ID) is free to guarantee another loan. The server checks again when the application is saved. */
+export function useGuarantorCheck(nationalId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["guarantor-check", nationalId],
+    queryFn: () => api.post<GuarantorCheck>("/guarantors/check", { nationalId }),
+    enabled,
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
 export const APPLICATIONS_PAGE_SIZE = 25;
 
 export interface ApplicationListParams {

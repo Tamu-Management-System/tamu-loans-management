@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ApiError } from "../../api/client";
 import type { CallOutcome, InstalmentDueTask, OverdueTask, PromiseDueTask } from "../../api/types";
+import { useSystemSettings } from "../../api/settings";
 import { useLogCallOutcome } from "../../api/worklist";
 import { Dialog, RadioOption } from "../../components/ui/Dialog";
 import { firstName, toDateInputValue } from "../../lib/format";
@@ -8,8 +9,6 @@ import styles from "./Worklist.module.css";
 
 type LoanTask = InstalmentDueTask | PromiseDueTask | OverdueTask;
 type Choice = "promised" | "no-answer" | "field-visit" | "paying-now";
-
-const DEFAULT_PROMISE_DAYS = 3;
 
 interface LogCallDialogProps {
   task: LoanTask;
@@ -24,7 +23,8 @@ export function LogCallDialog({ task, onClose, onPayingNow, onLogged }: LogCallD
   const logCall = useLogCallOutcome();
   const today = new Date();
   const defaultPromise = new Date(today);
-  defaultPromise.setDate(today.getDate() + DEFAULT_PROMISE_DAYS);
+  // The suggested date comes from Settings → Loan rules; the officer can change it
+  defaultPromise.setDate(today.getDate() + (useSystemSettings().data?.loanRules.promiseToPayDays ?? 0));
 
   const [choice, setChoice] = useState<Choice>("promised");
   const [promisedDate, setPromisedDate] = useState(toDateInputValue(defaultPromise));

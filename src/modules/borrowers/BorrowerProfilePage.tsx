@@ -246,6 +246,7 @@ function Overview({ borrower }: { borrower: BorrowerProfile }) {
             {borrower.pendingPhoneChange && <PendingPhoneChangeNotice borrower={borrower} />}
           </Detail>
           <Detail label="Other phone">{borrower.secondaryPhone ?? "—"}</Detail>
+          <Detail label="Email">{borrower.email ?? "—"}</Detail>
           <Detail label="Next of kin">{borrower.nextOfKin?.name || "—"}</Detail>
           <Detail label="Relationship">{borrower.nextOfKin?.relationship || "—"}</Detail>
           <Detail label="Next of kin's phone">{borrower.nextOfKin?.phone || "—"}</Detail>
@@ -353,6 +354,7 @@ function LoanDetails({ loan, borrowerName }: { loan: BorrowerCurrentLoan; borrow
   const repaid = Math.max(0, loan.totalRepayable - loan.balance);
   const repaidPercent = loan.totalRepayable > 0 ? Math.round((repaid / loan.totalRepayable) * 100) : 0;
   const late = loan.daysPastDue > 0;
+  const seriouslyLateDays = useSystemSettings().data?.loanRules.seriouslyLateDays;
 
   return (
     <section className={`${styles.card} ${styles.loanCard}`} aria-labelledby="current-loan">
@@ -390,7 +392,7 @@ function LoanDetails({ loan, borrowerName }: { loan: BorrowerCurrentLoan; borrow
 
       {loan.nextPayment &&
         (late ? (
-          <p className={`${styles.alert} ${loan.daysPastDue > 30 ? styles.alertDanger : ""}`} role="note">
+          <p className={`${styles.alert} ${seriouslyLateDays !== undefined && loan.daysPastDue >= seriouslyLateDays ? styles.alertDanger : ""}`} role="note">
             <Icon name="warning" size={16} strokeWidth={1.9} />
             <span>
               <b>{dayCount(loan.daysPastDue)} late.</b> {formatUGX(loan.arrearsAmount)} overdue since {formatDate(loan.nextPayment.dueOn)}.

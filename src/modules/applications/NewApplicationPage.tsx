@@ -1,15 +1,16 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import { useCreateApplication, useUpdateApplication } from "../../api/applications";
+import { useCreateApplication, useGuarantorCheck, useUpdateApplication } from "../../api/applications";
 import { useBorrowerList, useBorrowerProfile } from "../../api/borrowers";
 import { ApiError } from "../../api/client";
 import type { ApplicationDraft, BorrowerStatus, DocumentFile, GuarantorDetails, LoanProduct, NewApplicationResult, NewBorrowerDetails, RepaymentSchedule } from "../../api/types";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
+import { Select } from "../../components/ui/Select";
 import { useToast } from "../../components/ui/Toast";
 import { formatLongDate, formatUGX, toDateInputValue } from "../../lib/format";
 import { normalisePhone } from "../../lib/phone";
-import { describeInterest, describeLength, FIRST_PAYMENT_WITHIN_DAYS, summariseTerms } from "../../lib/repaymentSchedule";
+import { describeInterest, describeLength, summariseTerms } from "../../lib/repaymentSchedule";
 import { useLoanProducts, useSystemSettings } from "../../api/settings";
 import { BorrowerStatusChip } from "../borrowers/BorrowerStatusChip";
 import { describeFile } from "../borrowers/documents/documentFormat";
@@ -62,19 +63,22 @@ const todayDate = () => toDateInputValue(new Date());
 const draftGuarantors = (draft: ApplicationDraft): [GuarantorDraft, GuarantorDraft] => [{ ...EMPTY_GUARANTOR, ...draft.guarantors[0] }, { ...EMPTY_GUARANTOR, ...draft.guarantors[1] }];
 
 /** The first payment date that suits the frequency (tomorrow, in a week, or in a month), within the product's window. */
-function defaultFirstPayment(schedule: RepaymentSchedule, withinDays = 90) {
+function defaultFirstPayment(schedule: RepaymentSchedule, withinDays?: number) {
   const date = new Date();
   if (schedule === "daily") date.setDate(date.getDate() + 1);
   else if (schedule === "weekly") date.setDate(date.getDate() + 7);
   else date.setMonth(date.getMonth() + 1);
+  if (withinDays === undefined) return toDateInputValue(date);
   const latest = new Date();
   latest.setDate(latest.getDate() + withinDays);
   return toDateInputValue(date > latest ? latest : date);
 }
 
-const latestFirstPayment = (product: LoanProduct | undefined) => {
+/** The latest first payment, from the window in Settings → Loan rules; undefined until settings have loaded. */
+const latestFirstPayment = (withinDays: number | undefined) => {
+  if (withinDays === undefined) return undefined;
   const date = new Date();
-  date.setDate(date.getDate() + (product ? FIRST_PAYMENT_WITHIN_DAYS[product.repaymentSchedule] : 90));
+  date.setDate(date.getDate() + withinDays);
   return toDateInputValue(date);
 };
 
@@ -102,13 +106,16 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
   const [amount, setAmount] = useState(draft ? String(draft.terms.amount) : "");
   // Loan products (Settings): what's on offer, plus a draft's own product even if it's since been withdrawn
   const { data: allProducts } = useLoanProducts();
-  const oneLoanAtATime = useSystemSettings().data?.loanRules.oneOpenLoanPerBorrower ?? true;
+  const loanRules = useSystemSettings().data?.loanRules;
+  const oneLoanAtATime = loanRules?.oneOpenLoanPerBorrower ?? true;
+  const purposes = loanRules?.loanPurposes ?? [];
+  const [purpose, setPurpose] = useState(draft?.terms.purpose ?? "");
   const [productId, setProductId] = useState<string | null>(draft?.terms.productId ?? null);
   const products = (allProducts ?? []).filter((p) => p.status === "active" || p.id === draft?.terms.productId);
   const product = products.find((p) => p.id === productId);
   const schedule: RepaymentSchedule = product?.repaymentSchedule ?? draft?.terms.repaymentSchedule ?? "weekly";
   const [firstPaymentOn, setFirstPaymentOn] = useState(
-    draft && draft.terms.firstPaymentOn >= todayDate() ? draft.terms.firstPaymentOn : defaultFirstPayment(draft?.terms.repaymentSchedule ?? "weekly"),
+    draft && draft.terms.firstPaymentOn >= todayDate() ? draft.terms.firstPaymentOn : defaultFirstPayment(draft?.terms.repaymentSchedule ?? "weekly", loanRules?.firstPaymentWithinDays[draft?.terms.repaymentSchedule ?? "weekly"]),
   );
   const [firstPaymentEdited, setFirstPaymentEdited] = useState(!!draft);
   const [route, setRoute] = useState<Route | null>(draft ? "paper" : null);
@@ -146,18 +153,19 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
   // ----- Terms -----
   const amountValue = Number(amount.replace(/\D/g, "")) || 0;
   const earliest = todayDate();
-  const termErrors: { product?: string; amount?: string; firstPaymentOn?: string } = {};
+  const termErrors: { product?: string; amount?: string; purpose?: string; firstPaymentOn?: string } = {};
   // The product sets how long the loan runs
   const paymentsValue = product?.numberOfPayments ?? 0;
-  const latest = latestFirstPayment(product);
+  const latest = latestFirstPayment(product ? loanRules?.firstPaymentWithinDays[product.repaymentSchedule] : undefined);
   if (!product) termErrors.product = "Choose a loan product.";
+  if (!purposes.includes(purpose)) termErrors.purpose = "Choose what the loan is for.";
   if (amountValue <= 0) termErrors.amount = "Enter the amount to lend.";
   else if (product && (amountValue < product.amount.min || amountValue > product.amount.max)) termErrors.amount = `${product.name}: ${formatUGX(product.amount.min)} to ${formatUGX(product.amount.max)}.`;
   if (!firstPaymentOn || firstPaymentOn < earliest) termErrors.firstPaymentOn = "Choose today or a later date.";
-  else if (firstPaymentOn > latest) termErrors.firstPaymentOn = `${product!.name}: the first payment must be by ${formatLongDate(latest)}.`;
+  else if (latest && firstPaymentOn > latest) termErrors.firstPaymentOn = `${product!.name}: the first payment must be by ${formatLongDate(latest)}.`;
   const termsValid = Object.keys(termErrors).length === 0;
   const pricing = product ? pricingOf(product) : undefined;
-  const summary = termsValid ? summariseTerms({ amount: amountValue, repaymentSchedule: schedule, firstPaymentOn, numberOfPayments: paymentsValue, pricing }) : null;
+  const summary = termsValid && pricing ? summariseTerms({ amount: amountValue, repaymentSchedule: schedule, firstPaymentOn, numberOfPayments: paymentsValue, pricing }) : null;
 
   // ----- Paper route checks -----
   const isNew = chosen?.kind === "new";
@@ -169,6 +177,12 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
     const duplicate = sameAsError(guarantor.nationalId, others);
     return duplicate && !errors.nationalId ? { ...errors, nationalId: duplicate } : errors;
   });
+  // A guarantor already on an active loan can't guarantee another: asked as soon as the National ID is complete
+  const guarantorChecks = [
+    useGuarantorCheck(normaliseNationalId(guarantors[0].nationalId), Object.keys(personErrors(guarantors[0])).every((key) => key !== "nationalId")),
+    useGuarantorCheck(normaliseNationalId(guarantors[1].nationalId), Object.keys(personErrors(guarantors[1])).every((key) => key !== "nationalId")),
+  ];
+  const guarantorBlocks = guarantorChecks.map((check) => (check.data && !check.data.canGuarantee ? check.data.message : null));
   // A draft may keep the signed PDF it already has
   const pdfError = !signedPdf && draft?.signedApplication ? undefined : !signedPdf ? "Upload the signed forms as one PDF." : signedPdf.type !== "application/pdf" ? "This isn't a PDF." : signedPdf.size > MAX_PDF_BYTES ? "The PDF is larger than 5 MB." : undefined;
   const stepValid: Record<StepId, boolean> = {
@@ -176,7 +190,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
     terms: termsValid,
     route: !!route,
     details: !isNew || Object.keys(detailErrors).length === 0,
-    guarantors: guarantorFieldErrors.every((errors) => Object.keys(errors).length === 0),
+    guarantors: guarantorFieldErrors.every((errors) => Object.keys(errors).length === 0) && guarantorBlocks.every((block) => !block),
     signed: !pdfError,
     review: true,
   };
@@ -209,6 +223,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
     ...cleanPerson(borrower),
     gender: borrower.gender || "female",
     secondaryPhone: normalisePhone(borrower.secondaryPhone),
+    email: borrower.email.trim().toLowerCase() || null,
     area: borrower.area.trim(),
     premises: borrower.premises.trim(),
     occupation: borrower.occupation.trim(),
@@ -221,7 +236,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
       update
         .mutateAsync({
           application: {
-            terms: { productId, amount: amountValue, repaymentSchedule: schedule, firstPaymentOn, numberOfPayments: paymentsValue },
+            terms: { productId, amount: amountValue, purpose, repaymentSchedule: schedule, firstPaymentOn, numberOfPayments: paymentsValue },
             guarantors: guarantors.filter((g) => Object.keys(personErrors(g)).length === 0).map(cleanGuarantor),
             submit,
           },
@@ -238,7 +253,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
       {
         application: {
           borrowerId: chosen.kind === "existing" ? chosen.id : null,
-          terms: { productId, amount: amountValue, repaymentSchedule: schedule, firstPaymentOn, numberOfPayments: paymentsValue },
+          terms: { productId, amount: amountValue, purpose, repaymentSchedule: schedule, firstPaymentOn, numberOfPayments: paymentsValue },
           route: asRoute,
           submit,
           ...(asRoute === "paper"
@@ -303,7 +318,8 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
                     checked={productId === option.id}
                     onChange={() => {
                       setProductId(option.id);
-                      if (!firstPaymentEdited || firstPaymentOn > latestFirstPayment(option)) setFirstPaymentOn(defaultFirstPayment(option.repaymentSchedule, FIRST_PAYMENT_WITHIN_DAYS[option.repaymentSchedule]));
+                      const optionLatest = latestFirstPayment(loanRules?.firstPaymentWithinDays[option.repaymentSchedule]);
+                      if (!firstPaymentEdited || (optionLatest && firstPaymentOn > optionLatest)) setFirstPaymentOn(defaultFirstPayment(option.repaymentSchedule, loanRules?.firstPaymentWithinDays[option.repaymentSchedule]));
                     }}
                   />
                   <b>{option.name}</b>
@@ -321,6 +337,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
           {errors.product && <span className={styles.error}>{errors.product}</span>}
         </fieldset>
         <AmountField value={amount} onChange={setAmount} error={errors.amount} hint={product ? `${formatUGX(product.amount.min)} to ${formatUGX(product.amount.max)}` : undefined} />
+        <PurposeField value={purpose} onChange={setPurpose} purposes={purposes} error={errors.purpose} />
         <div className={styles.pair}>
           <DateField
             label="First payment"
@@ -452,7 +469,8 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
                     return copy;
                   })
                 }
-                errors={showErrors ? guarantorFieldErrors[index] : {}}
+                // The "already on an active loan" warning shows as soon as the ID is complete, under the ID number
+                errors={{ ...(showErrors ? guarantorFieldErrors[index] : {}), ...(guarantorBlocks[index] ? { nationalId: guarantorBlocks[index]! } : {}) }}
               />
             </section>
           ))}
@@ -480,6 +498,7 @@ export function NewApplicationPage({ draft }: { draft?: ApplicationDraft } = {})
           <b>
             {formatUGX(amountValue)}
             {product && ` · ${product.name}`}
+            {purpose && ` · ${purpose}`}
           </b>
           {summary && (
             <span>
@@ -699,6 +718,17 @@ function AmountField({ value, onChange, error, hint }: { value: string; onChange
       inputMode="tel"
       hint={hint ?? (digits ? undefined : "e.g. 2,500,000")}
     />
+  );
+}
+
+function PurposeField({ value, onChange, purposes, error }: { value: string; onChange: (value: string) => void; purposes: string[]; error?: string }) {
+  const id = useId();
+  return (
+    <div className={styles.dateField}>
+      <label htmlFor={id}>What the loan is for</label>
+      <Select id={id} value={value} onChange={onChange} options={purposes.map((purpose) => ({ value: purpose, label: purpose }))} placeholder="Choose the purpose" />
+      {error && <span className={styles.error}>{error}</span>}
+    </div>
   );
 }
 

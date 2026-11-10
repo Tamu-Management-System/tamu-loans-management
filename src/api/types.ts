@@ -390,6 +390,8 @@ export interface BorrowerProfile {
   status: BorrowerStatus;
   phone: string;
   secondaryPhone: string | null;
+  /** The client's email address; null when not given. Clients only: guarantors have none. */
+  email: string | null;
   /** Address: where they live */
   area: string;
   /** Shop / premises / building / arcade, as on the payment agreement */
@@ -427,6 +429,8 @@ export interface PendingPhoneChange {
 export interface BorrowerDetailsUpdate {
   phone: string;
   secondaryPhone: string | null;
+  /** null when not given */
+  email: string | null;
   area: string;
   premises: string;
   occupation: string;
@@ -531,6 +535,8 @@ export interface NewBorrowerDetails {
   nationalId: string;
   phone: string;
   secondaryPhone: string | null;
+  /** Optional; null when not given */
+  email: string | null;
   gender: "female" | "male";
   /** Address: where they live */
   area: string;
@@ -631,6 +637,8 @@ export interface ApplicationTerms {
   /** The loan product chosen; its pricing is copied below so later product changes don't alter this loan */
   productId: string | null;
   amount: number;
+  /** What the loan is for: one of the purposes in Settings → Loan rules */
+  purpose: string;
   repaymentSchedule: RepaymentSchedule;
   /** ISO date */
   firstPaymentOn: string;
@@ -722,8 +730,12 @@ export interface ApplicationList {
 
 /** GET /applications/{id}: everything an approver checks */
 export interface ApplicationDetail extends ApplicationListItem {
+  /** What the loan is for (from Settings); null on applications started before it was asked */
+  purpose: string | null;
+  /** How interest and any fee are worked out, copied from the loan product when the application was saved */
+  pricing: LoanPricing;
   /** The client as registered (null until someone new completes the online form) */
-  borrowerDetails: { nationalIdMasked: string; phone: string; premises: string; area: string; occupation: string } | null;
+  borrowerDetails: { nationalIdMasked: string; phone: string; email: string | null; premises: string; area: string; occupation: string } | null;
   guarantors: Guarantor[];
   schedule: { firstPaymentOn: string; lastPaymentOn: string; interest: number; totalRepayable: number; finalInstalment: number };
   documents: { signedApplication: DocumentFile | null; idFront: DocumentFile | null; idBack: DocumentFile | null };
@@ -1100,6 +1112,19 @@ export interface Market {
   name: string;
 }
 
+/** The furthest a loan product can be set; guards against typing mistakes (a fee of 200, an extra zero in an amount). */
+export interface ProductLimits {
+  smallestLoan: number;
+  biggestLoan: number;
+  /** The most payments one loan can have */
+  maxPayments: number;
+  maxFeePercent: number;
+  maxLateFeePercent: number;
+  maxGraceDays: number;
+  /** The highest interest rate each way of charging allows */
+  maxInterestPercent: Record<InterestBasis, number>;
+}
+
 export interface LoanRulesSettings {
   /** Whoever approved a loan can't pay it out */
   approverCannotDisburse: boolean;
@@ -1109,6 +1134,12 @@ export interface LoanRulesSettings {
   phoneChangeNeedsApproval: boolean;
   /** A client can't get a new loan while one is open */
   oneOpenLoanPerBorrower: boolean;
+  /** How many active loans one person can guarantee at once (1: a guarantor on an active loan can't guarantee another) */
+  guarantorMaxActiveLoans: number;
+  /** The limits Settings → Loan products can be set within */
+  productLimits: ProductLimits;
+  /** What a loan can be for; the officer picks one on the application */
+  loanPurposes: string[];
   /** Days late after which recovery applies (null = off) */
   recoveryAfterDaysLate: number | null;
   /** "suggest": loans that late are marked ready for someone to send; "auto": they're sent to recovery automatically */
@@ -1119,6 +1150,14 @@ export interface LoanRulesSettings {
   par30TargetPercent: number;
   /** Late loans show as early warnings from this many days late */
   earlyWarningDays: number;
+  /** The latest first payment date an officer can set, in days from the application, for each way of repaying */
+  firstPaymentWithinDays: Record<RepaymentSchedule, number>;
+  /** An application waiting for a decision this many hours is shown in red */
+  approvalWaitingWarnHours: number;
+  /** An approved loan not yet paid out after this many days is shown in red */
+  disbursementWaitingWarnDays: number;
+  /** The date suggested when an officer logs that a client promised to pay: this many days from the call */
+  promiseToPayDays: number;
   /** How long an online application link works before it expires */
   onlineLinkValidHours: number;
   /** Where a payment goes first: each part of what's owed, in the order a payment clears them */

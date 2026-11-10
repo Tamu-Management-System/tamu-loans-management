@@ -2,6 +2,7 @@ import { normalisePhone } from "../../lib/phone";
 
 /** Ugandan National ID number (NIN): 14 characters, starting CM or CF. */
 const NATIONAL_ID = /^C[MF][A-Z0-9]{12}$/;
+export const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const normaliseNationalId = (value: string) => value.replace(/\s+/g, "").toUpperCase();
 
@@ -23,6 +24,8 @@ export interface BorrowerDraft extends PersonDraft {
   gender: Gender | "";
   /** Optional alternative contact */
   secondaryPhone: string;
+  /** Optional; the client's email address */
+  email: string;
   premises: string;
   occupation: string;
   /** Where they live (the API calls it `area`) */
@@ -33,7 +36,7 @@ export interface BorrowerDraft extends PersonDraft {
 
 export const EMPTY_PERSON: PersonDraft = { fullName: "", nationalId: "", phone: "" };
 export const EMPTY_GUARANTOR: GuarantorDraft = { ...EMPTY_PERSON, relationship: "" };
-export const EMPTY_BORROWER: BorrowerDraft = { ...EMPTY_PERSON, gender: "", secondaryPhone: "", premises: "", occupation: "", area: "", kinName: "", kinPhone: "" };
+export const EMPTY_BORROWER: BorrowerDraft = { ...EMPTY_PERSON, gender: "", secondaryPhone: "", email: "", premises: "", occupation: "", area: "", kinName: "", kinPhone: "" };
 
 export type FieldErrors<T> = Partial<Record<keyof T, string>>;
 
@@ -50,6 +53,7 @@ export function borrowerErrors(borrower: BorrowerDraft): FieldErrors<BorrowerDra
   if (!borrower.gender) errors.gender = "Choose female or male.";
   if (borrower.secondaryPhone.trim() && !normalisePhone(borrower.secondaryPhone)) errors.secondaryPhone = "Enter a mobile number, or leave it empty.";
   else if (borrower.secondaryPhone.trim() && normalisePhone(borrower.secondaryPhone) === normalisePhone(borrower.phone)) errors.secondaryPhone = "Use a different number from the main one, or leave it empty.";
+  if (borrower.email.trim() && !EMAIL.test(borrower.email.trim())) errors.email = "Enter a valid email address, or leave it empty.";
   if (!borrower.premises.trim()) errors.premises = "Enter the shop, premises, building or arcade.";
   if (!borrower.area.trim()) errors.area = "Enter the address.";
   // Next of kin is optional; a number, if given, must be valid and not the client's own

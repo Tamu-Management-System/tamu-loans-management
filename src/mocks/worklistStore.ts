@@ -73,7 +73,7 @@ function seedTasks(): Record<string, WorklistTask[]> {
   for (const app of applications) {
     if (app.status === "submitted" && app.submittedAt) {
       const hoursWaiting = hoursSince(app.submittedAt);
-      admin.push({ ...open(), id: `task-apr-${app.id}`, type: "awaiting-approval", priority: hoursWaiting > 48 ? "do-first" : "routine", applicationId: app.id, borrower: { name: app.borrowerName, phone: app.phone }, amountRequested: app.amount, purpose: "", submittedBy: officerName(app.officerId), hoursWaiting });
+      admin.push({ ...open(), id: `task-apr-${app.id}`, type: "awaiting-approval", priority: hoursWaiting >= systemSettings.loanRules.approvalWaitingWarnHours ? "do-first" : "routine", applicationId: app.id, borrower: { name: app.borrowerName, phone: app.phone }, amountRequested: app.amount, purpose: "", submittedBy: officerName(app.officerId), hoursWaiting });
     }
     if (app.status === "approved" && !app.loanId && app.decided)
       admin.push({ ...open(), id: `task-dis-${app.id}`, type: "awaiting-disbursement", priority: "do-today", loanId: app.id, borrower: { name: app.borrowerName, phone: app.phone }, amount: app.amount, officerName: officerName(app.officerId), approvedOn: app.decided.at.slice(0, 10) });

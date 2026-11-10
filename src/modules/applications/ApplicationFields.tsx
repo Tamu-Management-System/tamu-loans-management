@@ -39,6 +39,7 @@ export function BorrowerExtraFields({
     <>
       <GenderField value={borrower.gender} onChange={(gender) => onChange({ gender })} error={errors.gender} />
       <TextField label="Other phone number (optional)" value={borrower.secondaryPhone} onChange={(secondaryPhone) => onChange({ secondaryPhone })} error={errors.secondaryPhone} hint="Another number to reach them" inputMode="tel" type="tel" />
+      <TextField label="Email address (optional)" value={borrower.email} onChange={(email) => onChange({ email })} error={errors.email} hint={you ? "Where we can email you" : "Where we can email them"} type="email" autoComplete="off" />
       <TextField label="Address (Location)" value={borrower.area} onChange={(area) => onChange({ area })} error={errors.area} hint={you ? "Where you live" : "Where they live"} />
       <TextField label="Occupation (optional)" value={borrower.occupation} onChange={(occupation) => onChange({ occupation })} error={errors.occupation} hint={you ? "What you do for a living" : "What they do for a living"} />
       <TextField label="Shop / premises / building / arcade" value={borrower.premises} onChange={(premises) => onChange({ premises })} error={errors.premises} />

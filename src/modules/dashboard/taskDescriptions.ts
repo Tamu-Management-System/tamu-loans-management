@@ -1,6 +1,6 @@
 // Words shown for each kind of worklist task. Kept apart from the components so
 // the row and the "Done today" list describe tasks the same way.
-import type { WorklistTask } from "../../api/types";
+import type { LoanRulesSettings, WorklistTask } from "../../api/types";
 import { daysSince, formatRelativeDay, formatShortDate, formatTime, formatUGX, dayCount } from "../../lib/format";
 
 export type ChipTone = "info" | "warning" | "danger";
@@ -39,14 +39,15 @@ export function describeSubject(task: WorklistTask): { name: string; reference: 
 }
 
 /** Status chip and the line under it. */
-export function describeStatus(task: WorklistTask): { tone: ChipTone; label: string; detail: string } {
+/** `rules` are the thresholds from Settings → Loan rules; until they load nothing is shown in red. */
+export function describeStatus(task: WorklistTask, rules: LoanRulesSettings | undefined): { tone: ChipTone; label: string; detail: string } {
   switch (task.type) {
     case "instalment-due":
       return { tone: "info", label: "Due today", detail: "Installment" };
     case "promise-due":
       return { tone: "warning", label: "Promised to pay today", detail: `Behind by ${dayCount(task.daysPastDue)} · promised on ${formatShortDate(task.promiseMadeOn)}` };
     case "overdue":
-      return { tone: task.daysPastDue > 30 ? "danger" : "warning", label: `${dayCount(task.daysPastDue)} overdue`, detail: "Arrears to collect" };
+      return { tone: rules && task.daysPastDue >= rules.seriouslyLateDays ? "danger" : "warning", label: `${dayCount(task.daysPastDue)} overdue`, detail: "Arrears to collect" };
     case "application-incomplete":
       return { tone: "warning", label: task.missingItem, detail: "Draft application" };
     case "payment-unmatched":
@@ -54,10 +55,10 @@ export function describeStatus(task: WorklistTask): { tone: ChipTone; label: str
     case "reversal-request":
       return { tone: task.priority === "do-first" ? "danger" : "warning", label: "Reversal request", detail: `Requested ${formatRelativeDay(task.requestedAt)}` };
     case "awaiting-approval":
-      return { tone: task.hoursWaiting > 48 ? "danger" : "info", label: `Waiting ${task.hoursWaiting} hours`, detail: "Not decided yet" };
+      return { tone: rules && task.hoursWaiting >= rules.approvalWaitingWarnHours ? "danger" : "info", label: `Waiting ${task.hoursWaiting} hours`, detail: "Not decided yet" };
     case "awaiting-disbursement": {
       const days = daysSince(task.approvedOn);
-      return { tone: days >= 3 ? "danger" : "warning", label: `Approved ${plural(days, "day")} ago`, detail: "Not yet disbursed" };
+      return { tone: rules && days >= rules.disbursementWaitingWarnDays ? "danger" : "warning", label: `Approved ${plural(days, "day")} ago`, detail: "Not yet disbursed" };
     }
     case "access-request":
       return task.kind === "password-reset"

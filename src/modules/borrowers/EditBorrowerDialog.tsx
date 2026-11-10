@@ -4,6 +4,7 @@ import { useUpdateBorrower } from "../../api/borrowers";
 import type { BorrowerProfile } from "../../api/types";
 import { Dialog, Field } from "../../components/ui/Dialog";
 import { normalisePhone } from "../../lib/phone";
+import { EMAIL } from "../applications/applicationValidation";
 import styles from "./EditBorrowerDialog.module.css";
 
 interface EditBorrowerDialogProps {
@@ -18,6 +19,7 @@ type FormState = {
   premises: string;
   occupation: string;
   secondaryPhone: string;
+  email: string;
   kinName: string;
   kinRelationship: string;
   kinPhone: string;
@@ -38,6 +40,7 @@ export function EditBorrowerDialog({ borrower, onClose, onSaved }: EditBorrowerD
     premises: borrower.premises,
     occupation: borrower.occupation,
     secondaryPhone: borrower.secondaryPhone ?? "",
+    email: borrower.email ?? "",
     kinName: borrower.nextOfKin?.name ?? "",
     kinRelationship: borrower.nextOfKin?.relationship ?? "",
     kinPhone: borrower.nextOfKin?.phone ?? "",
@@ -56,6 +59,7 @@ export function EditBorrowerDialog({ borrower, onClose, onSaved }: EditBorrowerD
   if (!form.area.trim()) errors.area = "Enter the address.";
   if (!form.premises.trim()) errors.premises = "Enter the shop, premises, building or arcade.";
   if (form.secondaryPhone.trim() && !secondaryPhone) errors.secondaryPhone = "Enter a Ugandan mobile number, or leave it empty.";
+  if (form.email.trim() && !EMAIL.test(form.email.trim())) errors.email = "Enter a valid email address, or leave it empty.";
   // Next of kin is optional; a number, if given, must be valid
   if (form.kinPhone.trim() && !kinPhone) errors.kinPhone = "Enter a Ugandan mobile number, or leave it empty.";
   const valid = Object.keys(errors).length === 0;
@@ -70,6 +74,7 @@ export function EditBorrowerDialog({ borrower, onClose, onSaved }: EditBorrowerD
       {
         phone,
         secondaryPhone,
+        email: form.email.trim().toLowerCase() || null,
         area: form.area.trim(),
         premises: form.premises.trim(),
         occupation: form.occupation.trim(),
@@ -129,6 +134,7 @@ export function EditBorrowerDialog({ borrower, onClose, onSaved }: EditBorrowerD
           </p>
         )}
         {input("secondaryPhone", { label: "Other phone (optional)", inputMode: "tel" })}
+        {input("email", { label: "Email address (optional)", hint: "Where we can email them" })}
         <Field label="Gender" htmlFor={`${id}-gender`} hint={show("gender") ? <span className={styles.error}>{show("gender")}</span> : undefined}>
           <div className={styles.choices} role="radiogroup" id={`${id}-gender`} aria-label="Gender">
             {(["female", "male"] as const).map((option) => (

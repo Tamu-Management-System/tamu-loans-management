@@ -114,12 +114,12 @@ import { notificationHistoryFor } from "./notificationHistory";
 import { reportPdf } from "./reportPdf";
 import { borrowerDetails, maskNationalId, nextPayment } from "./borrowerProfiles";
 import { pastLoans } from "./loanHistory";
-import { addApplicationSection, addDocumentVersion, markApplicationPaidOut, applicationGuarantors, updateApplicationForms, applicationVersionFor, createOnlineLinkForApplication, borrowerDocumentsResponse, createOnlineLink, describeSlot, documentFile, findDocument, findSlot, ingestOnlineApplications } from "./borrowerDocuments";
+import { documentSectionsFor, addApplicationSection, addDocumentVersion, markApplicationPaidOut, applicationGuarantors, updateApplicationForms, applicationVersionFor, createOnlineLinkForApplication, borrowerDocumentsResponse, createOnlineLink, describeSlot, documentFile, findDocument, findSlot, ingestOnlineApplications } from "./borrowerDocuments";
 import { createPasswordLink, ensureDemoPasswordLinks, findPasswordLink, markPasswordLinkUsed, passwordLinkProblem, revokePasswordLinks, sendDemoEmail } from "./passwordLinks";
 import { assignBorrower, findOnlineApplication, linkProblem, submitOnlineApplication, submittedForNewBorrowers, type StoredImage } from "./onlineApplications";
 import { nextBorrowerId } from "./borrowerDirectory";
 import { changePaymentAmount, findStoredPayment, loanPayments, recordLoanPayment } from "./loanPayments";
-import { describeLength, describePenalty, feeAmount, INTEREST_LIMITS, FIRST_PAYMENT_WITHIN_DAYS, latePenalty, paymentDate, summariseTerms } from "../lib/repaymentSchedule";
+import { describeLength, describePenalty, feeAmount, latePenalty, paymentDate, summariseTerms } from "../lib/repaymentSchedule";
 import { borrowerActivityPage, recordBorrowerEvent } from "./borrowerActivity";
 import { addFollowUpTask, clockTime, describePayment, findTask, openTaskForLoan, rememberForUndo, tasksFor, tasksForUser, ugx, undo } from "./worklistStore";
 
@@ -199,7 +199,7 @@ applications.forEach((app, index) => {
 
 /** The terms, worked out (seeded applications without terms: 26 weekly payments). */
 function termsOf(app: (typeof applications)[number]) {
-  const base = app.terms ?? { productId: null, amount: app.amount, repaymentSchedule: "weekly" as const, firstPaymentOn: new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10), numberOfPayments: 26 };
+  const base = app.terms ?? { productId: null, amount: app.amount, purpose: app.purpose, repaymentSchedule: "weekly" as const, firstPaymentOn: new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10), numberOfPayments: 26 };
   // Seeded applications made before products: the product for their frequency
   const product = findProduct(base.productId) ?? productForSchedule(base.repaymentSchedule);
   const terms = { ...base, productId: product.id, pricing: base.pricing ?? pricingOf(product) };
@@ -211,6 +211,48 @@ function termsOf(app: (typeof applications)[number]) {
  * them, so a later change to the product doesn't alter this loan. Returns a problem, or null.
  * `keepProductId`: an existing application may keep a product that has since been archived.
  */
+/** Email is optional. Returns the cleaned address, null when empty, or undefined when it isn't an email address. */
+const EMAIL_ADDRESS = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function cleanEmail(value: string | null | undefined): string | null | undefined {
+  const email = (value ?? "").trim().toLowerCase();
+  if (!email) return null;
+  return email.length <= 120 && EMAIL_ADDRESS.test(email) ? email : undefined;
+}
+
+/** The active loans (still being repaid) that this person guarantees, found by National ID. */
+function activeGuarantees(nationalId: string) {
+  const held: string[] = [];
+  for (const loan of loans) {
+    if (loan.outstandingBalance <= 0) continue;
+    const owner = borrowerForLoan(loan.id);
+    if (!owner) continue;
+    // A loan paid out from an application keeps that application's documents section
+    const sectionId = applications.find((app) => app.loanId === loan.id)?.id ?? loan.id;
+    const guarantors = documentSectionsFor(owner).find((section) => section.id === sectionId)?.forms?.guarantors ?? [];
+    if (guarantors.some((guarantor) => guarantor.nin === nationalId)) held.push(loan.id);
+  }
+  return held;
+}
+
+/** Whether this person is already on as many active loans as Settings allows. */
+function guaranteeLimit(nationalId: string) {
+  const max = systemSettings.loanRules.guarantorMaxActiveLoans;
+  const loanIds = activeGuarantees(nationalId);
+  return loanIds.length >= max ? { loanIds, max } : null;
+}
+
+const guaranteeMessage = (limit: { loanIds: string[]; max: number }, who = "This person") =>
+  `${who} already guarantees active ${limit.loanIds.length === 1 ? "loan" : "loans"} ${limit.loanIds.join(", ")}. A guarantor can be on ${limit.max === 1 ? "one active loan" : `${limit.max} active loans`} at a time, so they can guarantee another once ${limit.loanIds.length === 1 ? "it is" : "those are"} repaid.`;
+
+/** The first guarantor who can't guarantee another loan, as a message for the officer. */
+function guarantorBlocked(guarantors: { fullName: string; nationalId: string }[]) {
+  for (const guarantor of guarantors) {
+    const limit = guaranteeLimit(guarantor.nationalId);
+    if (limit) return guaranteeMessage(limit, guarantor.fullName.trim() || "This guarantor");
+  }
+  return null;
+}
+
 function checkTerms(terms: ApplicationTerms | undefined, keepProductId: string | null = null): string | null {
   if (!terms) return "Choose a loan product.";
   const product = findProduct(terms.productId);
@@ -220,11 +262,13 @@ function checkTerms(terms: ApplicationTerms | undefined, keepProductId: string |
     return `${product.name}: borrow between ${ugx(product.amount.min)} and ${ugx(product.amount.max)}.`;
   if (terms.repaymentSchedule !== product.repaymentSchedule) return `${product.name} is repaid ${product.repaymentSchedule}.`;
   const today = new Date().toLocaleDateString("en-CA");
-  const latest = paymentDate(today, "daily", FIRST_PAYMENT_WITHIN_DAYS[product.repaymentSchedule]);
+  const withinDays = systemSettings.loanRules.firstPaymentWithinDays[product.repaymentSchedule];
+  const latest = paymentDate(today, "daily", withinDays);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(terms.firstPaymentOn ?? "") || terms.firstPaymentOn < today || terms.firstPaymentOn > latest)
-    return `The first payment must be within ${FIRST_PAYMENT_WITHIN_DAYS[product.repaymentSchedule]} days, from today on.`;
+    return `The first payment must be within ${withinDays} days, from today on.`;
   // The product sets the loan's length
   if (terms.numberOfPayments !== product.numberOfPayments) return `${product.name} runs ${describeLength(product.repaymentSchedule, product.numberOfPayments)}.`;
+  if (!systemSettings.loanRules.loanPurposes.includes(terms.purpose)) return "Choose what the loan is for.";
   terms.pricing = pricingOf(product);
   return null;
 }
@@ -288,7 +332,9 @@ function applicationDetail(app: (typeof applications)[number], user: MockUser): 
         : null;
   return {
     ...item,
-    borrowerDetails: borrower && details ? { nationalIdMasked: maskNationalId(borrower.nin), phone: borrower.phone, premises: details.premises, occupation: details.occupation, area: borrower.area } : null,
+    borrowerDetails: borrower && details ? { nationalIdMasked: maskNationalId(borrower.nin), phone: borrower.phone, email: details.email, premises: details.premises, occupation: details.occupation, area: borrower.area } : null,
+    purpose: app.terms?.purpose || app.purpose || null,
+    pricing: terms.pricing,
     guarantors: own?.guarantors ?? [],
     schedule: { firstPaymentOn: terms.firstPaymentOn, lastPaymentOn: summary.lastPaymentOn, interest: summary.interest, totalRepayable: summary.totalRepayable, finalInstalment: summary.finalInstalment },
     documents: {
@@ -503,6 +549,7 @@ function registerBorrower(person: NewBorrowerDetails, officerId: string) {
     premises: person.premises,
     occupation: person.occupation?.trim() ?? "",
     secondaryPhone: person.secondaryPhone ?? null,
+    email: cleanEmail(person.email) ?? null,
     nextOfKin: person.nextOfKin ? { name: person.nextOfKin.name, phone: person.nextOfKin.phone, relationship: "" } : null,
     gender: person.gender ?? null,
     loanTerms: null,
@@ -525,7 +572,7 @@ function syncNewBorrowerApplications() {
       let numberOfPayments = 1;
       while (paymentDate(terms.firstPaymentOn, terms.repaymentSchedule, numberOfPayments - 1) < terms.lastPaymentOn && numberOfPayments < 400) numberOfPayments++;
       app = { id: entry.form.reference, borrowerName: details.borrower.fullName, phone: details.borrower.phone, amount: terms.amount, purpose: "", officerId: entry.officerId, status: "draft", missing: null, route: "online", createdAt: entry.createdAt,
-        terms: { productId: loanProducts.find((product) => product.name === terms.productName)?.id ?? null, amount: terms.amount, repaymentSchedule: terms.repaymentSchedule, firstPaymentOn: terms.firstPaymentOn, numberOfPayments } };
+        terms: { productId: loanProducts.find((product) => product.name === terms.productName)?.id ?? null, amount: terms.amount, purpose: "", repaymentSchedule: terms.repaymentSchedule, firstPaymentOn: terms.firstPaymentOn, numberOfPayments } };
       applications.push(app);
     }
     Object.assign(app, { borrowerId: borrower.id, borrowerName: details.borrower.fullName, phone: details.borrower.phone, guarantors: details.guarantors });
@@ -665,13 +712,29 @@ function settingsProblem(section: SettingsSection, body: unknown): string | null
       const problem = limit("recoveryAfterDaysLate", "Days late before recovery", r.recoveryAfterDaysLate);
       if (problem) return problem;
     }
+    if (!Array.isArray(r.loanPurposes) || r.loanPurposes.length === 0 || r.loanPurposes.length > 30 || r.loanPurposes.some((purpose) => typeof purpose !== "string" || purpose.trim().length < 2 || purpose.trim().length > 40))
+      return "Add at least one loan purpose, and give each a name.";
+    r.loanPurposes = r.loanPurposes.map((purpose) => purpose.trim().replace(/\s+/g, " "));
+    if (new Set(r.loanPurposes.map((purpose) => purpose.toLowerCase())).size !== r.loanPurposes.length) return "Each loan purpose can only be listed once.";
+    const pl = r.productLimits;
+    const whole = (value: unknown) => Number.isInteger(value) && (value as number) >= 1;
+    const percent = (value: unknown) => typeof value === "number" && value > 0 && value <= 100;
+    if (!pl || !whole(pl.smallestLoan) || !whole(pl.biggestLoan) || pl.biggestLoan < pl.smallestLoan || !whole(pl.maxPayments) || !whole(pl.maxGraceDays + 1) || !percent(pl.maxFeePercent) || !percent(pl.maxLateFeePercent) || !(["loan", "day", "week", "month"] as const).every((basis) => percent(pl.maxInterestPercent?.[basis])))
+      return "Check the loan product limits: whole numbers, the biggest loan not below the smallest, and percentages up to 100.";
     const order = r.paymentAllocationOrder;
     if (!Array.isArray(order) || order.length !== 4 || new Set(order).size !== 4 || order.some((part) => !["charges", "fees", "interest", "principal"].includes(part))) return "Choose where a payment goes first.";
     return (
       limit("seriouslyLateDays", "Days late shown in red", r.seriouslyLateDays) ??
       limit("par30TargetPercent", "PAR30 target", r.par30TargetPercent) ??
       limit("earlyWarningDays", "Early warning", r.earlyWarningDays) ??
-      limit("onlineLinkValidHours", "Online link lifetime", r.onlineLinkValidHours)
+      limit("onlineLinkValidHours", "Online link lifetime", r.onlineLinkValidHours) ??
+      limit("guarantorMaxActiveLoans", "Active loans a guarantor can be on", r.guarantorMaxActiveLoans) ??
+      limit("approvalWaitingWarnHours", "Approval waiting warning", r.approvalWaitingWarnHours) ??
+      limit("disbursementWaitingWarnDays", "Payout waiting warning", r.disbursementWaitingWarnDays) ??
+      limit("promiseToPayDays", "Promise to pay suggestion", r.promiseToPayDays) ??
+      limit("firstPaymentWithinDays", "Latest first payment (daily)", r.firstPaymentWithinDays?.daily) ??
+      limit("firstPaymentWithinDays", "Latest first payment (weekly)", r.firstPaymentWithinDays?.weekly) ??
+      limit("firstPaymentWithinDays", "Latest first payment (monthly)", r.firstPaymentWithinDays?.monthly)
     );
   }
   if (section === "payments") {
@@ -715,22 +778,23 @@ function productInUse(productId: string) {
 }
 
 function productProblem(body: SaveLoanProductRequest, productId: string | null): string | null {
+  const limits = systemSettings.loanRules.productLimits;
   const name = body.name?.trim() ?? "";
   if (name.length < 3) return "Give the product a name.";
   if (loanProducts.some((p) => p.id !== productId && p.name.toLowerCase() === name.toLowerCase())) return `There's already a product called ${name}.`;
   if (!["daily", "weekly", "monthly"].includes(body.repaymentSchedule)) return "Choose how often it's repaid.";
   const rate = body.interest?.ratePercent;
-  if (!(body.interest?.per in INTEREST_LIMITS) || typeof rate !== "number" || rate < 0 || rate > INTEREST_LIMITS[body.interest.per]) return "Check the interest rate.";
+  if (!(body.interest?.per in limits.maxInterestPercent) || typeof rate !== "number" || rate < 0 || rate > limits.maxInterestPercent[body.interest.per]) return "Check the interest rate.";
   const { amount } = body;
-  if (!Number.isInteger(amount?.min) || !Number.isInteger(amount?.max) || amount.min < 10_000 || amount.max < amount.min || amount.max > 100_000_000) return "Check the amount limits: at least UGX 10,000, and the most can't be below the least.";
-  if (!Number.isInteger(body.numberOfPayments) || body.numberOfPayments < 1 || body.numberOfPayments > 365) return "The loan length must be 1 to 365 payments.";
+  if (!Number.isInteger(amount?.min) || !Number.isInteger(amount?.max) || amount.min < limits.smallestLoan || amount.max < amount.min || amount.max > limits.biggestLoan) return `Check the amount limits: at least UGX ${limits.smallestLoan.toLocaleString("en-US")}, and the most can't be below the least.`;
+  if (!Number.isInteger(body.numberOfPayments) || body.numberOfPayments < 1 || body.numberOfPayments > limits.maxPayments) return `The loan length must be ${1} to ${limits.maxPayments} payments.`;
   const fee = body.fee;
-  if (!["none", "percent", "fixed"].includes(fee?.type) || !["deducted", "added"].includes(fee?.collection) || fee.value < 0 || (fee.type === "percent" && fee.value > 20) || (fee.type === "fixed" && fee.value >= amount.min))
-    return "Check the fee: up to 20%, or a fixed amount below the smallest loan.";
+  if (!["none", "percent", "fixed"].includes(fee?.type) || !["deducted", "added"].includes(fee?.collection) || fee.value < 0 || (fee.type === "percent" && fee.value > limits.maxFeePercent) || (fee.type === "fixed" && fee.value >= amount.min))
+    return `Check the fee: up to ${limits.maxFeePercent}%, or a fixed amount below the smallest loan.`;
   const penalty = body.penalty;
-  if (!["none", "percent", "fixed"].includes(penalty?.type) || !["missed-payment", "day"].includes(penalty?.per) || penalty.value < 0 || (penalty.type === "percent" && penalty.value > 20))
-    return "Check the late fee: up to 20% of the overdue amount.";
-  if (!Number.isInteger(penalty.graceDays) || penalty.graceDays < 0 || penalty.graceDays > 30) return "Grace days must be 0 to 30.";
+  if (!["none", "percent", "fixed"].includes(penalty?.type) || !["missed-payment", "day"].includes(penalty?.per) || penalty.value < 0 || (penalty.type === "percent" && penalty.value > limits.maxLateFeePercent))
+    return `Check the late fee: up to ${limits.maxLateFeePercent}% of the overdue amount.`;
+  if (!Number.isInteger(penalty.graceDays) || penalty.graceDays < 0 || penalty.graceDays > limits.maxGraceDays) return `Grace days must be 0 to ${limits.maxGraceDays}.`;
   return null;
 }
 
@@ -1357,6 +1421,7 @@ function newBorrowerProblem(person: Partial<NewBorrowerDetails> | undefined) {
   if (!person) return "Enter the client's details.";
   if (!["female", "male"].includes(person.gender ?? "")) return "Choose the client's gender.";
   if (person.secondaryPhone && !normalisePhone(person.secondaryPhone)) return "Check the other phone number, or leave it empty.";
+  if (cleanEmail(person.email) === undefined) return "Check the email address, or leave it empty.";
   if (!person.area?.trim()) return "Enter the client's address.";
   if (!person.premises?.trim()) return "Enter the client's shop or premises.";
   // Next of kin is optional; a number, if given, must be valid
@@ -1860,6 +1925,8 @@ export const handlers = [
     const guarantors = (body.guarantors ?? []).filter((g) => g?.fullName?.trim() && NATIONAL_ID.test(g.nationalId ?? "") && normalisePhone(g.phone ?? ""));
     if (guarantors.some((g) => g.nationalId === borrower.nin) || (guarantors.length === 2 && guarantors[0].nationalId === guarantors[1].nationalId))
       return invalid("The client and the two guarantors must be three different people.");
+    const blocked = guarantorBlocked(guarantors);
+    if (blocked) return HttpResponse.json({ message: blocked }, { status: 409 });
     const signed = form.get("signedApplication");
     const signedFile = signed instanceof File && signed.size > 0 ? signed : null;
     if (signedFile && (signedFile.size > MAX_UPLOAD_BYTES || (await sniffDocumentType(signedFile)) !== "application/pdf")) return HttpResponse.json({ message: "The signed application must be one PDF, up to 5 MB." }, { status: 415 });
@@ -1892,6 +1959,16 @@ export const handlers = [
     return HttpResponse.json<ApplicationDetail>(applicationDetail(app, user));
   }),
 
+  // Is this person free to guarantee another loan? Asked while the officer fills in the guarantor's ID number. The save checks again.
+  http.post(`${API_BASE}/guarantors/check`, async ({ request }) => {
+    const user = currentDemoUser();
+    if (!hasPermission(user, "applications.create")) return HttpResponse.json({ message: "You can't check guarantors." }, { status: 403 });
+    const { nationalId } = (await request.json()) as { nationalId?: string };
+    if (!NATIONAL_ID.test(nationalId ?? "")) return HttpResponse.json({ message: "Check the National ID number." }, { status: 422 });
+    const limit = guaranteeLimit(nationalId!);
+    return HttpResponse.json({ canGuarantee: !limit, message: limit ? guaranteeMessage(limit) : null });
+  }),
+
   http.post(`${API_BASE}/applications/:applicationId/approve`, async ({ params, request }) => {
     await delay(350);
     const user = currentDemoUser();
@@ -1903,6 +1980,10 @@ export const handlers = [
     if (!detail.documents.signedApplication) return HttpResponse.json({ message: "There's no signed application to check." }, { status: 422 });
     const { checks } = (await request.json()) as ApproveApplicationRequest;
     if (!checks?.signedPdfMatchesDetails || !checks.idCopyMatchesNin || !checks.guarantorsSigned) return HttpResponse.json({ message: "Confirm all three checks before approving." }, { status: 422 });
+    // A guarantor may have joined another loan since this was submitted
+    const applicant = detail.borrower.id ? borrowers.find((b) => b.id === detail.borrower.id) : undefined;
+    const blockedAtApproval = guarantorBlocked(app.guarantors ?? (applicant ? applicationGuarantors(applicant, app.id) : []));
+    if (blockedAtApproval) return HttpResponse.json({ message: blockedAtApproval }, { status: 409 });
 
     app.status = "approved";
     app.decided = { by: user.name, byId: user.id, at: new Date().toISOString() };
@@ -1992,6 +2073,8 @@ export const handlers = [
     if (guarantors.some((g) => g.nationalId === borrowerNin) || (guarantors.length === 2 && guarantors[0].nationalId === guarantors[1].nationalId))
       return invalid("The client and the two guarantors must be three different people.");
     if (submit && guarantors.length !== 2) return invalid("Enter both guarantors' details.");
+    const blocked = guarantorBlocked(guarantors);
+    if (blocked) return HttpResponse.json({ message: blocked }, { status: 409 });
 
     // Files (paper route)
     const signed = form.get("signedApplication");
@@ -2009,6 +2092,7 @@ export const handlers = [
           fullName: person.fullName.trim().replace(/\s+/g, " "),
           phone: normalisePhone(person.phone)!,
           secondaryPhone: person.secondaryPhone ? normalisePhone(person.secondaryPhone) : null,
+          email: cleanEmail(person.email) ?? null,
           premises: person.premises?.trim() ?? "",
           occupation: person.occupation?.trim() ?? "",
           area: person.area?.trim() ?? "",
@@ -2130,6 +2214,9 @@ export const handlers = [
     const borrowerProblem = newBorrowerProblem(details.borrower);
     if (borrowerProblem) return HttpResponse.json({ message: borrowerProblem }, { status: 422 });
     if (details.guarantors.some((g) => !g.relationship?.trim())) return HttpResponse.json({ message: "Say how each guarantor knows you." }, { status: 422 });
+    // The public form never says which loan: only that this person can't be a guarantor right now
+    const blockedGuarantor = details.guarantors.find((g) => guaranteeLimit(g.nationalId));
+    if (blockedGuarantor) return HttpResponse.json({ message: `${blockedGuarantor.fullName.trim()} already guarantees an active loan, so they can't guarantee another. Please choose someone else and ask your loan officer if you are not sure.` }, { status: 409 });
     // No drawn signatures: each of the three people must have ticked the consent box
     if (details.consent?.borrower !== true || details.consent?.guarantor1 !== true || details.consent?.guarantor2 !== true) return HttpResponse.json({ message: "All three people need to tick the box to agree." }, { status: 422 });
 
@@ -2151,6 +2238,7 @@ export const handlers = [
         fullName: details.borrower.fullName.trim(),
         phone: normalisePhone(details.borrower.phone)!,
         secondaryPhone: details.borrower.secondaryPhone ? normalisePhone(details.borrower.secondaryPhone) : null,
+        email: cleanEmail(details.borrower.email) ?? null,
         premises: details.borrower.premises.trim(),
         occupation: details.borrower.occupation?.trim() ?? "",
         area: details.borrower.area.trim(),
@@ -2705,6 +2793,7 @@ export const handlers = [
       status: borrowerStatus(borrower),
       phone: borrower.phone,
       secondaryPhone: details.secondaryPhone,
+      email: details.email,
       area: borrower.area,
       premises: details.premises,
       occupation: details.occupation,
@@ -2911,6 +3000,8 @@ export const handlers = [
     const kinPhone = body.nextOfKin?.phone?.trim() ? normalisePhone(body.nextOfKin.phone) : null;
     if (!phone) return HttpResponse.json({ message: "The main phone must be a Ugandan mobile number, e.g. 0772 418 230." }, { status: 422 });
     if (body.secondaryPhone?.trim() && !secondaryPhone) return HttpResponse.json({ message: "The other phone must be a Ugandan mobile number." }, { status: 422 });
+    const email = cleanEmail(body.email);
+    if (email === undefined) return HttpResponse.json({ message: "Enter a valid email address, or leave it empty." }, { status: 422 });
     if (!body.area?.trim() || !body.premises?.trim()) return HttpResponse.json({ message: "Enter the address and the shop or premises." }, { status: 422 });
     if (!["female", "male"].includes(body.gender)) return HttpResponse.json({ message: "Choose female or male." }, { status: 422 });
     // Next of kin is optional; a number, if given, must be a Ugandan mobile number
@@ -2920,6 +3011,7 @@ export const handlers = [
     const nextOfKin = { name: body.nextOfKin?.name?.trim() || null, relationship: body.nextOfKin?.relationship?.trim() || null, phone: kinPhone };
     const changed: string[] = [];
     if (secondaryPhone !== details.secondaryPhone) changed.push("other phone");
+    if (email !== details.email) changed.push("email");
     if (body.area.trim() !== borrower.area) changed.push("address");
     if (body.gender !== details.gender) changed.push("gender");
     if (body.premises.trim() !== details.premises) changed.push("shop / premises");
@@ -2927,6 +3019,7 @@ export const handlers = [
     if (JSON.stringify(nextOfKin) !== JSON.stringify(details.nextOfKin)) changed.push("next of kin");
 
     details.secondaryPhone = secondaryPhone;
+    details.email = email;
     borrower.area = body.area.trim();
     details.premises = body.premises.trim();
     details.occupation = (body.occupation ?? "").trim().slice(0, 80);

@@ -165,6 +165,7 @@ function ApplicationSteps({ token, form }: { token: string; form: OnlineApplicat
             ...clean(borrower),
             gender: borrower.gender || "female",
             secondaryPhone: normalisePhone(borrower.secondaryPhone),
+            email: borrower.email.trim().toLowerCase() || null,
             area: borrower.area.trim(),
             premises: borrower.premises.trim(),
             occupation: borrower.occupation.trim(),

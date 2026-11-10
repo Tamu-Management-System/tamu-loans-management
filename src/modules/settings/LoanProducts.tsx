@@ -1,14 +1,14 @@
 import { useId, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { ApiError } from "../../api/client";
-import { useLoanProducts, useSaveLoanProduct, useSetLoanProductOffered } from "../../api/settings";
-import type { LoanProduct, RepaymentSchedule, SaveLoanProductRequest } from "../../api/types";
+import { useLoanProducts, useSaveLoanProduct, useSetLoanProductOffered, useSystemSettings } from "../../api/settings";
+import type { LoanProduct, ProductLimits, RepaymentSchedule, SaveLoanProductRequest } from "../../api/types";
 import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { useToast } from "../../components/ui/Toast";
 import { formatCompactAmount, formatDate, formatUGX } from "../../lib/format";
-import { describeLength, INTEREST_LIMITS, latePenalty, ONE_MONTH_OF_PAYMENTS, summariseTerms } from "../../lib/repaymentSchedule";
+import { describeLength, latePenalty, ONE_MONTH_OF_PAYMENTS, summariseTerms } from "../../lib/repaymentSchedule";
 import { NumberField, Segmented, SettingRow, SettingsGroup } from "./SettingsForm";
 import styles from "./Settings.module.css";
 
@@ -122,25 +122,26 @@ const BLANK_PRODUCT: SaveLoanProductRequest = {
   name: "",
   description: "",
   repaymentSchedule: "weekly",
-  interest: { ratePercent: 4.5, per: "week" },
-  amount: { min: 100_000, max: 5_000_000 },
+  // Nothing is pre-filled: the admin sets every number, and the checks below say what is missing
+  interest: { ratePercent: 0, per: "week" },
+  amount: { min: 0, max: 0 },
   numberOfPayments: ONE_MONTH_OF_PAYMENTS.weekly,
   fee: { type: "none", value: 0, collection: "added" },
-  penalty: { type: "none", value: 0, per: "missed-payment", graceDays: 3 },
+  penalty: { type: "none", value: 0, per: "missed-payment", graceDays: 0 },
 };
 
 /** What's wrong with a product, or null (the API checks the same) */
-function productProblem(p: SaveLoanProductRequest) {
+function productProblem(p: SaveLoanProductRequest, limits: ProductLimits) {
   if (p.name.trim().length < 3) return "Give the product a name.";
-  if (p.interest.ratePercent < 0 || p.interest.ratePercent > INTEREST_LIMITS[p.interest.per]) return `Interest: 0 to ${INTEREST_LIMITS[p.interest.per]}%${p.interest.per === "loan" ? "" : ` a ${p.interest.per}`}.`;
-  if (p.amount.min < 10_000) return "The smallest loan must be at least UGX 10,000.";
+  if (p.interest.ratePercent < 0 || p.interest.ratePercent > limits.maxInterestPercent[p.interest.per]) return `Interest: 0 to ${limits.maxInterestPercent[p.interest.per]}%${p.interest.per === "loan" ? "" : ` a ${p.interest.per}`}.`;
+  if (p.amount.min < limits.smallestLoan) return `The smallest loan must be at least ${formatUGX(limits.smallestLoan)}.`;
   if (p.amount.max < p.amount.min) return "The biggest loan can't be smaller than the smallest.";
-  if (p.amount.max > 100_000_000) return "The biggest loan can be up to UGX 100,000,000.";
-  if (!Number.isInteger(p.numberOfPayments) || p.numberOfPayments < 1 || p.numberOfPayments > 365) return "Loan length: 1 to 365 payments.";
-  if (p.fee.type === "percent" && p.fee.value > 20) return "The fee can be up to 20%.";
+  if (p.amount.max > limits.biggestLoan) return `The biggest loan can be up to ${formatUGX(limits.biggestLoan)}.`;
+  if (!Number.isInteger(p.numberOfPayments) || p.numberOfPayments < 1 || p.numberOfPayments > limits.maxPayments) return `Loan length: ${1} to ${limits.maxPayments} payments.`;
+  if (p.fee.type === "percent" && p.fee.value > limits.maxFeePercent) return `The fee can be up to ${limits.maxFeePercent}%.`;
   if (p.fee.type === "fixed" && p.fee.value >= p.amount.min) return "A fixed fee must be less than the smallest loan.";
-  if (p.penalty.type === "percent" && p.penalty.value > 20) return "Late fees can be up to 20% of the overdue amount.";
-  if (p.penalty.graceDays > 30) return "Grace days: 0 to 30.";
+  if (p.penalty.type === "percent" && p.penalty.value > limits.maxLateFeePercent) return `Late fees can be up to ${limits.maxLateFeePercent}% of the overdue amount.`;
+  if (p.penalty.graceDays > limits.maxGraceDays) return `Grace days: 0 to ${limits.maxGraceDays}.`;
   return null;
 }
 
@@ -149,6 +150,7 @@ export function LoanProductEditor() {
   const { productId } = useParams();
   const [searchParams] = useSearchParams();
   const { data: products, isPending, isError, refetch } = useLoanProducts();
+  const { data: settings } = useSystemSettings();
 
   const breadcrumb = (current: string) => (
     <nav aria-label="Breadcrumb" className={styles.breadcrumb}>
@@ -169,7 +171,7 @@ export function LoanProductEditor() {
         </p>
       </>
     );
-  if (isPending) return <div className={styles.loading} aria-busy="true" aria-label="Loading the product" />;
+  if (isPending || !settings) return <div className={styles.loading} aria-busy="true" aria-label="Loading the product" />;
   const product = productId ? products.find((p) => p.id === productId) : undefined;
   if (productId && !product)
     return (
@@ -182,12 +184,12 @@ export function LoanProductEditor() {
   return (
     <>
       {breadcrumb(product?.name ?? "New product")}
-      <ProductForm key={product?.id ?? `new-${copyOf?.id ?? ""}`} product={product ?? null} copyOf={copyOf} />
+      <ProductForm key={product?.id ?? `new-${copyOf?.id ?? ""}`} product={product ?? null} copyOf={copyOf} limits={settings.loanRules.productLimits} />
     </>
   );
 }
 
-function ProductForm({ product, copyOf }: { product: LoanProduct | null; copyOf: LoanProduct | undefined }) {
+function ProductForm({ product, copyOf, limits }: { product: LoanProduct | null; copyOf: LoanProduct | undefined; limits: ProductLimits }) {
   const navigate = useNavigate();
   const showToast = useToast();
   const { can } = useAuth();
@@ -203,7 +205,7 @@ function ProductForm({ product, copyOf }: { product: LoanProduct | null; copyOf:
   });
   const [touched, setTouched] = useState(false);
   const set = <K extends keyof SaveLoanProductRequest>(key: K, value: SaveLoanProductRequest[K]) => setForm((before) => ({ ...before, [key]: value }));
-  const problem = productProblem(form);
+  const problem = productProblem(form, limits);
   const scheduleLocked = !!product && product.inUse > 0;
   const unit = SCHEDULES.find((s) => s.value === form.repaymentSchedule)!.unit;
 
@@ -298,7 +300,7 @@ function ProductForm({ product, copyOf }: { product: LoanProduct | null; copyOf:
           <SettingsGroup title="Interest">
             <SettingRow label="Rate" htmlFor={ids.rate} description={form.interest.per === "loan" ? "Charged once on the amount borrowed." : `Charged for every ${form.interest.per} the loan runs.`}>
               <span className={styles.controlStack}>
-                <NumberField id={ids.rate} value={form.interest.ratePercent} onChange={(ratePercent) => set("interest", { ...form.interest, ratePercent })} min={0} max={INTEREST_LIMITS[form.interest.per]} unit="%" allowDecimal />
+                <NumberField id={ids.rate} value={form.interest.ratePercent} onChange={(ratePercent) => set("interest", { ...form.interest, ratePercent })} min={0} max={limits.maxInterestPercent[form.interest.per]} unit="%" allowDecimal />
                 <Segmented
                   label="Interest charged"
                   value={form.interest.per}
@@ -317,13 +319,13 @@ function ProductForm({ product, copyOf }: { product: LoanProduct | null; copyOf:
           <SettingsGroup title="Limits" description="Officers can't offer anything outside these.">
             <SettingRow label="Amount" htmlFor={ids.minAmount}>
               <span className={styles.rangeControl}>
-                <NumberField id={ids.minAmount} label="Smallest amount" value={form.amount.min} onChange={(min) => set("amount", { ...form.amount, min })} min={10_000} max={100_000_000} step={50_000} unit="UGX" unitBefore wide />
+                <NumberField id={ids.minAmount} label="Smallest amount" value={form.amount.min} onChange={(min) => set("amount", { ...form.amount, min })} min={limits.smallestLoan} max={limits.biggestLoan} step={50_000} unit="UGX" unitBefore wide />
                 <span aria-hidden="true">to</span>
-                <NumberField id={ids.maxAmount} label="Biggest amount" value={form.amount.max} onChange={(max) => set("amount", { ...form.amount, max })} min={form.amount.min} max={100_000_000} step={50_000} unit="UGX" unitBefore wide />
+                <NumberField id={ids.maxAmount} label="Biggest amount" value={form.amount.max} onChange={(max) => set("amount", { ...form.amount, max })} min={form.amount.min} max={limits.biggestLoan} step={50_000} unit="UGX" unitBefore wide />
               </span>
             </SettingRow>
             <SettingRow label="Loan length" htmlFor={ids.length} description={`The client makes ${form.numberOfPayments} ${form.repaymentSchedule} payment${form.numberOfPayments === 1 ? "" : "s"}.`}>
-              <NumberField id={ids.length} value={form.numberOfPayments} onChange={(value) => set("numberOfPayments", value)} min={1} max={365} unit={unit} />
+              <NumberField id={ids.length} value={form.numberOfPayments} onChange={(value) => set("numberOfPayments", value)} min={1} max={limits.maxPayments} unit={unit} />
             </SettingRow>
           </SettingsGroup>
 
@@ -333,7 +335,7 @@ function ProductForm({ product, copyOf }: { product: LoanProduct | null; copyOf:
                 <Segmented
                   label="Fee"
                   value={form.fee.type}
-                  onChange={(type) => set("fee", { ...form.fee, type, value: type === "none" ? 0 : form.fee.value || (type === "percent" ? 2 : 10_000) })}
+                  onChange={(type) => set("fee", { ...form.fee, type, value: type === "none" ? 0 : form.fee.value })}
                   options={[
                     { value: "none", label: "None" },
                     { value: "percent", label: "% of amount" },

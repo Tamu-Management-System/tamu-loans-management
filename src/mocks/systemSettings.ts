@@ -26,6 +26,14 @@ export const systemSettings: SystemSettings = {
     creatorCannotApprove: true,
     phoneChangeNeedsApproval: true,
     oneOpenLoanPerBorrower: true,
+    guarantorMaxActiveLoans: 1,
+    productLimits: { smallestLoan: 10_000, biggestLoan: 100_000_000, maxPayments: 365, maxFeePercent: 20, maxLateFeePercent: 20, maxGraceDays: 30, maxInterestPercent: { loan: 100, day: 5, week: 20, month: 30 } },
+    firstPaymentWithinDays: { daily: 7, weekly: 14, monthly: 35 },
+    approvalWaitingWarnHours: 48,
+    disbursementWaitingWarnDays: 3,
+    promiseToPayDays: 3,
+    // Placeholders until Tamu sends its own list; edited in Settings → Loan rules
+    loanPurposes: ["Business stock", "Business expansion", "School fees", "Rent", "Medical bills", "Other"],
     recoveryAfterDaysLate: 60,
     recoveryMode: "suggest",
     seriouslyLateDays: 30,
@@ -135,3 +143,8 @@ export const productForSchedule = (schedule: LoanProduct["repaymentSchedule"]) =
 
 /** The pricing copied onto an application from its product */
 export const pricingOf = (p: LoanProduct): LoanPricing => ({ productName: p.name, interestRatePercent: p.interest.ratePercent, interestPer: p.interest.per, fee: { ...p.fee } });
+
+/** Sample older loans were made before loan products: 18% on the amount borrowed, no fee. Sample data only; the real API always stores each loan's pricing. */
+export const LEGACY_PRICING: LoanPricing = { productName: "Standard loan", interestRatePercent: 18, interestPer: "loan", fee: { type: "none", value: 0, collection: "added" } };
+/** Terms with their pricing, or the legacy pricing for older sample loans that have none */
+export const withPricing = <T extends { pricing?: LoanPricing }>(terms: T): T & { pricing: LoanPricing } => ({ ...terms, pricing: terms.pricing ?? LEGACY_PRICING });

@@ -475,7 +475,7 @@ The borrower profile. Same scope rule as the list: an officer asking for another
 ```json
 {
   "id": "B-0176", "name": "Aisha Namubiru", "status": "active",
-  "phone": "0772 418 230", "secondaryPhone": "0756 790 295", "area": "Owino market", "occupation": "Tailor", "premises": "Kisenyi, Shop 3",
+  "phone": "0772 418 230", "secondaryPhone": "0756 790 295", "email": "aisha@example.com", "area": "Owino market", "occupation": "Tailor", "premises": "Kisenyi, Shop 3",
   "nationalIdMasked": "CM••••••••••QK",
   "registeredOn": "2026-03-21",
   "officer": { "id": "u-sharon", "name": "Sharon Nakalema" },
@@ -494,6 +494,7 @@ The borrower profile. Same scope rule as the list: an officer asking for another
 
 - `nationalIdMasked` keeps the first two and last two characters. The full number is never in this response.
 - `occupation` is optional free text (what the client does for a living, max 80 characters); an empty string means not given. Sent on register, online submit and `PATCH` of client details.
+- `email` is the client's email address and is optional: `null` when not given, otherwise a valid address (lower-cased, max 120 characters). Clients only; guarantors have no email. Sent on register, online submit and `PATCH` of client details (`422` if it isn't an email address).
 - `premises` (shop / premises / building / arcade) is on Tamu's payment agreement and required.
 - **Optional:** `secondaryPhone`, and `nextOfKin`. Next of kin is `{ name, phone, relationship }`, each part
   `null` when not given, or the whole `nextOfKin` `null` on older records.
@@ -611,7 +612,7 @@ New application (user flow, phase 3). `multipart/form-data`: `application` (JSON
 ```json
 {
   "borrowerId": null,
-  "terms": { "amount": 1500000, "repaymentSchedule": "weekly", "firstPaymentOn": "2026-11-08", "numberOfPayments": 20 },
+  "terms": { "productId": "daily", "amount": 1500000, "purpose": "School fees", "repaymentSchedule": "weekly", "firstPaymentOn": "2026-11-08", "numberOfPayments": 20 },
   "route": "paper",
   "newBorrower": { "fullName": "Agnes Nakimera", "nationalId": "CF901234567890", "phone": "0782 123 456", "premises": "Owino market, Stall 12", "area": "Kampala Central" },
   "guarantors": [{ "fullName": "Grace Kato", "nationalId": "CM880011223344", "phone": "0701 234 567" }, { … }],
@@ -621,7 +622,7 @@ New application (user flow, phase 3). `multipart/form-data`: `application` (JSON
 
 → `201 { "id": "APP-322", "borrowerId": "B-0207", "status": "submitted", "onlineLink": null }`
 
-- **Terms:** whole shillings > 0; `daily` / `weekly` / `monthly`; first payment from today (the day the application is made) on, within the product window; 1–365 payments.
+- **Terms:** whole shillings > 0; `daily` / `weekly` / `monthly`; first payment from today (the day the application is made) on, within the product window (`firstPaymentWithinDays`); at least 1 payment, up to `productLimits.maxPayments`.
   The server works out (and stores) the interest (18% for now; later from the loan product), total, instalments (rounded down to UGX 100;
   the last payment takes the difference) and the last payment date: same rules as `src/lib/repaymentSchedule.ts`.
 - **Borrower:** an existing one in the user's scope (`404` otherwise), who has **no loan still being repaid and no
@@ -651,6 +652,14 @@ Everything an approver checks: the list item plus `borrowerDetails` (masked NIN,
 `schedule` uses `interest` (18% for now; it will come from the loan product). `documents`
 (`signedApplication`, `idFront`, `idBack` as document files) and
 `decision: { allowed, reason }`. `404` when the application isn't visible to the user.
+
+### `POST /guarantors/check` (requires `applications.create`)
+
+Asked while an officer types a guarantor's National ID, so the screen can warn before the form is saved.
+Body `{ "nationalId": "CM1234567890AB" }` → `{ "canGuarantee": false, "message": "This person already guarantees active loan TL-0548. …" }`
+(`canGuarantee: true` and `message: null` when they are free). `422` if the ID isn't a valid NIN. The check counts the
+loans still being repaid that have this National ID as a guarantor, against `guarantorMaxActiveLoans`. It never replaces
+the check on save: create, draft save, online submit and approve each run it again.
 
 ### `POST /applications/{id}/approve` (requires `applications.approve`)
 
@@ -1032,6 +1041,9 @@ Nothing an admin can change is hard-coded in the frontend: it reads these and fo
                 "payoutAccounts": [{ "method": "MTN MoMo", "number": "0772 900 410", "accountName": "Tamu Cleaning Services" }],
                 "branches": [{ "id": "mkt-kampala", "name": "Kampala Central" }, { "id": "mkt-mbarara", "name": "Mbarara" }] },
   "loanRules": { "approverCannotDisburse": true, "creatorCannotApprove": true, "phoneChangeNeedsApproval": true, "oneOpenLoanPerBorrower": true,
+                 "guarantorMaxActiveLoans": 1,
+                 "productLimits": { "smallestLoan": 10000, "biggestLoan": 100000000, "maxPayments": 365, "maxFeePercent": 20, "maxLateFeePercent": 20, "maxGraceDays": 30, "maxInterestPercent": { "loan": 100, "day": 5, "week": 20, "month": 30 } }, "firstPaymentWithinDays": { "daily": 7, "weekly": 14, "monthly": 35 },
+                 "approvalWaitingWarnHours": 48, "disbursementWaitingWarnDays": 3, "promiseToPayDays": 3, "loanPurposes": ["Business stock", "School fees", "Rent", "Other"],
                  "recoveryAfterDaysLate": 60, "recoveryMode": "suggest", "seriouslyLateDays": 30,
                  "par30TargetPercent": 5, "earlyWarningDays": 7, "onlineLinkValidHours": 72,
                  "paymentAllocationOrder": ["charges", "fees", "interest", "principal"] },
@@ -1061,6 +1073,12 @@ What each setting does on the server:
 - `recoveryMode: "auto"` with `recoveryAfterDaysLate`: a daily job sends loans that late to recovery (by
   "Automatic (Loan rules)"); a loan a person brought back isn't sent again automatically. `"suggest"` only flags them.
 - `oneOpenLoanPerBorrower`: `409` on a new application while the borrower has a loan to repay.
+- `guarantorMaxActiveLoans` (1 to 5): how many active loans (still being repaid) one person can guarantee at once, matched by National ID. At 1, a guarantor on an active loan can't guarantee another loan until it is repaid. Enforced on create, on saving a draft, on the online submit and again on approve: `409` with a message naming the active loan(s) (the public online form only says that person already guarantees an active loan, never which one). See `POST /guarantors/check`.
+- `productLimits`: the furthest a loan product can be set (`POST /loan-products`, `PUT /loan-products/{id}`): smallest and biggest loan, most payments, highest fee % and late fee %, most grace days, and the highest interest rate for each charging basis (`loan`, `day`, `week`, `month`). Whole numbers, biggest ≥ smallest, percentages up to 100. The example values are only starting points; the client can change them.
+- `firstPaymentWithinDays` (1 to 120 per way of repaying): the furthest first payment date an officer can set, in days from the application. `422` on an application with a later date.
+- `approvalWaitingWarnHours` (1 to 168): applications waiting this long for a decision are `do-first` on the worklist and shown in red. `disbursementWaitingWarnDays` (1 to 30): approved loans not paid out after this many days are shown in red.
+- `promiseToPayDays` (0 to 30): the date the app suggests when an officer logs a promise to pay (the officer can change it). The "seriously late" red on the worklist and the client page uses `seriouslyLateDays`.
+- `loanPurposes`: what a loan can be for (1 to 30 names, 2 to 40 characters, no duplicates, case-insensitive). `terms.purpose` must be one of them (`422` otherwise); an application keeps the purpose it was saved with even if the list changes later. The list shown is a placeholder until Tamu sends its own.
 - `par30TargetPercent`: the `targetPercent` returned by `/portfolio/risk` and the sidebar risk summary.
 - `earlyWarningDays`: loans at least this late appear in early warnings.
 - `onlineLinkValidHours`: lifetime of a new online application link (existing links keep their expiry).
@@ -1172,9 +1190,10 @@ The client confirmed the fields below; the endpoints above already use them.
 - **Guarantors** (`GuarantorDetails`): `fullName`, `nationalId`, `phone`, and `relationship` (e.g. "Sister"; required
   on the online form, sent empty on the paper route because it is on the signed consent). Guarantors have no gender
   or address: the Person model allows them to be empty and the screens don't ask.
-- **Removed**: work and income (occupation, income, workplace photo) and purpose of the loan.
+- **Removed**: work and income (occupation, income, workplace photo).
+- **Loan purpose** (client request, 10 Nov 2026): the application's `terms.purpose` is one of Settings → Loan rules `loanPurposes`. `GET /applications/{id}` returns it as `purpose` (`null` on applications started before it was asked), and `pricing` (the product's interest and fee copied when the application was saved), which the approval page shows instead of a fixed rate.
   `PATCH /borrowers/{id}` now takes `gender` and an optional `nextOfKin` instead of `work`.
-- **Interest per period**: `interest.per` is `loan`, `day`, `week` or `month` (limits 100%, 5%, 20%, 30%). Interest =
+- **Interest per period**: `interest.per` is `loan`, `day`, `week` or `month` (the highest rate for each is `loanRules.productLimits.maxInterestPercent`). Interest =
   amount × rate × the number of days, weeks or months the loan runs. Products: Daily 0.6% a day, Weekly 4.5% a
   week, Monthly 18% a month.
 - **Payout consent**: the payout is confirmed in a second step in the app before `POST /applications/{id}/disburse`.
