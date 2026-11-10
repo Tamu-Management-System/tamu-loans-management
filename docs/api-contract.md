@@ -89,6 +89,12 @@ with a clear `message`.
 
 ## Endpoints
 
+**What the `GET` headings are.** A heading that says `GET` is a **read**: it shows what a screen asks for (the parameters in the heading) and what comes back.
+It is written that way because it is the plainest way to describe a read. On the wire the backend's rule applies: a read is a `POST` with the
+filters in a JSON `query` body (see Conventions), so names, phones and National IDs never appear in an address. The method is
+fixed; the route names for these named reads are not final (his generic routes use names like `/find-all/`), so the backend dev picks them.
+Only the downloads (`/loans/export`, a document's file, `/loans/{id}/application-pdf`, `/audit/export`) and `GET /me` stay real `GET`s.
+
 Each route below is what the **screen needs**. [backend-mapping.md](backend-mapping.md) says which of them the backend already covers
 with its generic routes and which still have to be built.
 
