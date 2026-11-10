@@ -10,19 +10,26 @@ when an endpoint here changes, change its mock handler too.
 - **Base URL:** `/api` by default. Set `VITE_API_URL` to point the frontend at the real backend.
 - **Format:** JSON request and response bodies. Dates as ISO 8601 strings (`2026-10-31T09:42:00Z`).
 - **Money:** whole Ugandan shillings as integers (`1240000`), never formatted strings.
-- **Auth:** session cookie (`credentials: "include"`). An unauthenticated request returns `401`.
+- **Auth:** the real backend uses a token: sign-in returns `idToken`, and every request carries `Authorization: Bearer <idToken>`. The frontend keeps the token in memory only (`src/api/client.ts`). A `Refresh` cookie renews it. (The mock API still uses a session cookie.) An unauthenticated request returns `401`.
 - **Matching the backend that exists** (`loan-app-rest-api`, see [backend-mapping.md](backend-mapping.md)):
   - **Reads are `POST` with a JSON body.** Wherever this document shows `GET /x?y=z`, send `POST /x` with `{ "query": { "y": "z" } }`
     (filters in the body keep names, phones and National IDs out of the address, logs and browser history). Real `GET`s are only
     for downloads and the import template.
   - **List answers** are `{ "page": { "count": 120, "content": [ … ] }, "success": true, "message": "…" }`; a single record is
     `{ "content": { … }, "success": true, "message": "…" }`. The mock API still answers with the shapes shown below; the frontend maps between them.
-  - **Sign-in** is `POST /api/public/account/login` → `{ "content": { "idToken", "user", "accounts" } }`. The frontend sends
-    `Authorization: Bearer <idToken>` and keeps the token in memory only; the `Refresh` cookie renews it.
+  - **Sign-in** is `POST /api/public/account/login` (see below). The frontend sends `Authorization: Bearer <idToken>` and keeps the token in
+    memory only; the `Refresh` cookie renews it.
+  - **How the frontend builds a read** (`src/api/backend.ts`, `api.read` and `api.readPage` in `src/api/client.ts`): the route is
+    `/private/<Model>/<action>/` (for example `/private/Borrowers/find-and-count-all/`) and the body is `{ "query": { … } }` with
+    `advancedFilters`, `sort`, `page`, `size`, `populate` and `projections`. A text search such as `?q=ann` becomes a group of
+    `OR` conditions. `like` and `iLike` add the `%` signs themselves, so the frontend sends plain text. A dotted name
+    (`person.fullNames`) filters a joined table, so that relation is also listed in `populate`.
   - Where the backend already has a generic route for plain data (`/api/private/<Models>/find-all/` and the like), the frontend uses
     it. The named routes below are for what the generic routes cannot do safely (approve, pay out, record a payment, reports…).
-- **CSRF:** the backend sets a readable `XSRF-TOKEN` cookie; every `POST`/`PATCH`/`PUT`/`DELETE` carries the same
-  value in the `X-XSRF-TOKEN` header, which the backend must check (`403` if missing or wrong).
+- **CSRF:** requests that carry the `Authorization: Bearer` header can't be forged from another website. Any route that
+  relies on the `Refresh` cookie alone (the token renewal) must be protected: set `SameSite` (and `Secure`) on the cookie. If the backend
+  also sets a readable `XSRF-TOKEN` cookie, the frontend sends its value in `X-XSRF-TOKEN` on every `POST`/`PATCH`/`PUT`/`DELETE`
+  (`src/api/client.ts` already does when the cookie exists); the backend then checks it (`403` if missing or wrong).
 - **Idempotency:** `POST /payments` and `POST /applications/{id}/disburse` carry an `Idempotency-Key` header (a UUID,
   new for each dialog the person opens). If the same key arrives again (a retry, a double click, a dropped
   connection), do not record a second payment or payout: return the first result again with `200`. Store the key
@@ -82,24 +89,32 @@ with a clear `message`.
 
 ## Endpoints
 
+Each route below is what the **screen needs**. [backend-mapping.md](backend-mapping.md) says which of them the backend already covers
+with its generic routes and which still have to be built.
+
 ### `POST /auth/login`
 
-Signs a staff member in with email and password.
+Signs a staff member in with email and password. **On the real backend:** `POST /api/public/account/login`.
 
 ```json
-{ "email": "sharon@tamu.example", "password": "…" }
+{ "username": "sharon@tamu.example", "password": "…" }
 ```
 
-- `204` and an **HTTP-only, secure session cookie** on success. The frontend then calls `GET /me`.
+- The backend looks the account up by the staff email (trimmed, lower-cased); the frontend sends it as `username`.
+  (The mock API takes `{ "email", "password" }`; the frontend maps between them.)
+- On success: `{ "content": { "idToken": "…", "user": { … }, "accounts": { "staffAccount": { … } } } }`, the same token in the
+  `Authorization` response header, and a `Refresh` cookie (`HttpOnly`; it should also be `SameSite` and `Secure`).
+  The mock API answers `204` with a session cookie; either way the frontend then loads the user with its permissions (`GET /me`).
 - `401` with `{ "message": "That email and password don't match. Check them and try again." }` on a wrong
   email or password. Use the same message for both, so the screen doesn't reveal which emails exist.
-- Consider `429` with a `message` after repeated failures (lockout); the frontend shows it as is.
+- After 5 failed sign-ins the backend locks the account for 15 minutes and answers `401` with "Account is temporarily locked".
+  Those two numbers are fixed in the backend today; Settings → Security has `maxFailedSignIns` and `lockoutMinutes` for them.
 - **Decisions (client, 31 Oct):** email + password only; no 2-step code for the MVP (SMS is Phase 2);
   forgotten passwords are reset by an admin (worklist action "Send reset link"), no self-service yet. The person then sets a new one on the "Set your password" page (see `/public/invites/{token}`).
 
 ### `POST /auth/logout`
 
-Ends the session. `204`. The frontend clears its cached data and shows the login screen.
+Ends the session. `204`. The frontend clears its cached data and shows the login screen. **On the real backend:** `POST /api/private/account/logout`; the frontend also drops the in-memory token.
 
 ### Session expiry
 
@@ -109,6 +124,11 @@ after signing in again, returns the user to the page they were on.
 ### `GET /me`
 
 The signed-in user, with permissions already resolved from their role.
+
+**Backend status:** `GET /api/private/account/find-account` returns the staff account with its person (and profile image) only: no
+role and no permissions. A route that returns the user **with their roles and CASL rules** (`subject`, `action`, `conditions`,
+`fields`, `inverted`) does not exist yet. The frontend needs it to decide which buttons to show. Until it does, the
+permission keys below are the frontend's own list (see `src/auth/permissions.ts`).
 
 ```json
 {
