@@ -106,7 +106,7 @@ interface SimulatedLoan {
   numberOfPayments: number;
   instalment: number;
   totalRepayable: number;
-  payments: Omit<LoanPayment, "id">[];
+  payments: Omit<LoanPayment, "id" | "canEdit" | "edits">[];
   paid: number;
   /** Instalments not yet paid, in order */
   unpaid: { dueOn: string; amount: number }[];

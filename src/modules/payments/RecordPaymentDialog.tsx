@@ -14,7 +14,7 @@ interface RecordPaymentDialogProps {
   /** Pre-selected loan (from a worklist row); omit to let the user pick a client */
   loanId?: string;
   onClose: () => void;
-  /** Called after saving, with a confirmation message and the task that can be undone */
+  /** Called after saving, with a confirmation message (and a task that can be undone, if any) */
   onRecorded: (message: string, undoTaskId: string | null) => void;
 }
 
@@ -61,7 +61,8 @@ export function RecordPaymentDialog({ loanId: initialLoanId, onClose, onRecorded
       {
         onSuccess: (result) => {
           const cleared = result.balanceAfter <= 0 ? " Loan cleared." : "";
-          onRecorded(`${formatUGX(amount)} recorded for ${loan.borrowerName}.${cleared}`, result.taskId);
+          // No quick undo for money: a mistyped amount is fixed with "Edit payment", which keeps the old amount and the reason
+          onRecorded(`${formatUGX(amount)} recorded for ${loan.borrowerName}.${cleared}`, null);
           onClose();
         },
       },

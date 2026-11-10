@@ -100,7 +100,7 @@ function LoanListPage({ tab }: { tab: LoanListTab }) {
           <h1>{TITLES[tab]}</h1>
           <p className={styles.subtitle}>{tab === "recovery" ? "Loans handed to the recovery team" : branchWide ? "Every loan in the market" : "Loans in your portfolio"}</p>
         </div>
-        {can("reports.export") && (
+        {can("loans.export") && (
           <Button variant="secondary" onClick={download} disabled={exportLoans.isPending || !data}>
             <Icon name="upload" size={16} strokeWidth={1.8} className={styles.exportIcon} />
             Download CSV

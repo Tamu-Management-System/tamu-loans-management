@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useOfficers } from "../../api/borrowers";
 import { PAYMENTS_PAGE_SIZE, usePaymentList, type PaymentListParams } from "../../api/payments";
+import type { PaymentListItem } from "../../api/types";
 import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
@@ -9,6 +10,8 @@ import { Pagination } from "../../components/ui/Pagination";
 import { SEARCH_FROM, Select } from "../../components/ui/Select";
 import { formatShortDate, formatTime, formatUGX, toDateInputValue } from "../../lib/format";
 import { useAnnounce } from "../dashboard/useAnnounce";
+import { EditedNote } from "./EditedNote";
+import { EditPaymentDialog } from "./EditPaymentDialog";
 import { RecordPaymentDialog } from "./RecordPaymentDialog";
 import { useLatest } from "../../lib/useLatest";
 import styles from "./PaymentsPage.module.css";
@@ -68,6 +71,7 @@ export function PaymentsPage() {
   const { can, seesBranch } = useAuth();
   const searchId = useId();
   const announce = useAnnounce();
+  const [editing, setEditing] = useState<PaymentListItem | null>(null);
   const branchWide = seesBranch;
   const { range, params, update } = usePaymentFilters();
   const { data, isPending, isError, isFetching, refetch } = usePaymentList(params);
@@ -199,6 +203,7 @@ export function PaymentsPage() {
                   <th>METHOD</th>
                   {/* Officers mostly see payments they recorded themselves */}
                   {branchWide && <th>RECORDED BY</th>}
+                  {data.items.some((payment) => payment.canEdit) && <th aria-label="Change"></th>}
                 </tr>
               </thead>
               <tbody>
@@ -216,7 +221,10 @@ export function PaymentsPage() {
                         {payment.loanId}
                       </Link>
                     </td>
-                    <td className={styles.amount}>{formatUGX(payment.amount)}</td>
+                    <td className={styles.amount}>
+                      {formatUGX(payment.amount)}
+                      <EditedNote payment={payment} />
+                    </td>
                     <td className={styles.method}>
                       {payment.method}
                       {payment.reference && <span className={styles.secondary}>{payment.reference}</span>}
@@ -225,6 +233,15 @@ export function PaymentsPage() {
                       <td className={styles.recordedBy}>
                         {payment.recordedBy}
                         {payment.recordedBy !== payment.officer.name && <span className={styles.secondary}>Officer: {payment.officer.name}</span>}
+                      </td>
+                    )}
+                    {data.items.some((item) => item.canEdit) && (
+                      <td className={styles.changeCell}>
+                        {payment.canEdit && (
+                          <button type="button" className={styles.linkButton} onClick={() => setEditing(payment)}>
+                            Edit payment
+                          </button>
+                        )}
                       </td>
                     )}
                   </tr>
@@ -237,6 +254,7 @@ export function PaymentsPage() {
       </div>
 
       {recording && <RecordPaymentDialog onClose={() => setRecording(false)} onRecorded={announce} />}
+      {editing && <EditPaymentDialog payment={editing} loanId={editing.loanId} clientName={editing.borrower.name} onClose={() => setEditing(null)} onChanged={(message) => announce(message)} />}
     </>
   );
 }

@@ -6,6 +6,7 @@ export const SETTING_LIMITS = {
   earlyWarningDays: [1, 60],
   onlineLinkValidHours: [1, 168],
   backdateDays: [0, 30],
+  editWindowHours: [0, 168],
   idleTimeoutMinutes: [5, 60],
   nationalIdVisibleSeconds: [10, 120],
   inviteValidHours: [1, 168],

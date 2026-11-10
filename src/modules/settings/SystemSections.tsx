@@ -145,6 +145,7 @@ export function PaymentsSection() {
   const { can } = useAuth();
   const draft = useSettingsDraft("payments");
   const backdateId = useId();
+  const editId = useId();
   const payments = draft.values;
   const toggle = <T extends string>(list: T[], item: T, on: boolean) => (on ? [...list.filter((x) => x !== item), item] : list.filter((x) => x !== item));
   return (
@@ -160,7 +161,9 @@ export function PaymentsSection() {
             ? "Choose at least one way to pay out."
             : outside(payments!.backdateDays, SETTING_LIMITS.backdateDays)
               ? `Back-dating: ${rangeText(SETTING_LIMITS.backdateDays, "days")}.`
-              : null
+              : outside(payments!.editWindowHours, SETTING_LIMITS.editWindowHours)
+                ? `Time to change a payment: ${rangeText(SETTING_LIMITS.editWindowHours, "hours")}.`
+                : null
       }
     >
       {payments && (
@@ -180,6 +183,13 @@ export function PaymentsSection() {
             </SettingRow>
             <SettingRow label="Payments can be dated up to" htmlFor={backdateId} description="For money received while staff were away from the system. 0 means today only.">
               <NumberField id={backdateId} value={payments.backdateDays} onChange={(value) => draft.set("backdateDays", value)} min={SETTING_LIMITS.backdateDays[0]} max={SETTING_LIMITS.backdateDays[1]} unit="days back" />
+            </SettingRow>
+            <SettingRow
+              label="A payment's amount can be changed for"
+              htmlFor={editId}
+              description="By the person who recorded it, for a mistyped amount. Only the latest payment on a loan, and the old amount and the reason are kept. 0 means never."
+            >
+              <NumberField id={editId} value={payments.editWindowHours} onChange={(value) => draft.set("editWindowHours", value)} min={SETTING_LIMITS.editWindowHours[0]} max={SETTING_LIMITS.editWindowHours[1]} unit="hours" />
             </SettingRow>
           </SettingsGroup>
 

@@ -4,16 +4,22 @@ import { useDownloadAgreement } from "../../api/borrowers";
 import { useSystemSettings } from "../../api/settings";
 import { ApiError } from "../../api/client";
 import { useLoan } from "../../api/loans";
-import type { LoanDetail, LoanInstalment } from "../../api/types";
+import type { LoanDetail, LoanInstalment, LoanPayment } from "../../api/types";
 import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
+import { Pagination } from "../../components/ui/Pagination";
 import { useToast } from "../../components/ui/Toast";
 import { formatDate, formatShortDate, formatTime, formatUGX, dayCount } from "../../lib/format";
 import { useAnnounce } from "../dashboard/useAnnounce";
+import { EditedNote } from "../payments/EditedNote";
+import { EditPaymentDialog } from "../payments/EditPaymentDialog";
 import { RecordPaymentDialog } from "../payments/RecordPaymentDialog";
 import { ReturnFromRecoveryDialog, SendToRecoveryDialog } from "./RecoveryDialogs";
 import styles from "./LoanDetailsPage.module.css";
+
+/** Instalments shown at a time in the repayment schedule */
+const SCHEDULE_PAGE_SIZE = 14;
 
 const FREQUENCY = { daily: "Daily", weekly: "Weekly", monthly: "Monthly" } as const;
 const INSTALMENT_STATUS: Record<LoanInstalment["status"], string> = { paid: "Paid", "part-paid": "Part paid", late: "Late", due: "Due today", upcoming: "Upcoming" };
@@ -26,6 +32,9 @@ export function LoanDetailsPage() {
   const [dialog, setDialog] = useState<"payment" | "send" | "return" | null>(null);
   const announce = useAnnounce();
   const showToast = useToast();
+  const [editing, setEditing] = useState<LoanPayment | null>(null);
+  // null until someone turns the page: then the page with the next instalment to pay is shown
+  const [schedulePage, setSchedulePage] = useState<number | null>(null);
   const download = useDownloadAgreement();
   // How late is "seriously late", and when recovery is suggested: Settings → Loan rules
   const { data: settings } = useSystemSettings();
@@ -72,6 +81,11 @@ export function LoanDetailsPage() {
   }
 
   const open = loan.status !== "cleared";
+  // The repayment schedule, 14 instalments at a time, opening on the page with the first one not yet paid
+  const firstUnpaid = loan.schedule.findIndex((instalment) => instalment.status !== "paid");
+  const lastSchedulePage = Math.max(1, Math.ceil(loan.schedule.length / SCHEDULE_PAGE_SIZE));
+  const currentSchedulePage = Math.min(schedulePage ?? Math.floor(Math.max(0, firstUnpaid) / SCHEDULE_PAGE_SIZE) + 1, lastSchedulePage);
+  const visibleSchedule = loan.schedule.slice((currentSchedulePage - 1) * SCHEDULE_PAGE_SIZE, currentSchedulePage * SCHEDULE_PAGE_SIZE);
   const late = loan.daysPastDue > 0;
   const repaidPercent = loan.totalRepayable > 0 ? Math.round((loan.repaid / loan.totalRepayable) * 100) : 0;
   const summary = { id: loan.id, borrowerName: loan.borrower.name, balance: loan.balance, daysPastDue: loan.daysPastDue };
@@ -168,6 +182,7 @@ export function LoanDetailsPage() {
             )}
           </div>
           {loan.schedule.length ? (
+            <>
             <table className={styles.table}>
               <thead>
                 <tr>
@@ -179,7 +194,7 @@ export function LoanDetailsPage() {
                 </tr>
               </thead>
               <tbody>
-                {loan.schedule.map((instalment) => (
+                {visibleSchedule.map((instalment) => (
                   <tr key={instalment.number} className={instalment.status === "late" ? styles.lateRow : ""}>
                     <td className={styles.muted}>{instalment.number}</td>
                     <td>{formatDate(instalment.dueOn)}</td>
@@ -192,6 +207,10 @@ export function LoanDetailsPage() {
                 ))}
               </tbody>
             </table>
+            {loan.schedule.length > SCHEDULE_PAGE_SIZE && (
+              <Pagination page={currentSchedulePage} pageSize={SCHEDULE_PAGE_SIZE} total={loan.schedule.length} noun="payments" onPageChange={setSchedulePage} />
+            )}
+            </>
           ) : (
             <p className={styles.empty}>
               Repaid in full on {loan.clearedOn ? formatDate(loan.clearedOn) : "—"}
@@ -216,10 +235,16 @@ export function LoanDetailsPage() {
                         {payment.method}
                         {payment.reference ? ` · ${payment.reference}` : ""}
                       </span>
+                      <EditedNote payment={payment} />
                     </span>
                     <span className={styles.paymentWhen}>
                       {formatShortDate(payment.paidAt)}, {formatTime(payment.paidAt)}
                       <span className={styles.muted}>{payment.recordedBy}</span>
+                      {payment.canEdit && (
+                        <button type="button" className={styles.linkButton} onClick={() => setEditing(payment)}>
+                          Edit payment
+                        </button>
+                      )}
                     </span>
                   </li>
                 ))}
@@ -260,6 +285,7 @@ export function LoanDetailsPage() {
       </div>
 
       {dialog === "payment" && <RecordPaymentDialog loanId={loan.id} onClose={() => setDialog(null)} onRecorded={announce} />}
+      {editing && <EditPaymentDialog payment={editing} loanId={loan.id} clientName={loan.borrower.name} onClose={() => setEditing(null)} onChanged={(message) => announce(message)} />}
       {dialog === "send" && <SendToRecoveryDialog loan={summary} onClose={() => setDialog(null)} />}
       {dialog === "return" && <ReturnFromRecoveryDialog loan={summary} onClose={() => setDialog(null)} />}
     </>

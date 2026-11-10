@@ -32,6 +32,8 @@ import type {
   UpdateApplicationRequest,
   ApplicationList,
   ApplicationListItem,
+  EditPaymentRequest,
+  EditPaymentResponse,
   ApplicationRejectionReason,
   ApproveApplicationRequest,
   RejectApplicationRequest,
@@ -116,10 +118,10 @@ import { addApplicationSection, addDocumentVersion, markApplicationPaidOut, appl
 import { createPasswordLink, ensureDemoPasswordLinks, findPasswordLink, markPasswordLinkUsed, passwordLinkProblem, revokePasswordLinks, sendDemoEmail } from "./passwordLinks";
 import { assignBorrower, findOnlineApplication, linkProblem, submitOnlineApplication, submittedForNewBorrowers, type StoredImage } from "./onlineApplications";
 import { nextBorrowerId } from "./borrowerDirectory";
-import { loanPayments, recordLoanPayment } from "./loanPayments";
+import { changePaymentAmount, findStoredPayment, loanPayments, recordLoanPayment } from "./loanPayments";
 import { describeLength, describePenalty, feeAmount, INTEREST_LIMITS, FIRST_PAYMENT_WITHIN_DAYS, latePenalty, paymentDate, summariseTerms } from "../lib/repaymentSchedule";
 import { borrowerActivityPage, recordBorrowerEvent } from "./borrowerActivity";
-import { addFollowUpTask, clockTime, describePayment, findTask, nextPaymentId, openTaskForLoan, rememberForUndo, tasksFor, tasksForUser, ugx, undo } from "./worklistStore";
+import { addFollowUpTask, clockTime, describePayment, findTask, openTaskForLoan, rememberForUndo, tasksFor, tasksForUser, ugx, undo } from "./worklistStore";
 
 const API_BASE = "/api";
 const MIN_SEARCH_LENGTH = 2;
@@ -760,6 +762,17 @@ function scheduleOf(terms: NonNullable<ReturnType<typeof borrowerDetails.get>>["
  * What a client owes right now: the loan balance plus any late fees. It is the most one payment can be, so a payment
  * can never go beyond what's demanded (and nobody has to be refunded).
  */
+/** A loan's payments for the signed-in person, each marked with whether they can change its amount now */
+function paymentsFor(user: MockUser, loanId: string, officerName: string) {
+  const window = systemSettings.payments.editWindowHours;
+  const list = loanPayments(loanId, undefined, officerName);
+  return list.map((payment, index) => ({
+    ...payment,
+    // The person who recorded it, inside the time Settings allows, and only the latest payment on the loan
+    canEdit: window > 0 && index === 0 && hasPermission(user, "payments.edit") && payment.recordedBy === user.name && loans.some((loan) => loan.id === loanId) && Date.now() - new Date(payment.recordedAt).getTime() <= window * 3_600_000,
+  }));
+}
+
 function owedNowOf(loan: (typeof loans)[number]) {
   const balance = Math.max(0, loan.outstandingBalance);
   if (balance === 0 || loan.daysPastDue <= 0) return balance;
@@ -1489,7 +1502,7 @@ export const handlers = [
       const borrower = borrowerForLoan(loan.id);
       const terms = borrower ? borrowerDetails.get(borrower.id)?.loanTerms : null;
       if (!borrower || !terms) continue;
-      for (const payment of loanPayments(loan.id, terms, officerName(loan.officerId))) {
+      for (const payment of paymentsFor(user, loan.id, officerName(loan.officerId))) {
         all.push({ ...payment, loanId: loan.id, borrower: { id: borrower.id, name: borrower.name }, officer: { id: loan.officerId, name: officerName(loan.officerId) } });
       }
     }
@@ -1526,7 +1539,7 @@ export const handlers = [
     applyAutoRecovery();
     await delay(300);
     const user = currentDemoUser();
-    if (!hasPermission(user, "reports.export")) return forbidden("You can't export loans.");
+    if (!hasPermission(user, "loans.export")) return forbidden("You can't export loans.");
     const { tab, inTab } = filterLoans(user, new URL(request.url).searchParams);
     const sorted = [...inTab].sort((a, b) => a.id.localeCompare(b.id));
     const csv = trackerCsv(sorted);
@@ -1717,7 +1730,7 @@ export const handlers = [
         approvedBy: app?.decided?.by ?? null,
         payout: loan.payout ?? null,
         schedule,
-        payments: loanPayments(loan.id, terms, officerName(loan.officerId)),
+        payments: paymentsFor(user, loan.id, officerName(loan.officerId)),
         signedApplication: publicDocument(applicationVersionFor(borrower, loan.id)),
       });
     }
@@ -2391,12 +2404,12 @@ export const handlers = [
     loan.outstandingBalance = Math.max(0, balanceBefore - body.amount);
     // A back-dated payment keeps the time it was recorded, on the day it was paid
     const paidAt = paidOn === todayIso ? new Date().toISOString() : new Date(`${paidOn}T${new Date().toTimeString().slice(0, 8)}`).toISOString();
-    recordLoanPayment(loan.id, { amount: body.amount, method: body.method, reference: body.reference?.trim() || null, recordedBy: user.name }, paidAt);
+    const paymentId = recordLoanPayment(loan.id, { amount: body.amount, method: body.method, reference: body.reference?.trim() || null, recordedBy: user.name }, paidAt);
     const payer = borrowerForLoan(loan.id);
     if (payer) recordBorrowerEvent(payer, "money", `Recorded ${ugx(body.amount)} on ${loan.id} · ${body.method}`, actorOf(user));
 
     const response: RecordPaymentResponse = {
-      paymentId: nextPaymentId(),
+      paymentId,
       loanId: loan.id,
       balanceBefore,
       balanceAfter: loan.outstandingBalance,
@@ -2404,6 +2417,47 @@ export const handlers = [
     };
     rememberResult(request, response);
     return HttpResponse.json(response, { status: 201 });
+  }),
+
+  // Change the amount of a payment: for a typing mistake like an extra zero. The old amount, who changed it and why are kept on the payment.
+  http.patch(`${API_BASE}/payments/:paymentId`, async ({ params, request }) => {
+    await delay(250);
+    const replay = replayOf(request);
+    if (replay) return replay;
+    const user = currentDemoUser();
+    if (!hasPermission(user, "payments.edit")) return forbidden("You can't change payments.");
+    const found = findStoredPayment(String(params.paymentId));
+    const loan = found && loans.find((l) => l.id === found.loanId);
+    if (!found || !loan || !canSeeRecord(user, loan.officerId)) return notFound("That payment wasn't found.");
+    const { payment, isLatest } = found;
+    const window = systemSettings.payments.editWindowHours;
+    if (window === 0) return forbidden("Payments can't be changed.");
+    if (payment.recordedBy !== user.name) return forbidden(`Only ${payment.recordedBy}, who recorded it, can change this payment.`);
+    if (Date.now() - new Date(payment.recordedAt).getTime() > window * 3_600_000) return HttpResponse.json({ message: `A payment can only be changed within ${window} ${window === 1 ? "hour" : "hours"} of recording it.` }, { status: 409 });
+    if (!isLatest) return HttpResponse.json({ message: "Only the latest payment on a loan can be changed." }, { status: 409 });
+    const body = (await request.json()) as EditPaymentRequest;
+    const reason = (body.reason ?? "").trim();
+    if (!Number.isInteger(body.amount) || !(body.amount > 0)) return invalid("Enter a whole number of shillings above zero.");
+    if (body.amount === payment.amount) return invalid("That's the amount already recorded.");
+    if (reason.length < 3) return invalid("Say why the amount is being changed.");
+    if (reason.length > 200) return invalid("Keep the reason under 200 characters.");
+    // Never more than the client owes, counting this payment as if it hadn't been made yet
+    const most = owedNowOf(loan) + payment.amount;
+    if (body.amount > most) return invalid(`That's more than ${loan.borrowerName} owes. The most it can be is UGX ${most.toLocaleString("en-US")}.`);
+
+    const balanceBefore = loan.outstandingBalance;
+    loan.outstandingBalance = Math.max(0, balanceBefore + payment.amount - body.amount);
+    const from = payment.amount;
+    changePaymentAmount(payment, { from, to: body.amount, by: user.name, at: new Date().toISOString(), reason });
+    const payer = borrowerForLoan(loan.id);
+    if (payer) recordBorrowerEvent(payer, "money", `Changed payment ${payment.id} on ${loan.id} from ${ugx(from)} to ${ugx(body.amount)}: ${reason}`, actorOf(user));
+    audit(user, `changed payment ${payment.id} on ${loan.id} (${loan.borrowerName}) from ${ugx(from)} to ${ugx(body.amount)}`, [
+      { label: "Amount", value: `${ugx(from)} → ${ugx(body.amount)}` },
+      { label: "Reason", value: reason },
+    ]);
+    const response: EditPaymentResponse = { paymentId: payment.id, loanId: loan.id, balanceBefore, balanceAfter: loan.outstandingBalance };
+    rememberResult(request, response);
+    return HttpResponse.json(response);
   }),
 
   http.post(`${API_BASE}/worklist/:taskId/call-outcome`, async ({ params, request }) => {

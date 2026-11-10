@@ -39,6 +39,7 @@ export const systemSettings: SystemSettings = {
     payoutMethods: ["MTN MoMo", "Airtel Money"],
     referenceRequired: true,
     backdateDays: 3,
+    editWindowHours: 24,
   },
   notifications: {
     rules: [

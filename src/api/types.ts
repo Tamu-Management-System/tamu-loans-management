@@ -213,6 +213,21 @@ export interface RecordPaymentRequest {
   paidOn?: string;
 }
 
+/** PATCH /payments/{id}: change the amount of a payment you recorded */
+export interface EditPaymentRequest {
+  amount: number;
+  /** Why it is being changed (kept with the payment and in the audit log) */
+  reason: string;
+}
+
+/** PATCH /payments/{id} response */
+export interface EditPaymentResponse {
+  paymentId: string;
+  loanId: string;
+  balanceBefore: number;
+  balanceAfter: number;
+}
+
 /** POST /payments response */
 export interface RecordPaymentResponse {
   paymentId: string;
@@ -871,14 +886,29 @@ export interface LoanInstalment {
 }
 
 /** A repayment received on a loan */
+/** One change to a payment's amount. The payment keeps every one, so the history stays honest. */
+export interface PaymentEdit {
+  /** The amounts before and after (UGX) */
+  from: number;
+  to: number;
+  by: string;
+  /** ISO date-time */
+  at: string;
+  reason: string;
+}
+
 export interface LoanPayment {
   id: string;
-  /** ISO date-time */
+  /** ISO date-time the money was paid */
   paidAt: string;
   amount: number;
   method: "MTN MoMo" | "Airtel Money" | "Cash";
   reference: string | null;
   recordedBy: string;
+  /** Oldest change first; empty if the amount was never changed */
+  edits: PaymentEdit[];
+  /** Whether the signed-in person can change this amount now (see PATCH /payments/{id}) */
+  canEdit: boolean;
 }
 
 /** GET /loans/{id} */
@@ -924,6 +954,8 @@ export interface PaymentListItem {
   method: "MTN MoMo" | "Airtel Money" | "Cash";
   reference: string | null;
   recordedBy: string;
+  edits: PaymentEdit[];
+  canEdit: boolean;
   loanId: string;
   borrower: { id: string; name: string };
   officer: { id: string; name: string };
@@ -1105,6 +1137,8 @@ export interface PaymentSettings {
   referenceRequired: boolean;
   /** How many days back a repayment can be dated (0 = today only) */
   backdateDays: number;
+  /** How many hours after recording the person who recorded a payment can change its amount (0 = never) */
+  editWindowHours: number;
 }
 
 export interface SecuritySettings {

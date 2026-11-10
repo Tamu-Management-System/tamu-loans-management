@@ -92,7 +92,7 @@ async function request<T>(method: string, path: string, body?: unknown, options?
 export const api = {
   get: <T>(path: string) => request<T>("GET", path),
   post: <T>(path: string, body?: unknown, options?: RequestOptions) => request<T>("POST", path, body, options),
-  patch: <T>(path: string, body?: unknown) => request<T>("PATCH", path, body),
+  patch: <T>(path: string, body?: unknown, options?: RequestOptions) => request<T>("PATCH", path, body, options),
   put: <T>(path: string, body?: unknown) => request<T>("PUT", path, body),
   delete: <T>(path: string) => request<T>("DELETE", path),
   /** A file (e.g. a PDF), fetched with the session like any other request */

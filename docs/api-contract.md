@@ -52,6 +52,7 @@ reports. Roles with any `users.*`, `roles.*` or `settings.*` permission must be 
 | `loans.export` | Export loan lists | `loans.view` |
 | `payments.view` | See payments | |
 | `payments.record` | Record repayments | `payments.view`, `loans.view` |
+| `payments.edit` | Change the amount of a payment you recorded (see `PATCH /payments/{id}`) | `payments.record` |
 | `payments.export` | Export payments | `payments.view` |
 | `recovery.view` | See loans in recovery | `loans.view` |
 | `recovery.manage` | Send loans to recovery and bring them back | `recovery.view` |
@@ -135,7 +136,7 @@ Finds loans and applications by borrower name, ID or phone number, for the top-b
 ### `GET /loans/export`
 
 The loan tracker: the loans the Loans screen shows, as a CSV file, one row per loan. Same query as `GET /loans/list` (`status` =
-`active`, `recovery`, `cleared` or `all`; `q`, `officerId`, `late`), no paging. Requires `reports.export`; a person only gets loans they can see
+`active`, `recovery`, `cleared` or `all`; `q`, `officerId`, `late`), no paging. Requires `loans.export`; a person only gets loans they can see
 (own or market). Sorted by loan ID. Audit-logged ("exported the loan tracker"). `Content-Type: text/csv; charset=utf-8`, starts with a
 UTF-8 byte-order mark so Excel reads it correctly, CRLF line ends, numbers unquoted, text quoted, and a text cell that starts with `= + - @` gets a
 leading `'` (spreadsheet formula injection).
@@ -290,6 +291,28 @@ Records a repayment. Requires `payments.record`.
 - The payment counts towards the loan's open worklist task (`taskId`). Partly paid tasks stay open with a note.
 - `422` with a `message` if the amount isn't above zero; `404` if the user can't see the loan.
 
+### `PATCH /payments/{paymentId}`
+
+Changes the amount of a payment, for a typing mistake (200000 instead of 20000). Requires `payments.edit`. Send an `Idempotency-Key`.
+
+```json
+{ "amount": 20000, "reason": "typed an extra zero" }
+```
+
+Response `200`: `{ "paymentId": "PAY-1001", "loanId": "TL-1042", "balanceBefore": 1950000, "balanceAfter": 2130000 }`. Rules, each refused with a `message`:
+
+- Only the person who recorded the payment (`403` otherwise), and only within `payments.editWindowHours` of recording it (`409`; `0` means payments can
+  never be changed, `403`). The time counts from when it was recorded, not from `paidOn`.
+- Only the **latest** payment on a loan (`409`), so the balance and the instalment order stay correct.
+- `amount`: a whole number above zero, different from the current one, and **at most what the borrower owed before this payment** (the loan's
+  `owedNow` plus this payment's current amount): `422` "That's more than … owes. The most it can be is UGX …". Still no overpayments.
+- `reason` is required (3 to 200 characters), `422` otherwise.
+- The payment keeps **every** change in `edits` (`from`, `to`, `by`, `at`, `reason`); nothing is overwritten or deleted. The loan's balance is
+  recalculated (a loan that the payment had cleared becomes active again if the amount is lowered). Audit-log it (category `money`, "changed
+  payment PAY-… on TL-… from UGX 200,000 to UGX 20,000") with the reason, and add it to the client's activity.
+- Payments are listed with `edits` and `canEdit` (`GET /payments/list` and `payments` in `GET /loans/{id}`): `canEdit` is true when the signed-in
+  person could make this change now, so the screen shows "Edit payment" only then.
+
 ### `POST /worklist/{taskId}/call-outcome`
 
 Logs a call on a loan task.
@@ -314,9 +337,8 @@ Returns the updated task. (Payment reversals were removed at the client's reques
 ### `POST /worklist/{taskId}/undo`
 
 Reverts the last change to a task (the "Undo" button). `204` on success, `409` with a `message` if it can no
-longer be undone. **Open question:** undoing a recorded payment is effectively a payment reversal, which officers
-aren't allowed to do (`payments.reverse`). Decide with the client whether payment undo should become a reversal
-request to an admin instead.
+longer be undone. The screen no longer offers Undo after recording a payment: money is corrected with
+`PATCH /payments/{id}`, which keeps the old amount, the reason and who changed it. Undo stays for non-money task actions (a logged call, "Add to today").
 
 ## Portfolio section ("My portfolio" / "Market portfolio")
 
@@ -1014,7 +1036,7 @@ Nothing an admin can change is hard-coded in the frontend: it reads these and fo
                  "par30TargetPercent": 5, "earlyWarningDays": 7, "onlineLinkValidHours": 72,
                  "paymentAllocationOrder": ["charges", "fees", "interest", "principal"] },
   "payments": { "repaymentMethods": ["Cash", "MTN MoMo", "Airtel Money"], "payoutMethods": ["MTN MoMo", "Airtel Money"],
-                "referenceRequired": true, "backdateDays": 3 },
+                "referenceRequired": true, "backdateDays": 3, "editWindowHours": 24 },
   "security": { "idleTimeoutMinutes": 15, "nationalIdVisibleSeconds": 30, "inviteValidHours": 48, "maxFailedSignIns": 5, "lockoutMinutes": 15, "minPasswordLength": 12 },
   "notifications": { "rules": [{ "event": "submitted", "title": "An application is sent for approval", "who": "Everyone who can approve",
                                "example": "Tamu Loans: APP-311 for Brian Ochieng (UGX 500,000) is waiting for your approval.", "channels": ["sms"] }] },
@@ -1047,6 +1069,7 @@ What each setting does on the server:
 - Payments: refuse methods not in `repaymentMethods`/`payoutMethods`; require `reference` for mobile money when
   `referenceRequired`; `paidOn` (new, optional on `POST /payments`) may be up to `backdateDays` in the past;
   refuse any amount above what the borrower owes (`owedNow`); amounts must be whole shillings.
+  `editWindowHours` (0 to 168): how long after recording the person who recorded a payment can change its amount (`PATCH /payments/{id}`); 0 = never.
 - Security: sign-in lockout, idle timeout, National ID display time and invite lifetime follow these values.
 - Notifications: when a workflow step makes it someone else's turn, the server tells them (steps and recipients below). Each person is always
   told in-app (the bell, `GET /notifications`); `channels` adds SMS or email to the person's phone / email on file. Sending happens

@@ -47,7 +47,7 @@ Ugandan shillings (integers). Dates are calendar dates in Kampala time (EAT, UTC
 | `documents` + `document_versions` | borrower_id, slot (e.g. `national-id-front`, `APP-301:application`), file (private storage), content_type (sniffed), size, uploaded_by/at, method (`scanned` / `online`), version | Never deleted; replacing adds a version. |
 | `loans` | id (`TL-0001`), borrower_id, application_id, officer_id, product_id, pricing snapshot, principal, interest, fee, total_repayable, repayment_schedule, disbursed_on, payout method/reference (unique)/by, status (`active` / `cleared`), cleared_on | One open loan per borrower when that rule is on. |
 | `instalments` | loan_id, number, due_on, amount | Generated at payout (section 3). |
-| `payments` | id, loan_id, amount, method (`Cash` / `MTN MoMo` / `Airtel Money`), reference, paid_on, recorded_at, recorded_by, idempotency_key | Never edited or deleted (reversals were dropped). |
+| `payments` | id, loan_id, amount, method (`Cash` / `MTN MoMo` / `Airtel Money`), reference, paid_on, recorded_at, recorded_by, idempotency_key | Never deleted. The amount can be changed once the client asks for it (typing mistakes): keep each change in a `payment_edits` table (payment_id, old_amount, new_amount, edited_by, edited_at, reason) and never overwrite history; see `PATCH /payments/{id}`. |
 | `recovery` | loan_id, since, by (person or `Automatic`), reason, note, returned_at/by/note | |
 | `follow_ups` | loan_id, user_id, type (`promise` / `no-answer` / `field-visit`), promised_on, created_at | Feeds the worklist. |
 | `audit_log` | id, at, actor (user, borrower or automatic rule), category, description, target (loan/application), details (before → after), ip, device | Append-only. |

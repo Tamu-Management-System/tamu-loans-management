@@ -257,6 +257,13 @@
   padding-left: 28px;
 }
 
+/* The instalment number and the date: enough room between them that "1" and "5 Nov" never read as "15 Nov" */
+.table th:first-child,
+.table td:first-child {
+  width: 48px;
+  padding-right: 24px;
+}
+
 .lateRow {
   background: #fff8f6;
 }
@@ -365,6 +372,11 @@ td.muted {
 .row dd a {
   color: var(--color-text);
   font-weight: 600;
+}
+
+/* The line under a value (a phone number, a reference) sits a little apart from it */
+.row dd .muted {
+  margin-top: 5px;
 }
 
 .empty {

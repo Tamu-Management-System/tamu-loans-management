@@ -1,7 +1,7 @@
 // Data hooks for the Payments page.
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
-import type { PaymentList } from "./types";
+import type { EditPaymentRequest, EditPaymentResponse, PaymentList } from "./types";
 
 export const PAYMENTS_PAGE_SIZE = 25;
 
@@ -24,5 +24,17 @@ export function usePaymentList(params: PaymentListParams) {
     queryKey: ["payments", "list", params],
     queryFn: () => api.get<PaymentList>(`/payments/list?${search}`),
     placeholderData: keepPreviousData,
+  });
+}
+
+/** Changes the amount of a payment (a typing mistake). The old amount and the reason are kept. */
+export function useEditPayment(paymentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ idempotencyKey, ...change }: EditPaymentRequest & { idempotencyKey?: string }) => api.patch<EditPaymentResponse>(`/payments/${encodeURIComponent(paymentId)}`, change, { idempotencyKey }),
+    onSuccess: () =>
+      Promise.all(
+        [["payments"], ["loans"], ["borrowers"], ["dashboard"], ["worklist"], ["portfolio"], ["team"], ["activity"], ["audit"], ["notifications"]].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+      ),
   });
 }

@@ -365,3 +365,8 @@
     grid-column: 1 / -1;
   }
 }
+
+.changeCell {
+  text-align: right;
+  white-space: nowrap;
+}

@@ -21,7 +21,7 @@ export function categoryOf(description: string): AuditCategory {
   const d = description.toLowerCase();
   if (/^(signed in|signed out|failed sign-in)/.test(d)) return "signin";
   if (/^(viewed|downloaded|exported|opened draft)/.test(d)) return "access";
-  if (/^(recorded|disbursed)/.test(d)) return "money";
+  if (/^(recorded|disbursed|changed payment)/.test(d)) return "money";
   if (/^(approved|rejected|sent .* back|sent .* to recovery|brought .* back)/.test(d) || /recovery/.test(d)) return "decisions";
   if (/(role|invite|account|settings|loan product|staff|market)/.test(d)) return "admin";
   return "borrowers";
