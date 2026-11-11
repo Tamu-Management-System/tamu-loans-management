@@ -1,6 +1,6 @@
 # What the backend covers, and what is missing
 
-Written from reading `loan-app-rest-api` (branch `master`, 10 Nov 2026). It is the frontend's view; nothing in the backend was changed.
+Written from reading `loan-app-rest-api` (branch `master`; read again on 11 Nov 2026 at commit `bab20ec`, the same as the remote). It is the frontend's view; nothing in the backend was changed.
 Use it with [api-contract.md](api-contract.md) (what the screens need) and [backend-plan.md](backend-plan.md) (the rules).
 
 ## How the backend works today
@@ -40,6 +40,44 @@ Use it with [api-contract.md](api-contract.md) (what the screens need) and [back
 | Staff, roles | `StaffAccount`, `Role`, `Permission`, `RolePermission`, `StaffInvite` CRUD | send the invite email and accept it; role editor rules (built-in roles read-only, a role can't give more than its editor holds) |
 | Dashboard, worklist, reports | `WorkListTask`, `Notification`, `AuditLog` tables | the dashboard figures, worklist builder, PAR30 and arrears numbers, the reports (JSON, CSV, PDF) and the loan tracker CSV |
 | Files | `FileResource` table, upload routes | storage for uploads (the upload route does not save the file) and an authenticated download; only a public `static` folder is served today |
+
+## What really exists in the backend code (checked again 11 Nov)
+
+- **Every route is the generic one** (see above), plus login, logout, change password, find-account, the two payment webhooks and the file upload routes.
+  There is no route for approve, send back, close, pay out, record a payment, recovery, reports, dashboard or worklist.
+- **The service hooks are empty.** Each table's `beforeCreate`, `afterCreate`, `doCustomValidations` and the rest only contain the template
+  (`// handle hook here`), so nothing is checked or calculated when a loan, payment, application or disbursement is saved. All the rules
+  in [backend-plan.md](backend-plan.md) (schedule, allocation, late fees, two-person checks, guarantor limit) still have to be written.
+- **Sending a payout:** `MobileMoneyDisbursementService.disburse()` (MTN and Airtel) exists, but no route or service calls it.
+- **Webhooks work:** a payment callback becomes a `MobileMoneyTransaction`: `OUT` and `MATCHED` when it belongs to one of our disbursements
+  (the disbursement turns `CONFIRMED` or `FAILED`), otherwise `UNMATCHED`. This is the data the "Match payments" screen needs.
+  Nothing yet turns a matched transaction into a `Payment`.
+- **SMS:** `SendSMSService` (Africa's Talking) and `SendSMSJob`/`SendEmailJob` (queued by `SidequestJobsService`) exist, but nothing queues them.
+  There are no texts for payout, payment received or reminders, and no schedule that decides when a reminder goes.
+
+## The new screens against the backend
+
+| Screen | What the generic routes can already give | Still to build |
+|---|---|---|
+| Arrears & SMS (late loans) | `RepaymentSchedule`, `Loan` | the arrears figures (days late, overdue amount, age bands, collection rate); sending a staff text to a client (queue the SMS job, write a `CommunicationLog`, check `sms.send`) |
+| Arrears & SMS (texts sent) | `CommunicationLog` (channel, to, details, status, sentAt, recipient) | filter to texts staff sent, scoped to the officer's own clients |
+| Accounting, money in | `Payment` | totals by method for the dates |
+| Accounting, money out | `Disbursement` (grossAmount, channel, sentAt, status, transactionId) | the list in the screen's shape; the payout itself (see above) |
+| Match payments | `MobileMoneyTransaction` with `status = UNMATCHED` (has `matchedPaymentId`) | the match candidates (same phone, or the amount due); the match action that records a `Payment` and sets `matchedPaymentId` and `MATCHED`; the worklist task |
+| Texts to clients (payout, payment, reminder) | `SendSMSService`, jobs, `MessageTemplate`, `CommunicationLog` | the triggers on payout and payment, the reminder schedule from the loan's repayment interval, the on/off and days-before settings (a `NOTIFICATIONS` settings section) |
+| Four dashboard boxes, worklist, portfolio and risk cards | `WorkListTask` (type, priority, status, assignee), `Notification` | the builder that creates the tasks, and every figure (PAR30, arrears, early warnings, collection rate) |
+
+## The schema already has room for
+
+Recovery (`since`, `note`, `returnedAt`, `returnNote`), payment `idempotencyKey` and `surplus`, disbursement `idempotencyKey` and
+`consentConfirmedAt`, late fee fields on `LoanProduct` and `Loan`, `WorkListType.PAYMENT_UNMATCHED`, `PaymentReversal`, `PromiseToPay`.
+
+## The schema does not have yet
+
+- An email on the client (`Person` has none).
+- The guarantor waiver (reason and who granted it) and the "closed by officer" state of an application (could be `CANCELLED`).
+- A `NOTIFICATIONS` section in `SettingsSection`, and fields for the client text switches and reminder days.
+- Late fees that start only when a loan is in recovery (today the late fee fields on the loan say nothing about when they start).
 
 ## What the frontend will change to match
 

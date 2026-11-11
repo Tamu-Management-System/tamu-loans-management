@@ -74,6 +74,7 @@ reports. Roles with any `users.*`, `roles.*` or `settings.*` permission must be 
 | `payments.export` | Export payments | `payments.view` |
 | `recovery.view` | See loans in recovery | `loans.view` |
 | `recovery.manage` | Send loans to recovery and bring them back | `recovery.view` |
+| `sms.send` | Send texts to clients | `loans.view` |
 | `reports.view` / `reports.export` | Reports | |
 | `users.view` / `users.manage` | Staff accounts | |
 | `roles.manage` | Custom roles | `users.view` |
@@ -239,7 +240,7 @@ Counts shown next to menu items.
 
 Body `{ "query": { } }`. A read: nothing in the address.
 
-PAR30 for the sidebar risk card. Part of the arrears engine (Module 3, Phase 2), but the frontend already shows it under a "Coming soon" overlay.
+PAR30 for the sidebar risk card.
 
 ```json
 { "scope": "own", "par30Percent": 4.1, "targetPercent": 5, "loansOver30Days": 4 }
@@ -274,7 +275,8 @@ the frontend shows one box per section. Shape: `DashboardToday` in `src/api/type
 | `awaitingApproval` | `applications.approve` (to decide) or `users.manage` (to follow up) |
 | `approvedNotDisbursed` | `loans.disburse` (to pay out) or `users.manage` |
 | `accessRequests` | `users.manage` |
-- Payment matching and payment reversals are not in the MVP (`unmatchedPayments`, `paymentReversals` aren't sent).
+- `unmatchedPayments { count, amount }` (needs `payments.record`) counts received mobile money not yet on a loan. Payment reversals are not used (`paymentReversals` isn't sent).
+- The dashboard shows at most four boxes; the frontend picks the four most important for the role, so sending more is harmless.
 - Must stay consistent with `POST /worklist/query`: e.g. `collections.dueCount` = open instalment and promise tasks.
 
 ### `POST /worklist/query`
@@ -290,7 +292,7 @@ type (see `WorklistTask` in `src/api/types.ts`). Common fields:
 | Field | Meaning |
 |---|---|
 | `id` | Task id |
-| `type` | `instalment-due`, `promise-due`, `overdue`, `application-incomplete`, `awaiting-approval`, `awaiting-disbursement`, `access-request` (`payment-unmatched` and `reversal-request` are Phase 2 / not used) |
+| `type` | `instalment-due`, `promise-due`, `overdue`, `application-incomplete`, `awaiting-approval`, `awaiting-disbursement`, `access-request` (`payment-unmatched`: mobile money received but not on a loan yet; `reversal-request` is not used) |
 | `priority` | `do-first`, `do-today` or `routine` (decided by the backend) |
 | `status` | `open` or `done` |
 | `result` | What happened, for done tasks |
@@ -317,7 +319,7 @@ Loans the user can see that still have a balance, for pickers such as Record pay
 [{ "id": "TL-1042", "borrowerName": "Aisha Namubiru", "phone": "0772 418 230", "outstandingBalance": 2400000, "owedNow": 2400000, "dueToday": 450000 }]
 ```
 
-`owedNow` is what the borrower owes right now: the balance plus any unpaid late fees. It is the most one payment can be (see
+`owedNow` is what the borrower owes right now: the balance plus any unpaid late fees (late fees only start once the loan is sent to recovery). It is the most one payment can be (see
 `POST /payments`). `dueToday` is the amount still due today on an instalment or promise, otherwise `null`.
 
 ### `POST /payments`
@@ -402,10 +404,9 @@ activity if they have `audit.view`, team performance).
 **Scope:** the role's data access (`own` or `branch`). Shapes are in `src/api/types.ts`. Every figure here is
 **calculated from the loans, their schedules and their payments** (never stored or typed in); the definitions are
 in [backend-plan.md](backend-plan.md#calculations) and the mock's `src/mocks/portfolioFigures.ts` does exactly that.
-PAR, arrears and early warnings belong to the arrears engine (Module 3, Phase 2); the frontend already shows them
-under a "Coming soon" overlay, so the endpoints can arrive with Phase 2.
+PAR, arrears and early warnings feed the sidebar risk card, the dashboard portfolio cards and the Arrears & SMS page.
 
-### `POST /portfolio/risk/query` (Phase 2)
+### `POST /portfolio/risk/query`
 
 Body `{ "query": { } }`. A read: nothing in the address.
 
@@ -421,7 +422,7 @@ Body `{ "query": { } }`. A read: nothing in the address.
 
 The frontend shows 3, 6 or 12 months; the change chip compares today with the first month shown.
 
-### `POST /portfolio/arrears/query` (Phase 2)
+### `POST /portfolio/arrears/query`
 
 Body `{ "query": { } }`. A read: nothing in the address.
 
@@ -434,7 +435,7 @@ Body `{ "query": { } }`. A read: nothing in the address.
 }
 ```
 
-### `POST /portfolio/early-warnings/query` (Phase 2)
+### `POST /portfolio/early-warnings/query`
 
 Body `{ "query": { "limit" } }`. A read: nothing in the address.
 
@@ -464,7 +465,7 @@ today's list; `422` if the loan isn't overdue. `POST /worklist/{taskId}/undo` re
 Body `{ "query": { } }`. A read: nothing in the address.
 
 ```json
-{ "outstandingBalance": 96000000, "activeLoans": 41, "disbursedThisMonth": { "amount": 6400000, "count": 5 }, "clearedThisMonth": 3, "dueThisWeek": 2100000 }
+{ "outstandingBalance": 96000000, "activeLoans": 41, "disbursedThisMonth": { "amount": 6400000, "count": 5 }, "clearedThisMonth": 3, "cleared": { "count": 12, "amount": 18400000 }, "dueThisWeek": 2100000 }
 ```
 
 "Collected today" on this card comes from `POST /dashboard/today/query` (`collections`), so the two always agree.
@@ -832,6 +833,7 @@ One loan, for the loan page. Same scope rule (`404` outside the user's portfolio
   (today), `upcoming`. The last instalment takes the rounding difference. The first `late` instalment's date is
   what `daysPastDue` counts from.
 - `payments`: every repayment, newest first: `{ paidAt, amount, method, reference, recordedBy }`.
+- `clientMessages`: the texts sent to the client's phone, newest first: `{ id, event: payout|payment|reminder, at, message, delivery: sent|failed|scheduled }`. `scheduled` is the next reminder, due to go on `at`.
 - Where it came from: `applicationId`, `approvedBy`, `payout { method, reference, by, paidOn }`, and the
   `signedApplication` document.
 - Loans repaid before the system have no `schedule` or `payments` (empty lists) and no `applicationId`.
@@ -856,6 +858,13 @@ payment plan agreed). `note` required; `409` if not in recovery.
 
 Open with the client: the day limit, who confirms hand-overs, how recovery charges are worked out (the agreement
 says the recovery team adds them), and whether recovery staff need logins.
+
+### Matching received mobile money
+
+A mobile money payment that arrives without a loan is a worklist task of type `payment-unmatched` (`payment`: provider, phone, amount, reference, receivedAt), visible to people with `payments.record`.
+
+- `POST /worklist/{taskId}/match-candidates/query` → loans it probably belongs to: `[{ loanId, borrowerName, phone, owedNow, reason }]`. Loans on the same phone number come first, then loans with that amount due. Never a loan that owes less than the payment.
+- `POST /worklist/{taskId}/match` `{ "loanId": "TL-0548" }` → the done task. Records the payment on the loan (same rules as `POST /payments`: never more than the client owes), marks the task done, writes the client's timeline and the audit log. `409` if it was already matched.
 
 ### `POST /payments/list/query`
 
@@ -1028,6 +1037,30 @@ for all). Pass `nextBefore` from the previous page as `before` for older events.
   **changes:** registration, applications, approvals, edits, uploads, number changes. **access:** views of the
   National ID, documents and agreements.
 - Same scope rule (`404` outside the user's portfolio). Built from the audit log; nothing here can be edited.
+
+## Arrears & SMS, Accounting
+
+### `POST /loans/{id}/sms` (requires `sms.send`)
+
+`{ "message": "…" }` → `201` with the text sent: `{ id, at, loanId, borrower, phone, message, sentBy, delivery: sent|failed }`.
+Sent to the client's mobile money number. 1 to 480 characters (three SMS segments of 160); the server rejects longer or empty text with `422`. Officers can only text
+clients on their own loans. Recorded on the client's timeline and in the audit log. The screen suggests wording for a late loan and the person can change it.
+
+### `POST /sms/history/query` (requires `loans.view`)
+
+Body `{ "query": { "page", "pageSize" } }`. A read: nothing in the address.
+
+Texts staff sent, newest first: officers see texts on their own clients' loans, branch-wide users the whole market.
+`{ items: SentText[], total, page, pageSize }`. These are the staff-sent texts; the automatic texts (payout, payment, reminder) are on the loan (`clientMessages`).
+
+### `POST /accounting/payouts/query` (requires `reports.view`)
+
+Body `{ "query": { "from", "to" } }` (inclusive ISO dates). A read: nothing in the address.
+
+Loans paid out in the dates, newest first: `{ items: [{ loanId, borrower, officer, amount, method, reference, paidOn, by }], total, totals: { paidOut, loans, byMethod } }`.
+`amount` is what was sent to the client. The Accounting page pairs this (money out) with `POST /payments/list/query` (money in) for the same dates.
+
+The Arrears & SMS page also uses `POST /portfolio/arrears/query` (age bands) and `POST /loans/list/query` with `late: true` (the late loans).
 
 ## Settings: staff and roles
 
@@ -1238,6 +1271,7 @@ What each setting does on the server:
 - `interest.per`: `loan` (once on the amount, as on Tamu's agreement) or `month` (for each month the loan runs).
 - `numberOfPayments`: the loan's length; officers don't choose it.
 - `fee.collection`: `deducted` (taken from the payout: the payout amount is the amount less the fee) or `added` (repaid).
+- `notifications.clientMessages`: the texts to clients. `rules` is `{ event: payout|payment|reminder, title, example, enabled }` (the server owns the wording; an admin only switches each on or off). `reminderDaysBefore` is `{ daily, weekly, monthly }`: days before a payment is due that the reminder goes (0 = on the day; limits 0 to 14). The server sends the payout text when a loan is paid out, the payment text when a payment is recorded, and the reminder on the date worked out from the next payment's due date and how the client repays.
 - `penalty`: late fee on overdue instalments, `percent` of the overdue amount or `fixed` UGX, once per missed
   payment or every day late, after `graceDays`.
 - Applications now send `terms.productId` with the amount and first payment date; the server checks the amount
@@ -1337,4 +1371,4 @@ The client confirmed the fields below; the endpoints above already use them.
     Charts: started per day/week/month (trend) + where they stand (donut).
   Officers still sees only its own loans and applications (`own`); every report is audit-logged on export.
 - **Dashboard** (`POST /dashboard/today/query`): `activeLoans: { count, outstanding, lateCount }` comes first, then
-  `collections`; payment matching (`unmatchedPayments`) is no longer shown.
+  `collections`, then `unmatchedPayments`; the screen shows four boxes at most.

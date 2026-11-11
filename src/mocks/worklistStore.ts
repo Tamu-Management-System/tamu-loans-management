@@ -21,6 +21,7 @@ const SHARED_TASK_PERMISSIONS: Partial<Record<WorklistTask["type"], Permission[]
   "awaiting-approval": ["applications.approve", "users.manage"],
   "awaiting-disbursement": ["loans.disburse", "users.manage"],
   "access-request": ["users.manage"],
+  "payment-unmatched": ["payments.record"],
 };
 const TODAY = new Date().toLocaleDateString("en-CA");
 
@@ -82,6 +83,29 @@ function seedTasks(): Record<string, WorklistTask[]> {
     if (member.status === "invited" && member.invite)
       admin.push({ ...open(), id: `task-acc-${member.id}`, type: "access-request", priority: "routine", user: { name: member.name, role: roles[member.roleId]?.name ?? "" }, kind: "invite-pending", requestedAt: member.invite.sentAt });
   }
+  // Mobile money received that isn't on a loan yet: one from a client's own number, one from an unknown number (matched by the amount)
+  const payable = loans.filter((loan) => loan.outstandingBalance > 0).map((loan) => {
+    const borrower = borrowers.find((b) => b.currentLoanId === loan.id);
+    const terms = borrower ? borrowerDetails.get(borrower.id)?.loanTerms : null;
+    return { loan, next: terms ? nextPayment(terms, loan.outstandingBalance) : null };
+  }).filter((item) => item.next && item.next.amount <= item.loan.outstandingBalance);
+  const provider = ["MTN MoMo", "Airtel Money"] as const;
+  payable.slice(0, 3).forEach(({ loan, next }, index) => {
+    admin.push({
+      ...open(),
+      id: `task-pay-${index + 1}`,
+      type: "payment-unmatched",
+      priority: "do-today",
+      payment: {
+        provider: provider[index % 2],
+        // The last one comes from a number the system doesn't know
+        phone: index === 2 ? "0701 000 123" : loan.phone,
+        amount: next!.amount,
+        reference: `${index % 2 ? "AT" : "MP"}${TODAY.replace(/-/g, "").slice(2)}.${String(4172 + index * 311)}`,
+        receivedAt: new Date(Date.now() - (index + 1) * 5_400_000).toISOString(),
+      },
+    });
+  });
   lists[SHARED] = admin;
   return lists;
 }

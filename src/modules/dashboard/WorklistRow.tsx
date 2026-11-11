@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { useNavigate } from "react-router";
 import type { WorklistAction, WorklistTask } from "../../api/types";
 import { useSystemSettings } from "../../api/settings";
-import { useFeatureFlags } from "../../app/featureFlags";
 import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
@@ -21,7 +20,6 @@ export interface WorklistRowHandlers {
 }
 
 function RowActions({ task, handlers }: { task: WorklistTask; handlers: WorklistRowHandlers }) {
-  const { showUpcomingModules } = useFeatureFlags();
   const { can } = useAuth();
   const navigate = useNavigate();
   const borrowerName = describeSubject(task).name;
@@ -31,9 +29,9 @@ function RowActions({ task, handlers }: { task: WorklistTask; handlers: Worklist
       variant="icon"
       size="small"
       onClick={() => handlers.onSendSms(task)}
-      disabled={!showUpcomingModules}
-      aria-label={showUpcomingModules ? `Send SMS to ${borrowerName}` : `Send SMS to ${borrowerName}, coming in Phase 2`}
-      title={showUpcomingModules ? "Send SMS" : "SMS · coming in Phase 2"}
+      disabled={!can("sms.send")}
+      aria-label={`Send SMS to ${borrowerName}`}
+      title={can("sms.send") ? "Send SMS" : "You can't send texts"}
     >
       <Icon name="message" size={16} strokeWidth={1.8} />
     </Button>

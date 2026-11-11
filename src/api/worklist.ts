@@ -1,7 +1,7 @@
 // Data hooks for the worklist, loans and payments.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
-import type { CallOutcome, LoanSummary, RecordPaymentRequest, RecordPaymentResponse, WorklistAction, WorklistTask } from "./types";
+import type { CallOutcome, LoanSummary, MatchCandidate, MatchPaymentRequest, RecordPaymentRequest, RecordPaymentResponse, WorklistAction, WorklistTask } from "./types";
 
 export function useWorklist() {
   return useQuery({
@@ -58,6 +58,23 @@ export function useUndoTask() {
   const refresh = useRefreshWork();
   return useMutation({
     mutationFn: (taskId: string) => api.post<void>(`/worklist/${taskId}/undo`),
+    onSuccess: refresh,
+  });
+}
+
+/** Loans a received mobile money payment probably belongs to. */
+export function useMatchCandidates(taskId: string) {
+  return useQuery({
+    queryKey: ["worklist", taskId, "match-candidates"],
+    queryFn: () => api.get<MatchCandidate[]>(`/worklist/${encodeURIComponent(taskId)}/match-candidates`),
+  });
+}
+
+/** Puts a received payment on a loan. */
+export function useMatchPayment(taskId: string) {
+  const refresh = useRefreshWork();
+  return useMutation({
+    mutationFn: (body: MatchPaymentRequest) => api.post<WorklistTask>(`/worklist/${encodeURIComponent(taskId)}/match`, body),
     onSuccess: refresh,
   });
 }

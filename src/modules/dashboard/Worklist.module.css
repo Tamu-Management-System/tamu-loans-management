@@ -508,3 +508,21 @@
     --row-indent: 8px;
   }
 }
+
+.matchSummary {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--color-surface-subtle);
+  font-size: 14px;
+}
+
+.matchHeading {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.matchNote {
+  margin-top: 12px;
+}

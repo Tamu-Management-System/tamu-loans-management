@@ -32,6 +32,9 @@ export function PortfolioSummaryCard({ summary }: { summary: PortfolioSummary })
         {formatUGXMillions(summary.disbursedThisMonth.amount)} <span className={styles.mutedText}>· {loanCount(summary.disbursedThisMonth.count)}</span>
       </SummaryRow>
       <SummaryRow label="Cleared this month">{loanCount(summary.clearedThisMonth)}</SummaryRow>
+      <SummaryRow label="Cleared loans">
+        {formatUGXMillions(summary.cleared.amount)} <span className={styles.mutedText}>· {loanCount(summary.cleared.count)}</span>
+      </SummaryRow>
       <SummaryRow label="Due this week">{formatUGXMillions(summary.dueThisWeek)}</SummaryRow>
       {collections && (
         <SummaryRow label="Collected today">

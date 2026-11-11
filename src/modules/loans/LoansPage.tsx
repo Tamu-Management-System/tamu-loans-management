@@ -188,6 +188,7 @@ function LoanListPage({ tab }: { tab: LoanListTab }) {
                   <th>LOAN</th>
                   <th>CLIENT</th>
                   <th className={styles.numeric}>BORROWED</th>
+                  <th className={styles.numeric}>REPAID</th>
                   <th className={styles.numeric}>BALANCE</th>
                   <th className={styles.statusHeading}>{tab === "cleared" ? "REPAYMENT" : tab === "recovery" ? "RECOVERY" : "NEXT PAYMENT"}</th>
                   {branchWide && <th>OFFICER</th>}
@@ -211,6 +212,7 @@ function LoanListPage({ tab }: { tab: LoanListTab }) {
                       <span className={styles.secondary}>{loan.borrower.id}</span>
                     </td>
                     <td className={styles.numeric}>{formatUGX(loan.principal)}</td>
+                    <td className={styles.numeric}>{formatUGX(loan.repaid)}</td>
                     <td className={`${styles.numeric} ${styles.balance}`}>
                       {loan.status === "cleared" ? <span className={styles.secondary}>Repaid</span> : formatUGX(loan.balance)}
                     </td>

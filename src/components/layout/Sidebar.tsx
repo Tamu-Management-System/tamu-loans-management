@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { useNavigationBadges, useRiskSummary } from "../../api/shell";
-import { useFeatureFlags } from "../../app/featureFlags";
 import { NAVIGATION, type NavItem } from "../../app/navigation";
 import { useAuth } from "../../auth/AuthContext";
 import { PORTFOLIO_SECTION_ID } from "../../modules/portfolio/sectionId";
-import { ComingSoon } from "../ui/ComingSoon";
 import { Icon } from "../ui/Icon";
 import styles from "./AppShell.module.css";
 
@@ -31,7 +29,6 @@ export function Sidebar() {
 }
 
 function NavItemLink({ item }: { item: NavItem }) {
-  const { showUpcomingModules } = useFeatureFlags();
   const { data: badges } = useNavigationBadges();
   const count = item.badge ? badges?.[item.badge] : undefined;
 
@@ -39,7 +36,6 @@ function NavItemLink({ item }: { item: NavItem }) {
     <NavLink to={item.to!} end={item.to === "/"} className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ""}`}>
       <Icon name={item.icon} className={styles.navIcon} size={22} />
       {item.label}
-      {item.release === "phase-2" && !showUpcomingModules && <span className={styles.upcomingBadge}>Soon</span>}
       {!!count && (
         <span className={styles.countBadge} aria-label={`${count} waiting`}>
           {count}
@@ -85,7 +81,7 @@ function NavGroup({ item, items }: { item: NavItem; items: NavItem[] }) {
   );
 }
 
-/** PAR30 for the user's portfolio (or the branch). Arrears engine = Module 3, so Phase 2. */
+/** PAR30 for the user's portfolio (or the branch). */
 function SidebarRiskCard() {
   const { data: risk } = useRiskSummary();
   const navigate = useNavigate();
@@ -97,7 +93,7 @@ function SidebarRiskCard() {
 
   return (
     <div className={styles.sidebarFooter}>
-      <ComingSoon feature="Risk alerts" compact className={`${styles.riskCard} ${aboveTarget ? styles.riskCardAlert : ""}`}>
+      <div className={`${styles.riskCard} ${aboveTarget ? styles.riskCardAlert : ""}`}>
         <button
           type="button"
           className={styles.riskCardButton}
@@ -117,7 +113,7 @@ function SidebarRiskCard() {
             {aboveTarget ? "Above" : "Within"} the {risk.targetPercent}% target · {loansLabel}
           </span>
         </button>
-      </ComingSoon>
+      </div>
     </div>
   );
 }

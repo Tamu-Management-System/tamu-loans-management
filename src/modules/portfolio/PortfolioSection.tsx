@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { useArrearsBreakdown, useEarlyWarnings, usePortfolioRisk, usePortfolioSummary, useRecentActivity, useTeamPerformance } from "../../api/portfolio";
 import { useAuth } from "../../auth/AuthContext";
-import { ComingSoon } from "../../components/ui/ComingSoon";
 import { formatTime } from "../../lib/format";
 import { ArrearsInsightsCard } from "./ArrearsInsightsCard";
 import { EarlyWarningsCard } from "./EarlyWarningsCard";
@@ -17,23 +16,13 @@ function CardSlot<T>({ data, children }: { data: T | undefined; children: (data:
   return data ? <>{children(data)}</> : <div className={`${styles.card} ${styles.loading}`} aria-busy="true" />;
 }
 
-/** Phase 2 card: blurred under a "Coming soon" overlay until Phase 2 is switched on. */
-function UpcomingCard({ feature, children }: { feature: string; children: ReactNode }) {
-  return (
-    <ComingSoon feature={feature} className={styles.cardSlot}>
-      {children}
-    </ComingSoon>
-  );
-}
-
 interface PortfolioSectionProps {
   announce: (message: string, undoTaskId?: string | null) => void;
 }
 
 /**
  * "My portfolio" for people who look after their own clients, "Market portfolio" for people who see the
- * whole market. Shown to anyone who can view loans, whatever their role (built-in or custom). Risk cards (PAR30, arrears,
- * early warnings) belong to the arrears engine (Module 3) and stay under "Coming soon" for the MVP.
+ * whole market. Shown to anyone who can view loans, whatever their role (built-in or custom).
  */
 export function PortfolioSection({ announce }: PortfolioSectionProps) {
   const { can, seesBranch } = useAuth();
@@ -59,12 +48,8 @@ export function PortfolioSection({ announce }: PortfolioSectionProps) {
       </div>
 
       <div className={styles.grid}>
-        <UpcomingCard feature="PAR30 trend">
-          <CardSlot data={risk.data}>{(data) => <ParTrendCard risk={data} />}</CardSlot>
-        </UpcomingCard>
-        <UpcomingCard feature="Arrears insights">
-          <CardSlot data={arrears.data}>{(data) => <ArrearsInsightsCard arrears={data} />}</CardSlot>
-        </UpcomingCard>
+        <CardSlot data={risk.data}>{(data) => <ParTrendCard risk={data} />}</CardSlot>
+        <CardSlot data={arrears.data}>{(data) => <ArrearsInsightsCard arrears={data} />}</CardSlot>
         {isOfficer ? <OfficerCards announce={announce} /> : <AdminCards targetPercent={risk.data?.targetPercent} />}
       </div>
     </section>
@@ -76,9 +61,7 @@ function OfficerCards({ announce }: PortfolioSectionProps) {
   const summary = usePortfolioSummary();
   return (
     <>
-      <UpcomingCard feature="Early warnings">
-        <CardSlot data={warnings.data}>{(data) => <EarlyWarningsCard warnings={data} announce={announce} />}</CardSlot>
-      </UpcomingCard>
+      <CardSlot data={warnings.data}>{(data) => <EarlyWarningsCard warnings={data} announce={announce} />}</CardSlot>
       <CardSlot data={summary.data}>{(data) => <PortfolioSummaryCard summary={data} />}</CardSlot>
     </>
   );

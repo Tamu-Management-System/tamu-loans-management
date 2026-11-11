@@ -16,6 +16,8 @@ import { LoanDetailsPage } from "../modules/loans/LoanDetailsPage";
 import { PaymentsPage } from "../modules/payments/PaymentsPage";
 import { SettingsPage } from "../modules/settings/SettingsPage";
 import { AuditLogPage } from "../modules/audit/AuditLogPage";
+import { AccountingPage } from "../modules/accounting/AccountingPage";
+import { ArrearsPage } from "../modules/arrears/ArrearsPage";
 import { ReportsPage } from "../modules/reports/ReportsPage";
 import { AccountSettingsPage } from "../modules/account/AccountSettingsPage";
 import { HelpPage } from "../modules/account/HelpPage";
@@ -29,7 +31,6 @@ import { LoginPage } from "../pages/LoginPage";
 import { MorePage } from "../pages/MorePage";
 import { NotFoundPage, PlaceholderPage } from "../pages/PlaceholderPage";
 import { ROUTABLE_NAV_ITEMS } from "./navigation";
-import { FeatureFlagsProvider } from "./featureFlags";
 
 /** A 401 on any request means the server ended the session: wipe the cache and go to the login page. */
 function handleSessionExpiry(error: unknown, queryKey?: readonly unknown[]) {
@@ -77,6 +78,8 @@ const BUILT_PAGES: Record<string, ReactNode> = {
   "/settings": <SettingsPage />,
   "/audit-log": <AuditLogPage />,
   "/reports": <ReportsPage />,
+  "/arrears": <ArrearsPage />,
+  "/accounting": <AccountingPage />,
 };
 
 /** Everything a signed-in user sees: the app shell, the inactivity timeout and (in demos) the demo controls. */
@@ -116,7 +119,7 @@ function StaffApp() {
                 path={item.subpages ? `${item.to}/*` : item.to}
                 element={
                   <RequirePermission requires={item.requires}>
-                    {BUILT_PAGES[item.to!] ?? <PlaceholderPage title={item.label} upcoming={item.release === "phase-2"} />}
+                    {BUILT_PAGES[item.to!] ?? <PlaceholderPage title={item.label} />}
                   </RequirePermission>
                 }
               />
@@ -178,24 +181,22 @@ function StaffApp() {
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <FeatureFlagsProvider>
-        <BrowserRouter>
-          <Routes>
-            {/* Opened by borrowers from the link their loan officer sends; the token in the link is the only access */}
-            <Route
-              path="forms/:token"
-              element={
-                <Suspense fallback={<FormSkeletonPage />}>
-                  <OnlineApplicationPage />
-                </Suspense>
-              }
-            />
-            {/* Opened from an emailed invite or reset link, before the person has a password to sign in with */}
-            <Route path="set-password/:token" element={<SetPasswordPage />} />
-            <Route path="*" element={<StaffApp />} />
-          </Routes>
-        </BrowserRouter>
-      </FeatureFlagsProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Opened by borrowers from the link their loan officer sends; the token in the link is the only access */}
+          <Route
+            path="forms/:token"
+            element={
+              <Suspense fallback={<FormSkeletonPage />}>
+                <OnlineApplicationPage />
+              </Suspense>
+            }
+          />
+          {/* Opened from an emailed invite or reset link, before the person has a password to sign in with */}
+          <Route path="set-password/:token" element={<SetPasswordPage />} />
+          <Route path="*" element={<StaffApp />} />
+        </Routes>
+      </BrowserRouter>
     </QueryClientProvider>
   );
 }

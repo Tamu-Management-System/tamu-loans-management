@@ -51,7 +51,7 @@ export interface DashboardToday {
   followUps?: { overdueCount: number; over30DaysCount: number; withRecoveryCount: number };
   /** The user's draft applications missing documents or guarantor consent */
   applicationsToComplete?: { count: number };
-  /** Mobile money received but not linked to a loan (Module 4, Phase 2) */
+  /** Mobile money received but not linked to a loan */
   unmatchedPayments?: { count: number; amount: number };
   /** Officers' requests to undo a recorded payment */
   paymentReversals?: { count: number; amount: number };
@@ -120,7 +120,7 @@ export interface ApplicationIncompleteTask extends WorklistTaskBase {
   missingItem: string;
 }
 
-/** Module 4 (Phase 2) */
+/** Mobile money received that isn't on a loan yet */
 export interface PaymentUnmatchedTask extends WorklistTaskBase {
   type: "payment-unmatched";
   payment: { provider: "MTN MoMo" | "Airtel Money"; phone: string; amount: number; reference: string; receivedAt: string };
@@ -291,6 +291,8 @@ export interface PortfolioSummary {
   activeLoans: number;
   disbursedThisMonth: { amount: number; count: number };
   clearedThisMonth: number;
+  /** All the officer's cleared loans: how many, and the total they repaid */
+  cleared: { count: number; amount: number };
   dueThisWeek: number;
 }
 
@@ -870,6 +872,8 @@ export interface LoanListItem {
   principal: number;
   totalRepayable: number;
   balance: number;
+  /** UGX the client has paid so far */
+  repaid: number;
   /** null for older loans recorded without it */
   repaymentSchedule: RepaymentSchedule | null;
   /** ISO dates */
@@ -977,6 +981,8 @@ export interface LoanDetail {
   schedule: LoanInstalment[];
   /** Newest first; empty for older loans */
   payments: LoanPayment[];
+  /** Texts to the client's phone, newest first, and the next reminder if one is due to go */
+  clientMessages: ClientMessage[];
   signedApplication: DocumentFile | null;
 }
 
@@ -1257,8 +1263,35 @@ export interface NotificationRule {
   channels: NotificationChannel[];
 }
 
+/** The texts sent to a client's own phone */
+export type ClientMessageEvent = "payout" | "payment" | "reminder";
+
+/** One text to clients. `title` and `example` come from the server; an admin only switches it on or off. */
+export interface ClientMessageRule {
+  event: ClientMessageEvent;
+  title: string;
+  example: string;
+  enabled: boolean;
+}
+
 export interface NotificationSettings {
   rules: NotificationRule[];
+  /** SMS to clients: payout and payment alerts, and the reminder before a payment is due */
+  clientMessages: {
+    rules: ClientMessageRule[];
+    /** Days before the due date the reminder goes (0 = on the day), by how the client repays */
+    reminderDaysBefore: Record<RepaymentSchedule, number>;
+  };
+}
+
+/** A text sent to (or waiting to go to) a client's phone */
+export interface ClientMessage {
+  id: string;
+  event: ClientMessageEvent;
+  /** ISO date-time it was sent, or the date it will be sent */
+  at: string;
+  message: string;
+  delivery: "sent" | "failed" | "scheduled";
 }
 
 /** GET /settings (every signed-in user: the app follows these) */
@@ -1398,4 +1431,72 @@ export interface PasswordLinkInfo {
 /** POST /public/invites/{token} */
 export interface SetPasswordRequest {
   password: string;
+}
+
+
+// ---------- Arrears & SMS, Accounting ----------
+
+/** A text a staff member sent to a client's phone (GET /sms/history) */
+export interface SentText {
+  id: string;
+  /** ISO date-time */
+  at: string;
+  loanId: string;
+  borrower: { id: string; name: string };
+  phone: string;
+  message: string;
+  sentBy: string;
+  delivery: "sent" | "failed";
+}
+
+export interface SentTextList {
+  items: SentText[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/** POST /loans/{id}/sms (requires sms.send) */
+export interface SendTextRequest {
+  message: string;
+}
+
+/** One loan paid out (GET /accounting/payouts) */
+export interface PayoutItem {
+  loanId: string;
+  borrower: { id: string; name: string };
+  officer: { id: string; name: string };
+  /** UGX sent to the client */
+  amount: number;
+  method: string;
+  reference: string;
+  /** ISO date */
+  paidOn: string;
+  by: string;
+}
+
+/** GET /accounting/payouts?from=&to= (requires reports.view) */
+export interface PayoutList {
+  items: PayoutItem[];
+  total: number;
+  /** Over everything matching */
+  totals: { paidOut: number; loans: number; byMethod: Record<string, number> };
+}
+
+// ---------- Matching mobile money to loans ----------
+
+/** A loan a received payment probably belongs to (GET /worklist/{taskId}/match-candidates) */
+export interface MatchCandidate {
+  loanId: string;
+  borrowerName: string;
+  phone: string;
+  /** UGX owed now: the most the payment can be */
+  owedNow: number;
+  /** Why it is suggested, e.g. "Same phone number" */
+  reason: string;
+}
+
+/** POST /worklist/{taskId}/match (requires payments.record) */
+export interface MatchPaymentRequest {
+  loanId: string;
 }

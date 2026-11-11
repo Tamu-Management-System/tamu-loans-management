@@ -1,13 +1,13 @@
 import styles from "./Pages.module.css";
 
 /** Stand-in for screens that haven't been built yet. */
-export function PlaceholderPage({ title, upcoming = false }: { title: string; upcoming?: boolean }) {
+export function PlaceholderPage({ title }: { title: string }) {
   return (
     <>
       <div className={styles.pageHeader}>
         <h1>{title}</h1>
       </div>
-      <div className={styles.notice}>{upcoming ? "Coming in Phase 2." : "This screen comes next."}</div>
+      <div className={styles.notice}>This screen comes next.</div>
     </>
   );
 }

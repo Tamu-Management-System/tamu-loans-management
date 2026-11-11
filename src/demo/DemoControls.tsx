@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../auth/AuthContext";
-import { useFeatureFlags } from "../app/featureFlags";
 import { Icon } from "../components/ui/Icon";
 import { DEMO_USER_KEY, roles, users } from "../mocks/fixtures";
 import styles from "./DemoControls.module.css";
@@ -22,7 +21,6 @@ const readPanelOpen = () => {
 export function DemoControls() {
   const [isOpen, setIsOpenState] = useState(readPanelOpen); // closed by default
   const { user } = useAuth();
-  const { showUpcomingModules, setShowUpcomingModules } = useFeatureFlags();
   const queryClient = useQueryClient();
 
   const setIsOpen = (open: boolean) => {
@@ -73,12 +71,6 @@ export function DemoControls() {
           ))}
         </div>
       </div>
-
-      <label className={styles.toggle}>
-        <input type="checkbox" checked={showUpcomingModules} onChange={(e) => setShowUpcomingModules(e.target.checked)} />
-        <span className={styles.switchTrack} aria-hidden="true" />
-        Show Phase 2
-      </label>
     </section>
   );
 }

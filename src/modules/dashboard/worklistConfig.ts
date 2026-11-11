@@ -21,8 +21,6 @@ export interface WorklistGroup {
   tabLabel: string;
   /** Word after the group's total, e.g. "UGX 1,240,000 expected"; null = no total */
   amountSuffix: string | null;
-  /** Phase 2 groups are previewed under a "Coming soon" overlay */
-  upcoming?: { feature: string; previewDescription: string };
 }
 
 // Order of the "All" overview, as in the approved design
@@ -33,10 +31,6 @@ export const WORKLIST_GROUPS: WorklistGroup[] = [
     description: "Money already received. Match it before chasing anyone.",
     tabLabel: "Match",
     amountSuffix: "received",
-    upcoming: {
-      feature: "Automatic payment matching",
-      previewDescription: "Mobile money received, matched to loans automatically",
-    },
   },
   { id: "collect", title: "Collect today", description: "Promises to pay and installments due today", tabLabel: "Collect", amountSuffix: "expected" },
   { id: "follow-up", title: "Follow up overdue loans", description: "Clients behind on payments", tabLabel: "Follow up", amountSuffix: "in arrears" },

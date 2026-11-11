@@ -10,6 +10,7 @@ export const SETTING_LIMITS = {
   approvalWaitingWarnHours: [1, 168],
   disbursementWaitingWarnDays: [1, 30],
   promiseToPayDays: [0, 30],
+  reminderDaysBefore: [0, 14],
   backdateDays: [0, 30],
   editWindowHours: [0, 168],
   idleTimeoutMinutes: [5, 60],

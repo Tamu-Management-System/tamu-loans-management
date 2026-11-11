@@ -4,7 +4,7 @@ import { useDownloadAgreement } from "../../api/borrowers";
 import { useSystemSettings } from "../../api/settings";
 import { ApiError } from "../../api/client";
 import { useLoan } from "../../api/loans";
-import type { LoanDetail, LoanInstalment, LoanPayment } from "../../api/types";
+import type { ClientMessage, LoanDetail, LoanInstalment, LoanPayment } from "../../api/types";
 import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
@@ -22,6 +22,7 @@ import styles from "./LoanDetailsPage.module.css";
 const SCHEDULE_PAGE_SIZE = 14;
 
 const FREQUENCY = { daily: "Daily", weekly: "Weekly", monthly: "Monthly" } as const;
+const TEXT_TITLE: Record<ClientMessage["event"], string> = { payout: "Payout alert", payment: "Payment received", reminder: "Payment reminder" };
 const INSTALMENT_STATUS: Record<LoanInstalment["status"], string> = { paid: "Paid", "part-paid": "Part paid", late: "Late", due: "Due today", upcoming: "Upcoming" };
 
 /** One loan (user flow, phases 5–6): what's owed, the repayment schedule, the payments, and where it came from. */
@@ -253,6 +254,29 @@ export function LoanDetailsPage() {
               <p className={styles.empty}>{open ? "No payments yet." : "Payments on older loans aren't in the system."}</p>
             )}
           </section>
+
+          {loan.clientMessages.length > 0 && (
+            <section className={styles.card} aria-labelledby="texts-heading">
+              <div className={styles.cardHeader}>
+                <h2 id="texts-heading">Texts to the client</h2>
+                <span className={styles.cardMeta}>{loan.clientMessages.length}</span>
+              </div>
+              <ol className={styles.payments}>
+                {loan.clientMessages.map((text) => (
+                  <li key={text.id}>
+                    <span>
+                      <b>{TEXT_TITLE[text.event]}</b>
+                      <span className={styles.muted}>{text.message}</span>
+                    </span>
+                    <span className={styles.paymentWhen}>
+                      {text.delivery === "scheduled" ? `Goes ${formatShortDate(text.at)}` : `${formatShortDate(text.at)}, ${formatTime(text.at)}`}
+                      <span className={styles.muted}>{text.delivery === "failed" ? "Didn't reach the phone" : text.delivery === "scheduled" ? "Scheduled" : "Sent"}</span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
 
           <section className={styles.card} aria-labelledby="details-heading">
             <div className={styles.cardHeader}>

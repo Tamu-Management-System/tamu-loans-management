@@ -57,6 +57,14 @@ export const systemSettings: SystemSettings = {
       { event: "approved", title: "An application is approved", who: "Everyone who can pay out, and the officer who owns it", channels: ["sms"], example: "Tamu Loans: APP-311 for Brian Ochieng (UGX 500,000) is approved. It is ready to pay out." },
       { event: "disbursed", title: "A loan is paid out", who: "The officer who owns it", channels: ["sms"], example: "Tamu Loans: TL-0990 for Brian Ochieng (UGX 500,000) has been paid out. Repayments start on the first payment date." },
     ],
+    clientMessages: {
+      rules: [
+        { event: "payout", title: "The loan is paid out", example: "Tamu Loans: Hello Brian, UGX 500,000 has been sent to your phone. Your first payment is due on 14 Dec 2026.", enabled: true },
+        { event: "payment", title: "A payment is received", example: "Tamu Loans: Hello Brian, we received UGX 85,000 on TL-0990. Your balance is UGX 415,000. Thank you.", enabled: true },
+        { event: "reminder", title: "A payment is coming due", example: "Tamu Loans: Hello Brian, your payment of UGX 85,000 on TL-0990 is due on 14 Dec 2026.", enabled: true },
+      ],
+      reminderDaysBefore: { daily: 0, weekly: 1, monthly: 3 },
+    },
   },
   security: {
     idleTimeoutMinutes: 15,

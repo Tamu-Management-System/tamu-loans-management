@@ -28,6 +28,13 @@ import type {
   RecoveryReason,
   ReturnFromRecoveryRequest,
   SendToRecoveryRequest,
+  SendTextRequest,
+  MatchCandidate,
+  MatchPaymentRequest,
+  SentText,
+  SentTextList,
+  PayoutItem,
+  PayoutList,
   ApplicationDraft,
   UpdateApplicationRequest,
   ApplicationList,
@@ -120,6 +127,8 @@ import { createPasswordLink, ensureDemoPasswordLinks, findPasswordLink, markPass
 import { assignBorrower, findOnlineApplication, linkProblem, submitOnlineApplication, submittedForNewBorrowers, type StoredImage } from "./onlineApplications";
 import { nextBorrowerId } from "./borrowerDirectory";
 import { changePaymentAmount, findStoredPayment, loanPayments, recordLoanPayment } from "./loanPayments";
+import { clientMessagesFor } from "./clientMessages";
+import { overdueText, SMS_MAX_LENGTH } from "../lib/sms";
 import { describeLength, describePenalty, feeAmount, latePenalty, paymentDate, summariseTerms } from "../lib/repaymentSchedule";
 import { borrowerActivityPage, recordBorrowerEvent } from "./borrowerActivity";
 import { addFollowUpTask, clockTime, describePayment, findTask, openTaskForLoan, rememberForUndo, tasksFor, tasksForUser, ugx, undo } from "./worklistStore";
@@ -134,6 +143,8 @@ const hasPermission = (user: MockUser, permission: Permission) => !!roles[user.r
 const seesBranch = (user: MockUser) => roles[user.roleId]?.dataScope === "branch";
 
 /** Officers see only their own clients; anyone with loans.view.all sees the whole branch. */
+/** Most loans suggested for a received payment */
+const MATCH_CANDIDATES = 3;
 const canSeeRecord = (user: MockUser, officerId: string) => seesBranch(user) || officerId === user.id;
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
@@ -431,6 +442,7 @@ function loanListItems(user: MockUser): LoanListItem[] {
       principal: terms.principal,
       totalRepayable: terms.totalRepayable,
       balance: Math.max(0, loan.outstandingBalance),
+      repaid: Math.max(0, terms.totalRepayable - Math.max(0, loan.outstandingBalance)),
       repaymentSchedule: terms.repaymentSchedule,
       disbursedOn: terms.disbursedOn,
       clearedOn: paidOff ? new Date().toISOString().slice(0, 10) : null,
@@ -455,6 +467,7 @@ function loanListItems(user: MockUser): LoanListItem[] {
       principal: past.principal,
       totalRepayable: total,
       balance: 0,
+      repaid: total,
       repaymentSchedule: past.repaymentSchedule,
       disbursedOn: past.disbursedOn,
       clearedOn: past.clearedOn,
@@ -767,6 +780,13 @@ function settingsProblem(section: SettingsSection, body: unknown): string | null
     const n = body as SystemSettings["notifications"];
     const known = systemSettings.notifications.rules.map((rule) => rule.event);
     if (!Array.isArray(n.rules) || n.rules.length !== known.length || !known.every((event) => n.rules.some((rule) => rule.event === event))) return "Those notification settings couldn't be read.";
+    const cm = n.clientMessages;
+    const knownTexts = systemSettings.notifications.clientMessages.rules.map((rule) => rule.event);
+    if (!cm || !Array.isArray(cm.rules) || cm.rules.length !== knownTexts.length || !knownTexts.every((event) => cm.rules.some((rule) => rule.event === event && typeof rule.enabled === "boolean"))) return "Those client message settings couldn't be read.";
+    for (const frequency of ["daily", "weekly", "monthly"] as const) {
+      const problem = limit("reminderDaysBefore", "Reminder days before a payment", cm.reminderDaysBefore?.[frequency]);
+      if (problem) return problem;
+    }
     if (n.rules.some((rule) => !Array.isArray(rule.channels) || rule.channels.some((channel) => !["sms", "email"].includes(channel)) || new Set(rule.channels).size !== rule.channels.length)) return "Choose SMS or email for each step.";
     return null;
   }
@@ -818,9 +838,11 @@ function productProblem(body: SaveLoanProductRequest, productId: string | null):
 }
 
 /** Late fees on a loan under its product's rule (older loans: the product for their frequency) */
-function lateFeesOf(terms: { productId?: string; repaymentSchedule: LoanProduct["repaymentSchedule"]; principal: number }, schedule: LoanInstalment[], daysLate: number, overdue: number) {
+function lateFeesOf(terms: { productId?: string; repaymentSchedule: LoanProduct["repaymentSchedule"]; principal: number }, schedule: LoanInstalment[], daysLate: number, overdue: number, inRecovery: boolean) {
   const product = findProduct(terms.productId) ?? productForSchedule(terms.repaymentSchedule);
   const missedPayments = schedule.filter((instalment) => instalment.status === "late").length || (daysLate > 0 ? 1 : 0);
+  // Late fees start when a loan is sent to the recovery team, not when it first goes overdue
+  if (!inRecovery) return { amount: 0, rule: `${product.name}: ${describePenalty(product.penalty)}` };
   return { amount: latePenalty(product.penalty, { overdue, daysLate, missedPayments, principal: terms.principal }), rule: `${product.name}: ${describePenalty(product.penalty)}` };
 }
 
@@ -864,7 +886,24 @@ function owedNowOf(loan: (typeof loans)[number]) {
   if (!terms) return balance;
   const today = new Date().toLocaleDateString("en-CA");
   const overdue = Math.min(loan.arrearsAmount || (nextPayment(terms, balance)?.amount ?? 0), balance);
-  return balance + lateFeesOf(terms, scheduleOf(terms, balance, today), loan.daysPastDue, overdue).amount;
+  return balance + lateFeesOf(terms, scheduleOf(terms, balance, today), loan.daysPastDue, overdue, Boolean(loan.recovery)).amount;
+}
+
+/**
+ * Texts staff sent to clients. Starts with a few for late loans so the history isn't empty; the real backend stores each one as it sends it.
+ */
+let sentTextStore: SentText[] | null = null;
+function sentTexts(): SentText[] {
+  if (sentTextStore) return sentTextStore;
+  sentTextStore = [];
+  for (const loan of loans.filter((l) => l.daysPastDue > 0 && l.outstandingBalance > 0).slice(0, 6)) {
+    const borrower = borrowerForLoan(loan.id);
+    if (!borrower) continue;
+    const id = `sms-seed-${loan.id}`;
+    const at = new Date(Date.now() - (1 + sentTextStore.length) * 86_400_000).toISOString();
+    sentTextStore.push({ id, at, loanId: loan.id, borrower: { id: borrower.id, name: borrower.name }, phone: borrower.phone, message: overdueText(systemSettings.business.shortName, borrower.name, loan.id, loan.daysPastDue, loan.arrearsAmount ?? 0), sentBy: officers.find((o) => o.id === loan.officerId)?.name ?? "Loan officer", delivery: "sent" });
+  }
+  return sentTextStore;
 }
 
 /** Loans a person brought back from recovery: automatic recovery doesn't send them again */
@@ -1566,6 +1605,72 @@ export const handlers = [
     return new HttpResponse(null, { status: 204 });
   }),
 
+  // ---------- Texts to clients, and Accounting ----------
+
+  http.post(`${API_BASE}/loans/:loanId/sms`, async ({ params, request }) => {
+    await delay(300);
+    const user = currentDemoUser();
+    const loan = loans.find((l) => l.id === params.loanId);
+    if (!loan || !canSeeRecord(user, loan.officerId)) return HttpResponse.json({ message: "That loan wasn't found." }, { status: 404 });
+    if (!hasPermission(user, "sms.send")) return HttpResponse.json({ message: "You can't send texts." }, { status: 403 });
+    const { message } = (await request.json()) as SendTextRequest;
+    const text = message?.trim() ?? "";
+    if (!text) return HttpResponse.json({ message: "Write the text first." }, { status: 422 });
+    if (text.length > SMS_MAX_LENGTH) return HttpResponse.json({ message: `A text can be up to ${SMS_MAX_LENGTH} characters.` }, { status: 422 });
+    const borrower = borrowerForLoan(loan.id);
+    if (!borrower) return HttpResponse.json({ message: "That loan wasn't found." }, { status: 404 });
+    const sent: SentText = { id: `sms-${Date.now()}`, at: new Date().toISOString(), loanId: loan.id, borrower: { id: borrower.id, name: borrower.name }, phone: borrower.phone, message: text, sentBy: user.name, delivery: "sent" };
+    sentTexts().unshift(sent);
+    recordBorrowerEvent(borrower, "changes", `Texted ${borrower.name} about ${loan.id}`, actorOf(user));
+    audit(user, `texted ${borrower.name} about ${loan.id}`);
+    return HttpResponse.json<SentText>(sent, { status: 201 });
+  }),
+
+  http.get(`${API_BASE}/sms/history`, async ({ request }) => {
+    await delay(250);
+    const user = currentDemoUser();
+    if (!hasPermission(user, "loans.view")) return HttpResponse.json({ message: "You can't see loans." }, { status: 403 });
+    const params = new URL(request.url).searchParams;
+    const pageSize = Math.min(100, Number(params.get("pageSize")) || 25);
+    const visible = sentTexts().filter((text) => {
+      const loan = loans.find((l) => l.id === text.loanId);
+      return loan ? canSeeRecord(user, loan.officerId) : seesBranch(user);
+    });
+    const pageCount = Math.max(1, Math.ceil(visible.length / pageSize));
+    const page = Math.min(Math.max(1, Number(params.get("page")) || 1), pageCount);
+    return HttpResponse.json<SentTextList>({ items: visible.slice((page - 1) * pageSize, page * pageSize), total: visible.length, page, pageSize });
+  }),
+
+  http.get(`${API_BASE}/accounting/payouts`, async ({ request }) => {
+    await delay(250);
+    const user = currentDemoUser();
+    if (!hasPermission(user, "reports.view")) return HttpResponse.json({ message: "You can't see accounting." }, { status: 403 });
+    const params = new URL(request.url).searchParams;
+    const from = params.get("from") ?? "0000-00-00";
+    const to = params.get("to") ?? "9999-99-99";
+    const items: PayoutItem[] = [];
+    for (const loan of loans) {
+      if (!loan.payout || !canSeeRecord(user, loan.officerId) || loan.payout.paidOn < from || loan.payout.paidOn > to) continue;
+      const borrower = borrowerForLoan(loan.id);
+      const terms = borrower ? borrowerDetails.get(borrower.id)?.loanTerms : null;
+      if (!borrower || !terms) continue;
+      items.push({
+        loanId: loan.id,
+        borrower: { id: borrower.id, name: borrower.name },
+        officer: { id: loan.officerId, name: officers.find((o) => o.id === loan.officerId)?.name ?? "" },
+        amount: terms.principal,
+        method: loan.payout.method,
+        reference: loan.payout.reference,
+        paidOn: loan.payout.paidOn,
+        by: loan.payout.by,
+      });
+    }
+    items.sort((a, b) => b.paidOn.localeCompare(a.paidOn));
+    const byMethod: Record<string, number> = {};
+    for (const item of items) byMethod[item.method] = (byMethod[item.method] ?? 0) + item.amount;
+    return HttpResponse.json<PayoutList>({ items, total: items.length, totals: { paidOut: items.reduce((sum, item) => sum + item.amount, 0), loans: items.length, byMethod } });
+  }),
+
   // ---------- Payments (user flow, phase 6) ----------
 
   http.get(`${API_BASE}/payments/list`, async ({ request }) => {
@@ -1664,7 +1769,7 @@ export const handlers = [
         outstanding: inTab.reduce((sum, item) => sum + item.balance, 0),
         late: late.length,
         overdue: late.reduce((sum, item) => sum + item.arrearsAmount, 0),
-        repaid: inTab.reduce((sum, item) => sum + (item.totalRepayable - item.balance), 0),
+        repaid: inTab.reduce((sum, item) => sum + item.repaid, 0),
       },
     });
   }),
@@ -1809,12 +1914,23 @@ export const handlers = [
         mostDaysLate: loan.daysPastDue,
         nextPayment: paidOff ? null : nextPayment(terms, balance),
         recovery: paidOff ? null : recoveryOf(loan),
-        lateFees: lateFeesOf(terms, schedule, paidOff ? 0 : loan.daysPastDue, paidOff ? 0 : Math.min(loan.arrearsAmount || (nextPayment(terms, balance)?.amount ?? 0), balance)),
+        lateFees: lateFeesOf(terms, schedule, paidOff ? 0 : loan.daysPastDue, paidOff ? 0 : Math.min(loan.arrearsAmount || (nextPayment(terms, balance)?.amount ?? 0), balance), !paidOff && Boolean(loan.recovery)),
         applicationId: loan.applicationId ?? null,
         approvedBy: app?.decided?.by ?? null,
         payout: loan.payout ?? null,
         schedule,
         payments: paymentsFor(user, loan.id, officerName(loan.officerId)),
+        clientMessages: clientMessagesFor({
+          id: loan.id,
+          borrowerName: borrower.name,
+          schedule: terms.repaymentSchedule,
+          principal: terms.principal,
+          payout: loan.payout ?? null,
+          firstPaymentOn: terms.schedule?.firstPaymentOn ?? null,
+          payments: loanPayments(loan.id),
+          balance,
+          nextPayment: paidOff ? null : nextPayment(terms, balance),
+        }),
         signedApplication: publicDocument(applicationVersionFor(borrower, loan.id)),
       });
     }
@@ -1854,6 +1970,17 @@ export const handlers = [
       payout: null,
       schedule: pastSchedule,
       payments: loanPayments(past.id),
+      clientMessages: clientMessagesFor({
+        id: past.id,
+        borrowerName: borrower.name,
+        schedule: past.repaymentSchedule,
+        principal: past.principal,
+        payout: null,
+        firstPaymentOn: null,
+        payments: loanPayments(past.id),
+        balance: 0,
+        nextPayment: null,
+      }),
       signedApplication: publicDocument(version),
     });
   }),
@@ -2469,6 +2596,10 @@ export const handlers = [
       const disbursements = openOf("awaiting-disbursement");
       today.approvedNotDisbursed = { count: disbursements.length, amount: disbursements.reduce((sum, task) => sum + task.amount, 0) };
     }
+    if (can("payments.record")) {
+      const unmatched = openOf("payment-unmatched");
+      today.unmatchedPayments = { count: unmatched.length, amount: unmatched.reduce((sum, task) => sum + task.payment.amount, 0) };
+    }
     if (can("users.manage")) today.accessRequests = { count: openOf("access-request").length };
     return HttpResponse.json(today);
   }),
@@ -2477,6 +2608,55 @@ export const handlers = [
     await delay(150);
     const user = currentDemoUser();
     return HttpResponse.json<WorklistTask[]>(tasksForUser(user.id, (p) => hasPermission(user, p)));
+  }),
+
+  // Loans a received mobile money payment probably belongs to: the client's own number first, then loans with that amount due
+  http.get(`${API_BASE}/worklist/:taskId/match-candidates`, async ({ params }) => {
+    await delay(200);
+    const user = currentDemoUser();
+    const task = findTask(String(params.taskId));
+    if (!task || task.type !== "payment-unmatched") return HttpResponse.json({ message: "That payment wasn't found." }, { status: 404 });
+    if (!hasPermission(user, "payments.record")) return HttpResponse.json({ message: "You can't record payments." }, { status: 403 });
+    const digits = (phone: string) => phone.replace(/\D/g, "").slice(-9);
+    const candidates: MatchCandidate[] = [];
+    for (const loan of loans) {
+      if (loan.outstandingBalance <= 0 || !canSeeRecord(user, loan.officerId)) continue;
+      const owedNow = owedNowOf(loan);
+      if (task.payment.amount > owedNow) continue;
+      const borrower = borrowerForLoan(loan.id);
+      const terms = borrower ? borrowerDetails.get(borrower.id)?.loanTerms : null;
+      const sameNumber = digits(loan.phone) === digits(task.payment.phone);
+      const sameAmount = !!terms && nextPayment(terms, loan.outstandingBalance)?.amount === task.payment.amount;
+      if (sameNumber || sameAmount) candidates.push({ loanId: loan.id, borrowerName: loan.borrowerName, phone: loan.phone, owedNow, reason: sameNumber ? "Same phone number" : "This amount is due" });
+    }
+    candidates.sort((a, b) => Number(b.reason === "Same phone number") - Number(a.reason === "Same phone number"));
+    return HttpResponse.json<MatchCandidate[]>(candidates.slice(0, MATCH_CANDIDATES));
+  }),
+
+  http.post(`${API_BASE}/worklist/:taskId/match`, async ({ params, request }) => {
+    await delay(250);
+    const user = currentDemoUser();
+    const task = findTask(String(params.taskId));
+    if (!task || task.type !== "payment-unmatched" || task.status !== "open") return HttpResponse.json({ message: "That payment was already matched." }, { status: 409 });
+    if (!hasPermission(user, "payments.record")) return HttpResponse.json({ message: "You can't record payments." }, { status: 403 });
+    const { loanId } = (await request.json()) as MatchPaymentRequest;
+    const loan = loans.find((l) => l.id === loanId);
+    if (!loan || !canSeeRecord(user, loan.officerId) || loan.outstandingBalance <= 0) return HttpResponse.json({ message: "That loan wasn't found." }, { status: 404 });
+    const { payment } = task;
+    const owedNow = owedNowOf(loan);
+    if (payment.amount > owedNow) return HttpResponse.json({ message: `That's more than ${loan.borrowerName} owes. The most that loan can take is UGX ${owedNow.toLocaleString("en-US")}.` }, { status: 422 });
+
+    rememberForUndo(task, { loanId: loan.id, balance: loan.outstandingBalance });
+    loan.outstandingBalance = Math.max(0, loan.outstandingBalance - payment.amount);
+    recordLoanPayment(loan.id, { amount: payment.amount, method: payment.provider, reference: payment.reference, recordedBy: user.name }, payment.receivedAt);
+    task.status = "done";
+    task.result = `Matched to ${loan.borrowerName} · ${loan.id}`;
+    const dueTask = openTaskForLoan(loan.id);
+    if (dueTask && "amountPaid" in dueTask) dueTask.amountPaid += payment.amount;
+    const payer = borrowerForLoan(loan.id);
+    if (payer) recordBorrowerEvent(payer, "money", `Matched ${ugx(payment.amount)} (${payment.reference}) to ${loan.id} · ${payment.provider}`, actorOf(user));
+    audit(user, `matched ${ugx(payment.amount)} (${payment.reference}) to ${loan.id} (${loan.borrowerName})`);
+    return HttpResponse.json<WorklistTask>(task);
   }),
 
   http.get(`${API_BASE}/loans`, async () => {
@@ -3323,6 +3503,18 @@ export const handlers = [
         Object.assign(rule, next);
         return differs ? [line] : [];
       });
+      const texts = systemSettings.notifications.clientMessages;
+      const sentTexts = (body as SystemSettings["notifications"]).clientMessages;
+      for (const rule of texts.rules) {
+        const enabled = sentTexts.rules.find((item) => item.event === rule.event)!.enabled;
+        if (enabled !== rule.enabled) changed.push({ label: `Text to client: ${rule.title}`, value: `${rule.enabled ? "on" : "off"} → ${enabled ? "on" : "off"}` });
+        rule.enabled = enabled;
+      }
+      for (const frequency of ["daily", "weekly", "monthly"] as const) {
+        if (sentTexts.reminderDaysBefore[frequency] !== texts.reminderDaysBefore[frequency])
+          changed.push({ label: `Reminder days before (${frequency})`, value: `${texts.reminderDaysBefore[frequency]} → ${sentTexts.reminderDaysBefore[frequency]}` });
+        texts.reminderDaysBefore[frequency] = sentTexts.reminderDaysBefore[frequency];
+      }
       if (changed.length === 0) return HttpResponse.json<SystemSettings>(systemSettings);
       systemSettings.changed.notifications = { at: new Date().toISOString(), by: user.name };
       audit(user, `changed notification settings: ${changed.map((line) => line.label).join(", ")}`, changed);

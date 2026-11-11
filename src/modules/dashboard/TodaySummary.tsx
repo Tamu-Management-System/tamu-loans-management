@@ -6,14 +6,24 @@ import { SummaryTile, type SummaryTileProps } from "./SummaryTile";
 import { useWorklistFilter, type WorklistFilter } from "./worklistFilter";
 import styles from "./TodaySummary.module.css";
 
-type TileDefinition = Omit<SummaryTileProps, "selected" | "onSelect"> & { filter: WorklistFilter | null };
+type TileDefinition = Omit<SummaryTileProps, "selected" | "onSelect"> & { filter: WorklistFilter | null; /** Where it ranks when its box opens a page instead of filtering */ rankKey?: WorklistFilter };
 
 const plural = (count: number, singular: string, pluralForm: string) => (count === 1 ? singular : pluralForm);
 
-/** Turns the API's sections into boxes, in the order of the approved design. */
+/** The dashboard shows four boxes at most; the work behind the others is still in the worklist tabs */
+const MAX_TILES = 4;
+
+/** Which boxes win a place when a role has more than four (first = most important); the rest are left out */
+const TILE_PRIORITY: WorklistFilter[] = ["collect", "follow-up", "approvals", "disbursement", "access", "match", "complete", "reversals"];
+const tileRank = (tile: TileDefinition) => {
+  const key = tile.rankKey ?? tile.filter;
+  return key ? TILE_PRIORITY.indexOf(key) : TILE_PRIORITY.length;
+};
+
+/** Turns the API's sections into boxes (four at most, the most important for the role). */
 function buildTiles(today: DashboardToday, { marketWide, canApprove }: { marketWide: boolean; canApprove: boolean }): TileDefinition[] {
   const tiles: TileDefinition[] = [];
-  const { activeLoans, collections, followUps, applicationsToComplete, paymentReversals, awaitingApproval, approvedNotDisbursed, accessRequests } = today;
+  const { activeLoans, collections, followUps, applicationsToComplete, unmatchedPayments, paymentReversals, awaitingApproval, approvedNotDisbursed, accessRequests } = today;
 
   // Active loans first, then what's due to collect (the client's order)
   if (activeLoans)
@@ -28,7 +38,7 @@ function buildTiles(today: DashboardToday, { marketWide, canApprove }: { marketW
   if (collections)
     tiles.push({
       // Market-wide it's everyone's clients, so the box opens Payments rather than filtering your worklist
-      ...(marketWide ? { filter: null, href: "/payments" } : { filter: "collect" as const }),
+      ...(marketWide ? { filter: null, href: "/payments", rankKey: "collect" as const } : { filter: "collect" as const }),
       label: "Due to collect",
       icon: "coins",
       value: collections.dueCount,
@@ -56,6 +66,14 @@ function buildTiles(today: DashboardToday, { marketWide, canApprove }: { marketW
       icon: "document",
       value: applicationsToComplete.count,
       detail: "Missing documents or guarantor consent",
+    });
+  if (unmatchedPayments)
+    tiles.push({
+      filter: "match",
+      label: "Payments to match",
+      icon: "link",
+      value: unmatchedPayments.count,
+      detail: `${formatUGX(unmatchedPayments.amount)} not yet on any loan`,
     });
   if (paymentReversals)
     tiles.push({
@@ -89,10 +107,14 @@ function buildTiles(today: DashboardToday, { marketWide, canApprove }: { marketW
       value: accessRequests.count,
       detail: "Password resets and invites",
     });
-  return tiles;
+  return tiles
+    .map((tile, index) => ({ tile, index }))
+    .sort((a, b) => tileRank(a.tile) - tileRank(b.tile) || a.index - b.index)
+    .slice(0, MAX_TILES)
+    .map(({ tile }) => tile);
 }
 
-/** The "Today" section: four boxes summarising today's work. Selecting one filters the worklist. */
+/** The "Today" section: up to four boxes summarising today's work. Selecting one filters the worklist. */
 export function TodaySummary() {
   const { data: today, isPending, isError, refetch } = useDashboardToday();
   const { selected, toggle } = useWorklistFilter();
@@ -122,8 +144,18 @@ export function TodaySummary() {
         <div className={styles.tiles} aria-busy={isPending}>
           {isPending
             ? Array.from({ length: 4 }, (_, index) => <div key={index} className={`${styles.tile} ${styles.tileLoading}`} />)
-            : tiles.map(({ filter, ...tile }) => (
-                <SummaryTile key={tile.label} {...tile} selected={!!filter && selected === filter} onSelect={() => filter && toggle(filter)} />
+            : tiles.map((tile) => (
+                <SummaryTile
+                  key={tile.label}
+                  label={tile.label}
+                  icon={tile.icon}
+                  value={tile.value}
+                  detail={tile.detail}
+                  progress={tile.progress}
+                  href={tile.href}
+                  selected={!!tile.filter && selected === tile.filter}
+                  onSelect={() => tile.filter && toggle(tile.filter)}
+                />
               ))}
         </div>
       )}

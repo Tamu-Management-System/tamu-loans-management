@@ -8,6 +8,7 @@ import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { Pagination } from "../../components/ui/Pagination";
 import { SEARCH_FROM, Select } from "../../components/ui/Select";
+import { RANGES, rangeDates, type Range } from "../../lib/dateRange";
 import { formatShortDate, formatTime, formatUGX, toDateInputValue } from "../../lib/format";
 import { useAnnounce } from "../dashboard/useAnnounce";
 import { EditedNote } from "./EditedNote";
@@ -16,29 +17,8 @@ import { RecordPaymentDialog } from "./RecordPaymentDialog";
 import { useLatest } from "../../lib/useLatest";
 import styles from "./PaymentsPage.module.css";
 
-type Range = "today" | "week" | "month" | "custom";
-const RANGES: { value: Range; label: string }[] = [
-  { value: "today", label: "Today" },
-  { value: "week", label: "This week" },
-  { value: "month", label: "This month" },
-  { value: "custom", label: "Custom" },
-];
 const METHODS = ["MTN MoMo", "Airtel Money", "Cash"] as const;
 const SEARCH_DEBOUNCE_MS = 300;
-
-/** The dates a range covers (local calendar days; the week starts on Monday). */
-function rangeDates(range: Range, from: string | null, to: string | null) {
-  const today = new Date();
-  const todayIso = toDateInputValue(today);
-  if (range === "week") {
-    const monday = new Date(today);
-    monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-    return { from: toDateInputValue(monday), to: todayIso };
-  }
-  if (range === "month") return { from: toDateInputValue(new Date(today.getFullYear(), today.getMonth(), 1)), to: todayIso };
-  if (range === "custom") return { from: from || todayIso, to: to || todayIso };
-  return { from: todayIso, to: todayIso };
-}
 
 /** Range, dates, search, officer, method and page, kept in the address. */
 function usePaymentFilters() {

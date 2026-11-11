@@ -7,7 +7,7 @@ detail (requests, responses, errors) is in [api-contract.md](api-contract.md); s
 
 **Client:** Tamu Cleaning Services (Kampala Central branch). **MVP:** Module 1 (borrower onboarding) and Module 2
 (loan lifecycle), plus staff, roles, settings, audit log, reports and account pages, which the MVP screens depend on.
-Arrears automation, SMS and accounting (Modules 3 and 4) are Phase 2.
+The Arrears & SMS and Accounting screens are built (see "Arrears & SMS, Accounting" in api-contract.md). Still Phase 2: automatic arrears rules, bulk and automatic reminders for late loans, and matching mobile money statements to loans.
 
 ## 1. How to start
 
@@ -78,7 +78,7 @@ needs a transaction ID when `payments.referenceRequired`.
 later). `arrearsAmount` = what's unpaid on instalments due before today. "Seriously late" from
 `loanRules.seriouslyLateDays` (default 30).
 
-**Late fees** (from the loan's product): after `grace_days`, `percent` of the overdue amount or a `fixed` amount,
+**Late fees** (from the loan's product), charged only once a loan is with the recovery team (not when it first goes overdue): after `grace_days`, `percent` of the overdue amount or a `fixed` amount,
 charged once per missed payment or every day late. The nightly job must never charge twice: one late fee per instalment when charged per missed payment,
 one per instalment per day when charged per day (a unique key on the charge enforces it). The frontend shows them separately; the backend adds them to
 what's owed.

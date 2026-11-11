@@ -1,8 +1,15 @@
-import type { NotificationChannel } from "../../api/types";
+import type { NotificationChannel, RepaymentSchedule } from "../../api/types";
+import { SETTING_LIMITS } from "../../lib/settingLimits";
 import { useAuth } from "../../auth/AuthContext";
-import { SettingRow, SettingsForm, SettingsGroup } from "./SettingsForm";
+import { NumberField, SettingRow, SettingsForm, SettingsGroup, Switch } from "./SettingsForm";
 import { useSettingsDraft } from "./useSettingsDraft";
 import styles from "./Settings.module.css";
+
+const FREQUENCIES: { value: RepaymentSchedule; label: string }[] = [
+  { value: "daily", label: "Clients who pay daily" },
+  { value: "weekly", label: "Clients who pay weekly" },
+  { value: "monthly", label: "Clients who pay monthly" },
+];
 
 const CHANNELS: { value: NotificationChannel; label: string }[] = [
   { value: "sms", label: "SMS" },
@@ -15,6 +22,7 @@ export function NotificationsSection() {
   const draft = useSettingsDraft("notifications");
   const rules = draft.values?.rules;
   const canEdit = can("settings.notifications");
+  const texts = draft.values?.clientMessages;
 
   const toggle = (event: string, channel: NotificationChannel) =>
     draft.set(
@@ -23,7 +31,17 @@ export function NotificationsSection() {
     );
 
   return (
-    <SettingsForm title="Notifications" subtitle="Tell the next person as soon as a step is ready for them" draft={draft as never} canEdit={canEdit}>
+    <SettingsForm
+      title="Notifications"
+      subtitle="Tell the next person as soon as a step is ready for them, and keep clients informed"
+      draft={draft as never}
+      canEdit={canEdit}
+      validate={() =>
+        texts && FREQUENCIES.some(({ value }) => !Number.isInteger(texts.reminderDaysBefore[value]) || texts.reminderDaysBefore[value] < SETTING_LIMITS.reminderDaysBefore[0] || texts.reminderDaysBefore[value] > SETTING_LIMITS.reminderDaysBefore[1])
+          ? `Reminder days: ${SETTING_LIMITS.reminderDaysBefore[0]} to ${SETTING_LIMITS.reminderDaysBefore[1]}.`
+          : null
+      }
+    >
       {rules && (
         <SettingsGroup
           title="From onboarding to payout"
@@ -51,6 +69,38 @@ export function NotificationsSection() {
             </SettingRow>
           ))}
         </SettingsGroup>
+      )}
+      {texts && (
+        <>
+          <SettingsGroup title="Texts to clients" description="Sent to the client's own phone by SMS. Every text is also kept on the loan page.">
+            {texts.rules.map((rule) => (
+              <SettingRow key={rule.event} label={rule.title} description="Goes to: the client.">
+                <div className={styles.notifyControl}>
+                  <Switch
+                    label={rule.enabled ? "On" : "Off"}
+                    checked={rule.enabled}
+                    onChange={(enabled) => draft.set("clientMessages", { ...texts, rules: texts.rules.map((item) => (item.event === rule.event ? { ...item, enabled } : item)) })}
+                  />
+                  <p className={styles.example}>{rule.example}</p>
+                </div>
+              </SettingRow>
+            ))}
+          </SettingsGroup>
+          <SettingsGroup title="Payment reminders" description="How long before a payment is due the reminder goes, by how the client repays. 0 sends it on the day.">
+            {FREQUENCIES.map(({ value, label }) => (
+              <SettingRow key={value} label={label} htmlFor={`reminder-${value}`}>
+                <NumberField
+                  id={`reminder-${value}`}
+                  value={texts.reminderDaysBefore[value]}
+                  onChange={(days) => draft.set("clientMessages", { ...texts, reminderDaysBefore: { ...texts.reminderDaysBefore, [value]: days } })}
+                  min={SETTING_LIMITS.reminderDaysBefore[0]}
+                  max={SETTING_LIMITS.reminderDaysBefore[1]}
+                  unit="days before"
+                />
+              </SettingRow>
+            ))}
+          </SettingsGroup>
+        </>
       )}
     </SettingsForm>
   );

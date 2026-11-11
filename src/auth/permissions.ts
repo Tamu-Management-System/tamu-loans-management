@@ -25,6 +25,7 @@ export const PERMISSIONS = [
   "payments.export",
   "recovery.view",
   "recovery.manage",
+  "sms.send",
   "reports.view",
   "reports.export",
   "users.view",
@@ -91,6 +92,7 @@ export const PERMISSION_MODULES: PermissionModule[] = [
   { group: "Lending", name: "Loans", description: "Active, cleared and to-be-paid-out loans" },
   { group: "Lending", name: "Payments", description: "Repayments and what was collected" },
   { group: "Lending", name: "Recovery", description: "Loans handed to the recovery team" },
+  { group: "Lending", name: "Messages", description: "Texts to clients about their loans" },
   { group: "Lending", name: "Reports", description: "Portfolio, collections and performance reports" },
   { group: "Administration", name: "Staff", description: "Staff accounts, invites and switching accounts off" },
   { group: "Administration", name: "Roles", description: "Roles and their permissions" },
@@ -131,6 +133,8 @@ export const PERMISSION_CATALOG: PermissionInfo[] = [
 
   { id: "recovery.view", module: "Recovery", action: "view", label: "See loans in recovery", description: "The recovery list and why each loan was sent.", requires: ["loans.view"] },
   { id: "recovery.manage", module: "Recovery", action: "manage", cellLabel: "Send and bring back", label: "Send loans to recovery and bring them back", description: "Hand late loans to the recovery team, with a reason.", requires: ["recovery.view"] },
+
+  { id: "sms.send", module: "Messages", action: "create", cellLabel: "Send texts", label: "Send texts to clients", description: "Text a client about a late payment, from Arrears & SMS or the loan page.", requires: ["loans.view"] },
 
   { id: "reports.view", module: "Reports", action: "view", label: "See reports", description: "Portfolio, collections and officer performance." },
   { id: "reports.export", module: "Reports", action: "export", label: "Export reports", description: "Download reports as spreadsheets or PDF.", requires: ["reports.view"] },
@@ -258,6 +262,7 @@ export const BUILT_IN_ROLES: Record<BuiltInRoleId, Role> = {
       "payments.export",
       "recovery.view",
       "recovery.manage",
+      "sms.send",
       "reports.view",
       "reports.export",
       "audit.view",
@@ -286,6 +291,7 @@ export const BUILT_IN_ROLES: Record<BuiltInRoleId, Role> = {
       "payments.record",
       "payments.edit",
       "recovery.view",
+      "sms.send",
       "reports.view",
       "reports.export",
     ],

@@ -52,7 +52,7 @@ export const roles: Record<string, Role> = {
     description: "Oversees the market's loans and the recovery team. Can't approve or pay out.",
     builtIn: false,
     dataScope: "branch",
-    permissions: ["borrowers.view", "documents.view", "applications.view", "loans.view", "payments.view", "payments.record", "recovery.view", "recovery.manage", "reports.view", "reports.export"],
+    permissions: ["borrowers.view", "documents.view", "applications.view", "loans.view", "payments.view", "payments.record", "recovery.view", "recovery.manage", "sms.send", "reports.view", "reports.export"],
   },
   "role-recovery": {
     id: "role-recovery",
@@ -60,7 +60,7 @@ export const roles: Record<string, Role> = {
     description: "Follows up loans with the recovery team and records what clients pay.",
     builtIn: false,
     dataScope: "branch",
-    permissions: ["borrowers.view", "loans.view", "payments.view", "payments.record", "recovery.view", "recovery.manage"],
+    permissions: ["borrowers.view", "loans.view", "payments.view", "payments.record", "recovery.view", "recovery.manage", "sms.send"],
   },
 };
 

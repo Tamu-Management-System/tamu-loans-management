@@ -206,6 +206,10 @@ export function officerSummary(officerId: string) {
     activeLoans: open.length,
     disbursedThisMonth: { amount: thisMonth.reduce((sum, loan) => sum + principalOf(loan.id), 0), count: thisMonth.length },
     clearedThisMonth: pastLoans.filter((past) => past.clearedOn >= monthStart && borrowers.find((b) => b.id === past.borrowerId)?.officerId === officerId).length,
+    cleared: (() => {
+      const done = pastLoans.filter((past) => borrowers.find((b) => b.id === past.borrowerId)?.officerId === officerId);
+      return { count: done.length, amount: done.reduce((sum, past) => sum + past.totalRepayable, 0) };
+    })(),
     dueThisWeek: dueBetween(mine, today(), weekEnd),
   };
 }

@@ -1,0 +1,115 @@
+/* Tabs, the age bands, and the text dialog. The page itself shares the Loans page styles. */
+.bands {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.band {
+  padding: 14px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+}
+
+.band dt {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.band dd {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.band dd span {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.tabs button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.tabs button:hover {
+  background: var(--color-surface-subtle);
+}
+
+.tabs button[aria-selected="true"] {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+.textMessage {
+  max-width: 460px;
+  color: var(--color-text-muted);
+}
+
+.failed {
+  color: var(--color-danger);
+}
+
+.empty {
+  margin: 28px 0;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.dialogLabel {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.textBox {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 12px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--color-text);
+  resize: vertical;
+}
+
+.textBox:focus {
+  border-color: var(--color-primary);
+  outline: none;
+}
+
+.count {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}

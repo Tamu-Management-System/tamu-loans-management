@@ -2,9 +2,6 @@ import type { NavigationBadges } from "../api/types";
 import { ANY_SETTINGS_PERMISSION, type Permission } from "../auth/permissions";
 import type { IconName } from "../components/ui/Icon";
 
-/** MVP = Modules 1 & 2 (proposal). Phase 2 = Modules 3 & 4. */
-export type Release = "mvp" | "phase-2";
-
 export interface NavItem {
   label: string;
   icon: IconName;
@@ -12,8 +9,6 @@ export interface NavItem {
   to?: string;
   /** Any one of these grants access. Omitted = everyone signed in. */
   requires?: Permission | Permission[];
-  /** Release the screen ships in; anything after the MVP shows a "Soon" badge. Defaults to "mvp". */
-  release?: Release;
   /** Count shown next to the item, from GET /navigation/badges */
   badge?: keyof NavigationBadges;
   children?: NavItem[];
@@ -40,9 +35,9 @@ export const NAVIGATION: NavItem[] = [
   },
   { label: "Applications", icon: "applications", to: "/applications", requires: "applications.view", badge: "applications" },
   { label: "Clients", icon: "user", to: "/borrowers", requires: "borrowers.view" },
-  { label: "Arrears & SMS", icon: "arrears", to: "/arrears", requires: VIEW_LOANS_PERMISSIONS, release: "phase-2" },
+  { label: "Arrears & SMS", icon: "arrears", to: "/arrears", requires: VIEW_LOANS_PERMISSIONS },
   { label: "Payments", icon: "payments", to: "/payments", requires: "payments.view" },
-  { label: "Accounting", icon: "accounting", to: "/accounting", requires: "reports.view", release: "phase-2" },
+  { label: "Accounting", icon: "accounting", to: "/accounting", requires: "reports.view" },
   { label: "Reports", icon: "reports", to: "/reports", requires: "reports.view" },
   { label: "Audit log", icon: "clock", to: "/audit-log", requires: "audit.view" },
   { label: "Settings", icon: "settings", to: "/settings", requires: ANY_SETTINGS_PERMISSION, subpages: true },
