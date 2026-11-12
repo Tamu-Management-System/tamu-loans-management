@@ -26,8 +26,12 @@ export function useChangePassword() {
   });
 }
 
+/** How many ended sign-ins to list under the active ones (screen size, not a rule) */
+const RECENT_ENDED_SIGN_INS = 3;
+
+/** Active sign-ins, followed by the most recent ones that have ended (they carry an `endedAt`). */
 export function useMySessions() {
-  return useQuery({ queryKey: ["me", "sessions"], queryFn: () => api.get<SignedInDevice[]>("/me/sessions") });
+  return useQuery({ queryKey: ["me", "sessions"], queryFn: () => api.get<SignedInDevice[]>(`/me/sessions?endedLimit=${RECENT_ENDED_SIGN_INS}`) });
 }
 
 export function useSignOutOtherDevices() {

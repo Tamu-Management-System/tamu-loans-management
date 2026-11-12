@@ -121,7 +121,7 @@ function StaffApp() {
                 key={item.to}
                 path={item.subpages ? `${item.to}/*` : item.to}
                 element={
-                  <RequirePermission requires={item.requires}>
+                  <RequirePermission requires={item.requires} screen={item.label}>
                     {BUILT_PAGES[item.to!] ?? <PlaceholderPage title={item.label} />}
                   </RequirePermission>
                 }
@@ -130,7 +130,7 @@ function StaffApp() {
             <Route
               path="borrowers/:borrowerId"
               element={
-                <RequirePermission requires="borrowers.view">
+                <RequirePermission requires="borrowers.view" screen="Client profile">
                   <BorrowerProfilePage />
                 </RequirePermission>
               }
@@ -138,7 +138,7 @@ function StaffApp() {
             <Route
               path="applications/new"
               element={
-                <RequirePermission requires="applications.create">
+                <RequirePermission requires="applications.create" screen="New application">
                   <NewApplicationRoute />
                 </RequirePermission>
               }
@@ -146,7 +146,7 @@ function StaffApp() {
             <Route
               path="loans/:loanId"
               element={
-                <RequirePermission requires="loans.view">
+                <RequirePermission requires="loans.view" screen="Loan">
                   <LoanDetailsPage />
                 </RequirePermission>
               }
@@ -154,7 +154,7 @@ function StaffApp() {
             <Route
             path="applications/:applicationId/edit"
             element={
-              <RequirePermission requires="applications.create">
+              <RequirePermission requires="applications.create" screen="Continue application">
                 <ContinueApplicationPage />
               </RequirePermission>
             }
@@ -162,7 +162,7 @@ function StaffApp() {
           <Route
               path="applications/:applicationId"
               element={
-                <RequirePermission requires="applications.view">
+                <RequirePermission requires="applications.view" screen="Application">
                   <ApplicationReviewPage />
                 </RequirePermission>
               }

@@ -252,6 +252,18 @@
   white-space: nowrap;
 }
 
+.endNote {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-align: right;
+}
+
+.endNote .hint {
+  font-weight: 400;
+}
+
 .chipOk {
   background: var(--color-success-soft);
   color: var(--color-success);
@@ -361,6 +373,17 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--color-danger);
+}
+
+.fieldError {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-danger);
+}
+
+.input[aria-invalid="true"] {
+  border-color: var(--color-danger);
 }
 
 .inlineForm .error {

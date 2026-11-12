@@ -157,7 +157,7 @@ const RULES: Rule[] = [
 ];
 
 /** Query-string values the backend reads as numbers */
-const NUMERIC_KEYS = new Set(["page", "pageSize", "limit"]);
+const NUMERIC_KEYS = new Set(["page", "pageSize", "limit", "endedLimit"]);
 
 function queryObject(search: string): Record<string, unknown> {
   const out: Record<string, unknown> = {};

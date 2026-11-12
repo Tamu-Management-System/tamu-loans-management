@@ -52,6 +52,14 @@ export function formatRelativeDay(iso: string) {
   return formatShortDate(iso);
 }
 
+/** ISO date-time -> "Today, 9:05 AM", "Yesterday, 4:10 PM" or "27 Oct, 4:10 PM" */
+export function formatDayAndTime(iso: string) {
+  const days = daysSince(iso);
+  if (days === 0) return `Today, ${formatTime(iso)}`;
+  if (days === 1) return `Yesterday, ${formatTime(iso)}`;
+  return `${formatShortDate(iso)}, ${formatTime(iso)}`;
+}
+
 /** Local calendar date as "YYYY-MM-DD", for date inputs. */
 export function toDateInputValue(date: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");

@@ -53,7 +53,7 @@ can call the API directly.
 
 ### 2.3 Sign-in and passwords
 - Hash passwords with **Argon2id** (or bcrypt, cost ≥ 12). Never store or log plain passwords.
-- Minimum **12 characters**; reject common or breached passwords. Don't force character-type rules or regular rotation (NIST SP 800-63B).
+- Minimum **8 characters** (Settings → Security, 8 to 64; decided 12 Nov 2026, was 12); reject common or breached passwords. Don't force character-type rules or regular rotation (NIST SP 800-63B).
 - **Rate limiting and lockout:** e.g. 5 failed attempts per account in 15 minutes locks it for 15 minutes, plus a
   per-IP limit. Answer `429` with a `message` (the login page shows it as is).
 - Same error for unknown email and wrong password; keep response times similar for both.

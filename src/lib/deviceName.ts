@@ -34,18 +34,19 @@ export function deviceName(userAgent: string): string {
 }
 
 /**
- * What to show as the place of a signed-in device. The backend stores the address the person connected from (for example "127.0.0.1"),
- * not a town, so an address is shown for what it is, and the computer's own or a home or office network address is named plainly.
- * Anything that is not an address is already a place name and is shown as it is.
+ * What to show as the place of a signed-in device, or null when there is nothing useful to say.
+ * The backend stores the address the person connected from (for example "127.0.0.1"), not a town, so an address is shown for what
+ * it is, a home or office network address is named plainly, and the computer's own address (it says nothing about where anyone is)
+ * is left out. Anything that is not an address is already a place name and is shown as it is.
  */
-export function placeName(location: string): string {
+export function placeName(location: string): string | null {
   const text = location.trim();
-  if (!text) return "Unknown place";
+  if (!text) return null;
   const address = text.replace(/^::ffff:/i, "");
   const isV4 = /^\d{1,3}(\.\d{1,3}){3}$/.test(address);
   const isV6 = address.includes(":") && /^[0-9a-f:]+$/i.test(address);
   if (!isV4 && !isV6) return text;
-  if (/^127\./.test(address) || address === "::1") return "This computer";
+  if (/^127\./.test(address) || address === "::1") return null;
   if (/^(10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(address) || /^(fe80:|fc|fd)/i.test(address)) return "Same network";
   return `Address ${address}`;
 }

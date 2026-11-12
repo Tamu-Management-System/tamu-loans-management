@@ -1202,7 +1202,7 @@ Body `{ "query": { } }`. A read: nothing in the address.
                  "paymentAllocationOrder": ["charges", "fees", "interest", "principal"] },
   "payments": { "repaymentMethods": ["Cash", "MTN MoMo", "Airtel Money"], "payoutMethods": ["MTN MoMo", "Airtel Money"],
                 "referenceRequired": true, "backdateDays": 3, "editWindowHours": 24 },
-  "security": { "idleTimeoutMinutes": 15, "nationalIdVisibleSeconds": 30, "inviteValidHours": 48, "maxFailedSignIns": 5, "lockoutMinutes": 15, "minPasswordLength": 12 },
+  "security": { "idleTimeoutMinutes": 15, "nationalIdVisibleSeconds": 30, "inviteValidHours": 48, "maxFailedSignIns": 5, "lockoutMinutes": 15, "minPasswordLength": 8 },
   "notifications": { "rules": [{ "event": "submitted", "title": "An application is sent for approval", "who": "Everyone who can approve",
                                "example": "Tamu Loans: APP-311 for Brian Ochieng (UGX 500,000) is waiting for your approval.", "channels": ["sms"] }] },
   "changed": { "business": { "at": "…", "by": "Martin Ssempa" }, "loanRules": null, "payments": null, "security": null, "notifications": null }
@@ -1325,7 +1325,18 @@ spreadsheet can't run them as formulas. The export itself is logged ("exported t
   the lockout); `422` if the new one is shorter than Settings → Security's `minPasswordLength`, common/breached, or
   contains the person's name or email. On success, **end every other session** of the account. No character-type
   rules (NIST SP 800-63B).
-- `POST /me/sessions/query`: `[{ id, device, location, lastActiveAt, current }]`; `POST /me/sessions/sign-out-others`.
+- `POST /me/sessions/query` with `{ query: { endedLimit?: number } }`: `[{ id, device, location, lastActiveAt, current, signedInAt, endedAt, endReason }]`;
+  `POST /me/sessions/sign-out-others`.
+  - Without `endedLimit` it returns only the sessions still active (`endedAt: null`), as it does today.
+  - With `endedLimit` (the screen sends 3) it also returns that many of the **most recent ended sessions** of the account, newest first,
+    after the active ones. The Account settings page shows them under "Recent sign-ins" so a person can see where they signed in before
+    and how each sign-in ended. The page hides that list until the backend sends them.
+  - `signedInAt`: when the session started (`Session.createdAt`). `endedAt`: ISO date-time it ended, `null` while active.
+    `endReason`: `"SIGNED_OUT" | "IDLE" | "EXPIRED" | "SIGNED_OUT_ELSEWHERE"` (the `SessionEndReason` values), `null` while active.
+  - `location`: a town and country (for example "Kampala, Uganda") when it can be worked out from the address the person connected
+    from, otherwise the address. The page shows what it gets and leaves out the computer's own address (`127.0.0.1`).
+  - The address must be the person's own. Behind the frontend host's rewrite, take it from the forwarded-address header
+    (`X-Forwarded-For`) and set Nest's `trust proxy`, or every session will show the host's address.
 - `POST /support/contacts/query`: `{ admins: [{ name, phone, email }], business: { name, phone, email } }` for the
   Help page (active people with `users.manage`).
 

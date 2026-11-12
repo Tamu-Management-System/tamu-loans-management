@@ -18,6 +18,6 @@ export const SETTING_LIMITS = {
   inviteValidHours: [1, 168],
   maxFailedSignIns: [3, 10],
   lockoutMinutes: [5, 120],
-  minPasswordLength: [10, 64],
+  minPasswordLength: [8, 64],
 } as const;
 

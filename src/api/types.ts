@@ -1358,7 +1358,13 @@ export interface ChangePasswordRequest {
   newPassword: string;
 }
 
-/** GET /me/sessions: where this account is signed in */
+/** How a sign-in ended (the backend's SessionEndReason) */
+export type SessionEndReason = "SIGNED_OUT" | "IDLE" | "EXPIRED" | "SIGNED_OUT_ELSEWHERE";
+
+/**
+ * GET /me/sessions: where this account is signed in, and with `endedLimit` also its most recent sign-ins that have ended
+ * (the ones with an `endedAt`). A backend that doesn't send the last three fields has only active sign-ins to show.
+ */
 export interface SignedInDevice {
   id: string;
   device: string;
@@ -1366,6 +1372,11 @@ export interface SignedInDevice {
   /** ISO date-time */
   lastActiveAt: string;
   current: boolean;
+  /** ISO date-time the person signed in */
+  signedInAt?: string;
+  /** ISO date-time it ended; absent or null while it is still active */
+  endedAt?: string | null;
+  endReason?: SessionEndReason | null;
 }
 
 /** GET /support/contacts: who staff can ask for help */

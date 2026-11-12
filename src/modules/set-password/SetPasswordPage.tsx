@@ -28,11 +28,13 @@ export function SetPasswordPage() {
   const setPassword = useSetPassword(token);
   const ids = { password: useId(), confirm: useId() };
   const passwordRef = useRef<HTMLInputElement>(null);
+  const confirmRef = useRef<HTMLInputElement>(null);
 
   const [password, setPasswordText] = useState("");
   const [confirm, setConfirm] = useState("");
   const [visible, setVisible] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
+  const [left, setLeft] = useState({ password: false, confirm: false });
 
   useEffect(() => {
     document.title = "Set your password · Tamu Loans";
@@ -68,13 +70,17 @@ export function SetPasswordPage() {
     { ok: matches, label: "Both passwords match" },
   ];
   const ready = long && matches;
+  // Say what's wrong once the person has had a chance to finish: on leaving the field, on submitting, or when the second box is as long as the first
+  const passwordError = (left.password || showErrors) && password && !long ? `Use at least ${link.minPasswordLength} characters` : showErrors && !password ? "Enter a password" : null;
+  const confirmError =
+    confirm && confirm !== password && (left.confirm || showErrors || confirm.length >= password.length) ? "The two passwords don't match" : showErrors && password && !confirm ? "Enter the password again" : null;
   const firstName = link.name.split(" ")[0];
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!ready) {
       setShowErrors(true);
-      passwordRef.current?.focus();
+      (long ? confirmRef : passwordRef).current?.focus();
       return;
     }
     setPassword.mutate(
@@ -117,15 +123,23 @@ export function SetPasswordPage() {
                 setPasswordText(event.target.value);
                 setPassword.reset();
               }}
-              aria-invalid={showErrors && !long}
+              onBlur={() => setLeft((state) => ({ ...state, password: true }))}
+              aria-invalid={!!passwordError}
+              aria-describedby={passwordError ? `${ids.password}-error` : undefined}
             />
             {reveal}
           </div>
+          {passwordError && (
+            <p id={`${ids.password}-error`} className={login.fieldError} role="alert">
+              {passwordError}
+            </p>
+          )}
         </div>
 
         <div className={login.field}>
           <label htmlFor={ids.confirm}>New password again</label>
           <input
+            ref={confirmRef}
             id={ids.confirm}
             type={type}
             autoComplete="new-password"
@@ -136,8 +150,15 @@ export function SetPasswordPage() {
               setConfirm(event.target.value);
               setPassword.reset();
             }}
-            aria-invalid={showErrors && !matches}
+            onBlur={() => setLeft((state) => ({ ...state, confirm: true }))}
+            aria-invalid={!!confirmError}
+            aria-describedby={confirmError ? `${ids.confirm}-error` : undefined}
           />
+          {confirmError && (
+            <p id={`${ids.confirm}-error`} className={login.fieldError} role="alert">
+              {confirmError}
+            </p>
+          )}
         </div>
 
         <ul className={styles.checks} aria-label="Password checks">
