@@ -161,6 +161,7 @@ export function ArrearsPage() {
                     <td className={styles.textMessage}>
                       {text.message}
                       {text.delivery === "failed" && <span className={`${loanStyles.secondary} ${styles.failed}`}>Didn't reach the phone</span>}
+                      {text.delivery === "pending" && <span className={loanStyles.secondary}>Sending…</span>}
                     </td>
                     <td className={loanStyles.officer}>{text.sentBy}</td>
                   </tr>

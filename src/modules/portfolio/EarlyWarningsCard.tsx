@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import { ApiError } from "../../api/client";
+import { useAuth } from "../../auth/AuthContext";
 import { EARLY_WARNINGS_LIMIT, useAddToWorklist } from "../../api/portfolio";
 import type { EarlyWarningList } from "../../api/types";
 import { Icon } from "../../components/ui/Icon";
@@ -19,6 +20,8 @@ interface EarlyWarningsCardProps {
 /** Clients showing signs of trouble before they fall further behind (Module 3). */
 export function EarlyWarningsCard({ warnings, announce }: EarlyWarningsCardProps) {
   const addToWorklist = useAddToWorklist();
+  // Only a loan officer can put a loan on their own list: it must be one of their clients. Whoever sees the whole market sees the officer instead.
+  const { seesBranch } = useAuth();
   const showToast = useToast();
   const { select } = useWorklistFilter();
 
@@ -63,6 +66,8 @@ export function EarlyWarningsCard({ warnings, announce }: EarlyWarningsCardProps
                 <button type="button" className={styles.listButton} onClick={() => reveal(item.worklistTask!)}>
                   {item.worklistTask.status === "done" ? "Done today ✓" : "In today's list"}
                 </button>
+              ) : seesBranch ? (
+                <span className={styles.mutedText}>{item.officerName}</span>
               ) : (
                 <button type="button" className={styles.listButton} onClick={() => add(item.loanId, item.borrowerName)} disabled={addToWorklist.isPending}>
                   Add to today

@@ -136,11 +136,11 @@ export function LoanDetailsPage() {
           <Figure label="Repaid">{formatUGX(loan.repaid)}</Figure>
           {loan.lateFees.amount > 0 ? (
             <>
-              <Figure label="Late fees">{formatUGX(loan.lateFees.amount)}</Figure>
-              {/* What the borrower owes now includes the late fees; the loan balance alone is shown under it */}
+              <Figure label="Late fees charged">{formatUGX(loan.lateFees.amount)}</Figure>
+              {/* The balance already includes the late fees that are still unpaid */}
               <Figure label="Owed now" strong>
-                {formatUGX(loan.balance + loan.lateFees.amount)}
-                <span className={styles.figureHint}>Balance {formatUGX(loan.balance)} + late fees</span>
+                {formatUGX(loan.balance)}
+                <span className={styles.figureHint}>Includes any late fees not yet paid</span>
               </Figure>
             </>
           ) : (
@@ -270,7 +270,7 @@ export function LoanDetailsPage() {
                     </span>
                     <span className={styles.paymentWhen}>
                       {text.delivery === "scheduled" ? `Goes ${formatShortDate(text.at)}` : `${formatShortDate(text.at)}, ${formatTime(text.at)}`}
-                      <span className={styles.muted}>{text.delivery === "failed" ? "Didn't reach the phone" : text.delivery === "scheduled" ? "Scheduled" : "Sent"}</span>
+                      <span className={styles.muted}>{text.delivery === "failed" ? "Didn't reach the phone" : text.delivery === "scheduled" ? "Scheduled" : text.delivery === "pending" ? "Sending…" : "Sent"}</span>
                     </span>
                   </li>
                 ))}

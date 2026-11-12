@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useRef, useState, type CSSProperties } from "react";
 import { useSearchParams } from "react-router";
 import { ApiError } from "../../api/client";
 import { useExportReport, useReport } from "../../api/reports";
@@ -7,8 +7,10 @@ import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { Pagination } from "../../components/ui/Pagination";
+import { Select } from "../../components/ui/Select";
 import { useToast } from "../../components/ui/Toast";
 import { formatDate, toDateInputValue } from "../../lib/format";
+import { useDismiss } from "../../lib/useDismiss";
 import { ReportChart } from "./ReportChart";
 import { formatValue } from "./reportFormat";
 import styles from "./Reports.module.css";
@@ -96,11 +98,18 @@ export function ReportsPage() {
       return next;
     });
 
-  const download = (format: "pdf" | "csv") =>
-    exportReport
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const closeMenu = () => setMenuOpen(false);
+  useDismiss(menuRef, menuOpen, closeMenu);
+
+  const download = (format: "pdf" | "csv") => {
+    closeMenu();
+    return exportReport
       .mutateAsync({ name: active.name, from: dates.from, to: dates.to, format })
       .then(() => showToast({ message: `${active.label} report downloaded (${format.toUpperCase()}).` }))
       .catch((error) => showToast({ message: error instanceof ApiError ? error.message : "The export didn't work. Try again." }));
+  };
 
   return (
     <>
@@ -109,18 +118,46 @@ export function ReportsPage() {
           <h1>Reports</h1>
           <p className={styles.subtitle}>{seesBranch ? "The whole market" : "Your portfolio"}</p>
         </div>
-        {can("reports.export") && (
-          <div className={styles.downloads}>
-            <Button variant="secondary" onClick={() => download("pdf")} disabled={exportReport.isPending || !report}>
-              <Icon name="upload" size={16} strokeWidth={1.8} className={styles.exportIcon} />
-              Download PDF
-            </Button>
-            <Button variant="secondary" onClick={() => download("csv")} disabled={exportReport.isPending || !report}>
-              <Icon name="upload" size={16} strokeWidth={1.8} className={styles.exportIcon} />
-              Download CSV
-            </Button>
-          </div>
-        )}
+        <div className={styles.headerActions}>
+          {!snapshot && (
+            <div className={styles.dateControls}>
+              <Select
+                aria-label="Dates"
+                className={styles.rangeSelect}
+                value={range}
+                options={ranges}
+                onChange={(value) => update({ range: value === defaultRange ? null : value, ...(value === "custom" ? { from: dates.from, to: dates.to } : { from: null, to: null }) })}
+              />
+              {range === "custom" && (
+                <div className={styles.custom}>
+                  <label htmlFor={ids.from}>From</label>
+                  <input id={ids.from} type="date" value={dates.from} max={dates.to} onChange={(event) => update({ from: event.target.value || null })} />
+                  <label htmlFor={ids.to}>To</label>
+                  <input id={ids.to} type="date" value={dates.to} min={dates.from} max={toDateInputValue(new Date())} onChange={(event) => update({ to: event.target.value || null })} />
+                </div>
+              )}
+            </div>
+          )}
+          {can("reports.export") && (
+            <div className={styles.menuAnchor} ref={menuRef}>
+              <Button variant="secondary" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)} disabled={exportReport.isPending || !report}>
+                <Icon name="upload" size={16} strokeWidth={1.8} className={styles.exportIcon} />
+                Download
+                <Icon name="chevronDown" size={16} strokeWidth={1.8} />
+              </Button>
+              {menuOpen && (
+                <div className={styles.downloadMenu} role="menu" aria-label="Download this report">
+                  <button type="button" role="menuitem" onClick={() => download("pdf")}>
+                    PDF
+                  </button>
+                  <button type="button" role="menuitem" onClick={() => download("csv")}>
+                    CSV
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className={styles.tabs} role="tablist" aria-label="Reports">
@@ -133,32 +170,7 @@ export function ReportsPage() {
 
       <div className={styles.toolbar}>
         <p className={styles.reportDescription}>{active.description}</p>
-        {snapshot ? (
-          <p className={styles.asOf}>As of today, {formatDate(new Date().toISOString())}</p>
-        ) : (
-          <div className={styles.dateControls}>
-            <div className={styles.ranges} role="group" aria-label="Dates">
-              {ranges.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  aria-pressed={range === option.value}
-                  onClick={() => update({ range: option.value === defaultRange ? null : option.value, ...(option.value === "custom" ? { from: dates.from, to: dates.to } : { from: null, to: null }) })}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-            {range === "custom" && (
-              <div className={styles.custom}>
-                <label htmlFor={ids.from}>From</label>
-                <input id={ids.from} type="date" value={dates.from} max={dates.to} onChange={(event) => update({ from: event.target.value || null })} />
-                <label htmlFor={ids.to}>To</label>
-                <input id={ids.to} type="date" value={dates.to} min={dates.from} max={toDateInputValue(new Date())} onChange={(event) => update({ to: event.target.value || null })} />
-              </div>
-            )}
-          </div>
-        )}
+        {snapshot && <p className={styles.asOf}>As of today, {formatDate(new Date().toISOString())}</p>}
       </div>
 
       {isError ? (
@@ -174,7 +186,7 @@ export function ReportsPage() {
         <div className={styles.loading} aria-busy="true" aria-label="Loading the report" />
       ) : (
         <div className={`${styles.report} ${isFetching ? styles.refreshing : ""}`} role="tabpanel" aria-label={active.label}>
-          <dl className={styles.figures}>
+          <dl className={styles.figures} style={{ "--figure-count": Math.min(report.figures.length, 4) } as CSSProperties}>
             {report.figures.map((figure) => (
               <div key={figure.label} className={styles.figure}>
                 <dt>{figure.label}</dt>

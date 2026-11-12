@@ -138,6 +138,8 @@ function productProblem(p: SaveLoanProductRequest, limits: ProductLimits) {
   if (p.amount.max < p.amount.min) return "The biggest loan can't be smaller than the smallest.";
   if (p.amount.max > limits.biggestLoan) return `The biggest loan can be up to ${formatUGX(limits.biggestLoan)}.`;
   if (!Number.isInteger(p.numberOfPayments) || p.numberOfPayments < 1 || p.numberOfPayments > limits.maxPayments) return `Loan length: ${1} to ${limits.maxPayments} payments.`;
+  if (p.fee.type !== "none" && !Number.isInteger(p.fee.value)) return "The fee must be a whole number.";
+  if (p.penalty.type !== "none" && !Number.isInteger(p.penalty.value)) return "The late fee must be a whole number.";
   if (p.fee.type === "percent" && p.fee.value > limits.maxFeePercent) return `The fee can be up to ${limits.maxFeePercent}%.`;
   if (p.fee.type === "fixed" && p.fee.value >= p.amount.min) return "A fixed fee must be less than the smallest loan.";
   if (p.penalty.type === "percent" && p.penalty.value > limits.maxLateFeePercent) return `Late fees can be up to ${limits.maxLateFeePercent}% of the overdue amount.`;
@@ -343,7 +345,7 @@ function ProductForm({ product, copyOf, limits }: { product: LoanProduct | null;
                   ]}
                 />
                 {form.fee.type !== "none" && (
-                  <NumberField id={ids.fee} value={form.fee.value} onChange={(value) => set("fee", { ...form.fee, value })} min={0} max={form.fee.type === "percent" ? 20 : form.amount.min - 1} unit={form.fee.type === "percent" ? "%" : "UGX"} unitBefore={form.fee.type === "fixed"} wide={form.fee.type === "fixed"} allowDecimal={form.fee.type === "percent"} />
+                  <NumberField id={ids.fee} value={form.fee.value} onChange={(value) => set("fee", { ...form.fee, value })} min={0} max={form.fee.type === "percent" ? 20 : form.amount.min - 1} unit={form.fee.type === "percent" ? "%" : "UGX"} unitBefore={form.fee.type === "fixed"} wide={form.fee.type === "fixed"} allowDecimal={false} />
                 )}
               </span>
             </SettingRow>
@@ -376,7 +378,7 @@ function ProductForm({ product, copyOf, limits }: { product: LoanProduct | null;
                   ]}
                 />
                 {form.penalty.type !== "none" && (
-                  <NumberField id={ids.penalty} value={form.penalty.value} onChange={(value) => set("penalty", { ...form.penalty, value })} min={0} max={form.penalty.type === "percent" ? 20 : 10_000_000} unit={form.penalty.type === "percent" ? "%" : "UGX"} unitBefore={form.penalty.type === "fixed"} wide={form.penalty.type === "fixed"} allowDecimal={form.penalty.type === "percent"} />
+                  <NumberField id={ids.penalty} value={form.penalty.value} onChange={(value) => set("penalty", { ...form.penalty, value })} min={0} max={form.penalty.type === "percent" ? 20 : 10_000_000} unit={form.penalty.type === "percent" ? "%" : "UGX"} unitBefore={form.penalty.type === "fixed"} wide={form.penalty.type === "fixed"} allowDecimal={false} />
                 )}
               </span>
             </SettingRow>

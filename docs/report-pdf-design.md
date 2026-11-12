@@ -1,7 +1,7 @@
 # Report PDF: design reference for the backend
 
-`GET /reports/{name}/export?format=pdf` returns the report as a PDF. The demo draws it in `src/mocks/reportPdf.ts`
-(with `src/mocks/pdfKit.ts`); the backend should produce the same layout. The data is the same `Report` object the screen uses.
+`GET /reports/{name}/export?format=pdf` returns the report as a PDF. The old mock drew it in `src/mocks/reportPdf.ts`
+(with `src/mocks/pdfKit.ts`, in the git history at commit `ff3cc8e`); the backend produces the same layout. The data is the same `Report` object the screen uses.
 
 **Page:** A4 portrait, 40 pt margins, Helvetica (Arial is fine). Colours are the app's: ink `#1B2430`, muted `#5B6470`,
 lines `#E3E7ED`, cards white with a `#E3E7ED` border, table header `#EEF1F5`, primary `#2185F6`; chart colours `--chart-1..5` in `src/styles/tokens.css`.

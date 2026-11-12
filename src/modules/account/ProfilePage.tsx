@@ -1,6 +1,6 @@
-import { useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import { Link } from "react-router";
-import { useMyProfile, useRemoveMyPhoto, useUpdateMyPhone, useUploadMyPhoto } from "../../api/account";
+import { useMyProfile, useUpdateMyPhone } from "../../api/account";
 import { ApiError } from "../../api/client";
 import { useAuth } from "../../auth/AuthContext";
 import { DATA_SCOPES, PERMISSION_CATALOG, PERMISSION_MODULES } from "../../auth/permissions";
@@ -11,7 +11,6 @@ import { formatRelativeDay } from "../../lib/format";
 import { normalisePhone } from "../../lib/phone";
 import styles from "./Account.module.css";
 
-const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
 const capitalise = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /** My profile: your details, what your role lets you do, and your recent sign-ins. */
@@ -126,47 +125,12 @@ export function ProfilePage() {
 }
 
 function PhotoAndName({ name, photoUrl, roleLine }: { name: string; photoUrl: string | null; roleLine: string }) {
-  const showToast = useToast();
-  const input = useRef<HTMLInputElement>(null);
-  const upload = useUploadMyPhoto();
-  const remove = useRemoveMyPhoto();
-  const busy = upload.isPending || remove.isPending;
-
-  const choose = (file: File | undefined) => {
-    if (!file) return;
-    if (!["image/jpeg", "image/png"].includes(file.type)) return showToast({ message: "Use a JPEG or PNG photo." });
-    if (file.size > MAX_PHOTO_BYTES) return showToast({ message: "The photo is larger than 2 MB." });
-    upload
-      .mutateAsync(file)
-      .then(() => showToast({ message: "Photo updated." }))
-      .catch((error) => showToast({ message: error instanceof ApiError ? error.message : "The photo couldn't be uploaded. Try again." }));
-  };
-
   return (
     <div className={styles.identity}>
       <Avatar name={name} src={photoUrl} size={72} />
       <div className={styles.identityText}>
         <p className={styles.name}>{name}</p>
         <p className={styles.hint}>{roleLine}</p>
-        <div className={styles.photoActions}>
-          <input ref={input} type="file" accept="image/jpeg,image/png" hidden onChange={(event) => {
-              choose(event.target.files?.[0]);
-              event.target.value = "";
-            }} aria-label="Choose a photo" />
-          <button type="button" className={styles.textButton} onClick={() => input.current?.click()} disabled={busy}>
-            {upload.isPending ? "Uploading…" : photoUrl ? "Change photo" : "Add photo"}
-          </button>
-          {photoUrl && (
-            <button
-              type="button"
-              className={`${styles.textButton} ${styles.textButtonMuted}`}
-              onClick={() => remove.mutateAsync().then(() => showToast({ message: "Photo removed." }))}
-              disabled={busy}
-            >
-              Remove
-            </button>
-          )}
-        </div>
       </div>
     </div>
   );

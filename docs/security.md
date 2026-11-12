@@ -23,7 +23,7 @@ can call the API directly.
 | CSRF token sent on every request that changes data (double-submit cookie, see 2.2) | `src/api/client.ts` |
 | API responses are never stored in the browser's HTTP cache (`cache: "no-store"`) | `src/api/client.ts` |
 | Content Security Policy in production builds (scripts, styles, fonts, images and API calls only from listed sources) | `vite.config.ts` |
-| Production builds contain **no** mock API, sample data or demo accounts; `npm run build:demo` is for presentations only | `vite.config.ts` (`__MOCK_API_ENABLED__`) |
+| The code contains **no** mock API, sample data or demo accounts, and a build refuses to run without the backend address | `vite.config.ts` (`VITE_API_URL` check) |
 | No source maps in production (they would publish readable source code) | `vite.config.ts` |
 | Permission checks in the UI (`can("applications.approve")`), never role names | `src/auth/permissions.ts` |
 | Nothing sensitive in browser storage: only UI preferences and the last-activity time | — |
@@ -113,7 +113,7 @@ Cache-Control: no-store            (for index.html; hashed files in /assets can 
 ```
 
 - Serve `index.html` for every app path (`/login`, `/applications/…`), so deep links work.
-- **Deploy `npm run build`, never `npm run build:demo`**, to any environment with real data.
+- **Deploy `npm run build`** with `VITE_API_URL` set to the backend. There is no demo build any more.
 
 ---
 
@@ -122,6 +122,6 @@ Cache-Control: no-store            (for index.html; hashed files in /assets can 
 - [ ] All of section 2 implemented and tested, including the QA scenarios in the proposal.
 - [ ] Independent penetration test (or at least an OWASP Top 10 review) of the backend.
 - [ ] `npm audit --omit=dev` shows no vulnerabilities; dependencies up to date.
-- [ ] The demo tools (`src/demo`, `src/mocks`, `public/mockServiceWorker.js`) removed from the codebase.
+- [x] The demo tools (`src/demo`, `src/mocks`, `public/mockServiceWorker.js`) removed from the codebase (12 Nov 2026).
 - [ ] Hosting headers in section 3 verified (e.g. with securityheaders.com).
 - [ ] Idle and absolute timeouts confirmed with the client.

@@ -8,6 +8,7 @@ import { Icon } from "../../components/ui/Icon";
 import { useToast } from "../../components/ui/Toast";
 import { formatRelativeDay } from "../../lib/format";
 import styles from "./Account.module.css";
+import { deviceName, placeName } from "../../lib/deviceName";
 
 const capitalise = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
@@ -136,9 +137,9 @@ function DevicesCard() {
           {devices?.map((device) => (
             <li key={device.id}>
               <span>
-                <b>{device.device}</b>
+                <b>{deviceName(device.device)}</b>
                 <span className={styles.hint}>
-                  {device.location} · {device.current ? "Now" : capitalise(formatRelativeDay(device.lastActiveAt))}
+                  {placeName(device.location)} · {device.current ? "Now" : capitalise(formatRelativeDay(device.lastActiveAt))}
                 </span>
               </span>
               {device.current && <span className={`${styles.chip} ${styles.chipOk}`}>This device</span>}

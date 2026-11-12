@@ -1,5 +1,5 @@
 // Response shapes of the API, as documented in docs/api-contract.md.
-// The mock API and the screens both use these, so a contract change shows up as a type error.
+// The screens use these, so a contract change shows up as a type error.
 import type { DataScope, Permission } from "../auth/permissions";
 
 /** GET /search?q= */
@@ -1008,7 +1008,8 @@ export interface PaymentList {
   page: number;
   pageSize: number;
   /** Over everything matching */
-  totals: { collected: number; payments: number; byMethod: Record<"MTN MoMo" | "Airtel Money" | "Cash", number> };
+  /** `byMethod` lists only the methods that have payments in these dates */
+  totals: { collected: number; payments: number; byMethod: Partial<Record<"MTN MoMo" | "Airtel Money" | "Cash", number>> };
 }
 
 // ---------- Settings: staff users and roles ----------
@@ -1291,7 +1292,8 @@ export interface ClientMessage {
   /** ISO date-time it was sent, or the date it will be sent */
   at: string;
   message: string;
-  delivery: "sent" | "failed" | "scheduled";
+  /** `pending`: queued, not yet handed to the SMS provider */
+  delivery: "sent" | "failed" | "scheduled" | "pending";
 }
 
 /** GET /settings (every signed-in user: the app follows these) */
@@ -1446,7 +1448,8 @@ export interface SentText {
   phone: string;
   message: string;
   sentBy: string;
-  delivery: "sent" | "failed";
+  /** `pending`: queued, not yet handed to the SMS provider */
+  delivery: "sent" | "failed" | "pending";
 }
 
 export interface SentTextList {

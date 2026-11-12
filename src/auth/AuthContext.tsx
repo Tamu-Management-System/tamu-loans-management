@@ -27,7 +27,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const { data, isPending, error, refetch } = useQuery<CurrentUser | null>({
     queryKey: ["me"],
-    queryFn: () => api.get<CurrentUser>("/me"),
+    queryFn: async () => {
+      const user = await api.get<CurrentUser>("/me");
+      return { ...user, branch: user.branch ?? "" };
+    },
     staleTime: Infinity,
     retry: (failureCount, err) => !(err instanceof ApiError && err.status === 401) && failureCount < 1,
   });

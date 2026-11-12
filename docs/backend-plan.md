@@ -1,7 +1,7 @@
 # Tamu Loans: backend plan
 
-For the backend developer. The frontend is built and runs against a mock API that behaves like the real backend
-should. This plan says what to build, in what order, and the rules behind the numbers. The endpoint-by-endpoint
+For the backend developer. The frontend was built against a mock API (now removed, see "How to start") and now runs against the real backend.
+This plan says what to build, in what order, and the rules behind the numbers. The endpoint-by-endpoint
 detail (requests, responses, errors) is in [api-contract.md](api-contract.md); security requirements are in
 [security.md](security.md).
 
@@ -11,14 +11,12 @@ The Arrears & SMS and Accounting screens are built (see "Arrears & SMS, Accounti
 
 ## 1. How to start
 
-1. Run the frontend: `npm install`, `npm run dev` (mock API on), sign in with a demo account (password
-   `tamu2026`). Use the demo controls (bottom right) to switch between Loan officer, Finance and Admin.
-2. The mock is the reference implementation: `src/mocks/handlers.ts` (every endpoint, with its checks),
-   `src/mocks/seed.ts` (how sample data is shaped), `src/mocks/portfolioFigures.ts` (the calculations below),
-   `src/lib/repaymentSchedule.ts` (interest, fees, schedule, late fees: **port this exactly**).
+1. Run the frontend: `npm install`, set `VITE_API_URL` (see [running-against-the-backend.md](running-against-the-backend.md)), `npm run dev`.
+2. The mock API that was the reference implementation (`src/mocks/handlers.ts`, `seed.ts`, `portfolioFigures.ts`) was removed from the
+   code once the frontend ran against the real backend. It is in the git history at commit `ff3cc8e` if a rule needs checking.
+   `src/lib/repaymentSchedule.ts` (interest, fees, schedule, late fees) is still in the frontend and matches the backend's.
 3. Response shapes are TypeScript types in `src/api/types.ts`. Match them field for field.
-4. Point the frontend at your API with `VITE_API_URL` and build with `npm run build` (no mocks). Every screen
-   should work unchanged.
+4. Point the frontend at your API with `VITE_API_URL` and build with `npm run build`. Every screen should work unchanged.
 
 ## 2. Data model
 
@@ -37,7 +35,7 @@ Ugandan shillings (integers). Dates are calendar dates in Kampala time (EAT, UTC
 | `sessions` | id, user_id, device, location, created_at, last_active_at, ended_at | HTTP-only cookie; see security.md. |
 | `roles` | id, name, description, built_in, data_scope (`own` / `branch`) | Built-in: Admin, Finance, Loan officer (read-only). |
 | `role_permissions` | role_id, permission | Permission list in api-contract.md. Save adds required permissions. |
-| `settings` | section (`business`, `loanRules`, `payments`, `security`), value (JSON), changed_at, changed_by | Defaults in `src/mocks/systemSettings.ts`. |
+| `settings` | section (`business`, `loanRules`, `payments`, `security`), value (JSON), changed_at, changed_by | Defaults are in the backend's `utils/system-settings.ts` (they match the old mock's, commit `ff3cc8e`). |
 | `loan_products` | id, name, description, status (`active` / `archived`), repayment_schedule (`daily` / `weekly` / `monthly`), interest_rate_percent, interest_per (`loan` / `day` / `week` / `month`), amount_min, amount_max, number_of_payments (loan length), fee_type/value/collection, penalty_type/value/per/grace_days, updated_at/by | Defaults: Daily 0.6% a day, Weekly 4.5% a week, Monthly 18% a month, all one month long. |
 | `borrowers` | id (`B-0001`), full_name, nin (encrypted, unique), phone (mobile money), secondary_phone, email (optional, clients only), gender, address, occupation (optional), premises, next_of_kin_name/phone/relationship, officer_id, registered_on, branch | The client's confirmed fields (questionnaire, 2 Nov 2026). No work/income. |
 | `phone_change_requests` | borrower_id, new_phone, requested_by, requested_at, decided_by, decision | Four-eyes on the payout number. |
@@ -146,7 +144,7 @@ Each phase leaves the frontend working for the screens it covers (switch screens
 
 ## 5. Sample data
 
-`src/mocks/seed.ts` shows the shape to aim for in a staging database: about 190 borrowers across five officers,
+The old mock's sample data (commit `ff3cc8e`, and the backend's own `demo-data.json`) shows the shape to aim for in a staging database: about 190 borrowers across five officers,
 each with up to a year of one-month loans (most repaid on time, some often late, a few stopped paying and went to
 recovery), real schedules and payments, and applications at every stage. Never load sample data into production.
 

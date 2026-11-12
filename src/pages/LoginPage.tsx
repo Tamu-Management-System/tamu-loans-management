@@ -1,4 +1,4 @@
-import { lazy, Suspense, useId, useRef, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 import { Navigate, useSearchParams } from "react-router";
 import { ApiError } from "../api/client";
 import { useSignIn } from "../api/auth";
@@ -10,9 +10,6 @@ import { Icon } from "../components/ui/Icon";
 import styles from "./LoginPage.module.css";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-// TEMPORARY demo accounts; not part of production builds (__MOCK_API_ENABLED__ in vite.config.ts)
-const DemoAccounts = __MOCK_API_ENABLED__ ? lazy(() => import("../demo/DemoAccounts").then((module) => ({ default: module.DemoAccounts }))) : null;
 
 /** Why the user is on the login page, when it wasn't their choice. */
 const SESSION_END_NOTICES: Record<SessionEndReason, string> = {
@@ -169,19 +166,6 @@ export function LoginPage() {
           <Button type="submit" className={styles.submit} disabled={signIn.isPending}>
             {signIn.isPending ? "Signing in…" : "Sign in"}
           </Button>
-
-          {DemoAccounts && (
-            <Suspense fallback={null}>
-              <DemoAccounts
-                onPick={(demoEmail, demoPassword) => {
-                  setEmail(demoEmail);
-                  setPassword(demoPassword);
-                  setErrors({});
-                  signIn.reset();
-                }}
-              />
-            </Suspense>
-          )}
         </form>
     </AuthLayout>
   );

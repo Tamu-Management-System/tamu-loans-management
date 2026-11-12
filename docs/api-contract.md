@@ -1,9 +1,10 @@
 # Tamu Loans — API contract
 
 This is the API the frontend expects, endpoint by endpoint. Start with [backend-plan.md](backend-plan.md): the
-data model, the rules and calculations, and the order to build in. This file is the detail behind it. While the backend doesn't exist,
-the mock API in `src/mocks/handlers.ts` answers these requests. Keep the two in step:
-when an endpoint here changes, change its mock handler too.
+data model, the rules and calculations, and the order to build in. This file is the detail behind it. The frontend sends these requests
+through `src/api/backendRoutes.ts`, which turns each one into the backend's own route (the backend's table is `docs/frontend-mapping.md`
+in its repository). When an endpoint here changes, change that table too.
+(A mock API used to answer these requests; it was removed once the frontend ran against the real backend, and is in the git history at commit `ff3cc8e`.)
 
 ## Conventions
 
@@ -17,7 +18,7 @@ when an endpoint here changes, change its mock handler too.
     out of the address, logs and browser history. The `/query` ending keeps a read apart from a route that creates something at the same path
     (`POST /loans` and `POST /loans/query` are different routes). Real `GET`s are only for downloads and `GET /me`.
   - **List answers** are `{ "page": { "count": 120, "content": [ … ] }, "success": true, "message": "…" }`; a single record is
-    `{ "content": { … }, "success": true, "message": "…" }`. The mock API still answers with the shapes shown below; the frontend maps between them.
+    `{ "content": { … }, "success": true, "message": "…" }`. The shapes shown below are what the screens read.
   - **Sign-in** is `POST /api/public/account/login` (see below). The frontend sends `Authorization: Bearer <idToken>` and keeps the token in
     memory only; the `Refresh` cookie renews it.
   - **How the frontend builds a read** (`src/api/backend.ts`, `api.read` and `api.readPage` in `src/api/client.ts`): the route is
@@ -94,8 +95,8 @@ with a clear `message`.
 **Reads and downloads.** A heading that says `POST <path>/query` is a **read**: the body is `{ "query": { … } }` with the parameters named under the
 heading, and nothing sensitive goes in the address. The `/query` ending separates a read from a route that creates or changes something at the same
 path. Only the downloads (`/loans/export`, a document's file, `/loans/{id}/application-pdf`, `/audit/export`, `/reports/{name}/export`) and
-`GET /me` stay real `GET`s. The mock API (`src/mocks/handlers.ts`) still answers these reads at their old `GET` paths while the real backend is
-not ready; when the frontend switches to the real backend it sends the `POST` form described here.
+`GET /me` stay real `GET`s. The screens' code writes a read as a `GET` with its filters in the address; `src/api/backendRoutes.ts` turns it into
+the `POST … /query` form described here before it is sent.
 
 Each route below is what the **screen needs**. [backend-mapping.md](backend-mapping.md) says which of them the backend already covers
 with its generic routes and which still have to be built.
@@ -109,10 +110,10 @@ Signs a staff member in with email and password. **On the real backend:** `POST 
 ```
 
 - The backend looks the account up by the staff email (trimmed, lower-cased); the frontend sends it as `username`.
-  (The mock API takes `{ "email", "password" }`; the frontend maps between them.)
+  (The screens' sign-in form has an "Email" field; the client maps it to `username`.)
 - On success: `{ "content": { "idToken": "…", "user": { … }, "accounts": { "staffAccount": { … } } } }`, the same token in the
   `Authorization` response header, and a `Refresh` cookie (`HttpOnly`; it should also be `SameSite` and `Secure`).
-  The mock API answers `204` with a session cookie; either way the frontend then loads the user with its permissions (`GET /me`).
+  The frontend then loads the user with their permissions (`GET /me`).
 - `401` with `{ "message": "That email and password don't match. Check them and try again." }` on a wrong
   email or password. Use the same message for both, so the screen doesn't reveal which emails exist.
 - After 5 failed sign-ins the backend locks the account for 15 minutes and answers `401` with "Account is temporarily locked".
@@ -306,7 +307,7 @@ type (see `WorklistTask` in `src/api/types.ts`). Common fields:
 }
 ```
 
-Priority rules used in the mock (confirm with the client): promises due today, loans more than 30 days late,
+Priority rules (confirm with the client): promises due today, loans more than 30 days late,
 loans with a warning and applications waiting over 48 hours are `do-first` or `do-today`.
 
 ### `POST /loans/query`
@@ -403,7 +404,7 @@ activity if they have `audit.view`, team performance).
 
 **Scope:** the role's data access (`own` or `branch`). Shapes are in `src/api/types.ts`. Every figure here is
 **calculated from the loans, their schedules and their payments** (never stored or typed in); the definitions are
-in [backend-plan.md](backend-plan.md#calculations) and the mock's `src/mocks/portfolioFigures.ts` does exactly that.
+in [backend-plan.md](backend-plan.md#calculations).
 PAR, arrears and early warnings feed the sidebar risk card, the dashboard portfolio cards and the Arrears & SMS page.
 
 ### `POST /portfolio/risk/query`

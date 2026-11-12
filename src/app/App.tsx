@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ReactNode } from "react";
+import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApiError } from "../api/client";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router";
@@ -8,24 +8,6 @@ import { RequirePermission } from "../auth/RequirePermission";
 import { endSession } from "../auth/session";
 import { AppShell } from "../components/layout/AppShell";
 import { ToastProvider } from "../components/ui/Toast";
-import { ApplicationReviewPage } from "../modules/applications/ApplicationReviewPage";
-import { ContinueApplicationPage } from "../modules/applications/ContinueApplicationPage";
-import { ApplicationsPage } from "../modules/applications/ApplicationsPage";
-import { NewApplicationPage } from "../modules/applications/NewApplicationPage";
-import { LoanDetailsPage } from "../modules/loans/LoanDetailsPage";
-import { PaymentsPage } from "../modules/payments/PaymentsPage";
-import { SettingsPage } from "../modules/settings/SettingsPage";
-import { AuditLogPage } from "../modules/audit/AuditLogPage";
-import { AccountingPage } from "../modules/accounting/AccountingPage";
-import { ArrearsPage } from "../modules/arrears/ArrearsPage";
-import { ReportsPage } from "../modules/reports/ReportsPage";
-import { AccountSettingsPage } from "../modules/account/AccountSettingsPage";
-import { HelpPage } from "../modules/account/HelpPage";
-import { NotificationsPage } from "../modules/account/NotificationsPage";
-import { ProfilePage } from "../modules/account/ProfilePage";
-import { LoansPage } from "../modules/loans/LoansPage";
-import { BorrowerProfilePage } from "../modules/borrowers/BorrowerProfilePage";
-import { BorrowersPage } from "../modules/borrowers/BorrowersPage";
 import { DashboardPage } from "../pages/DashboardPage";
 import { LoginPage } from "../pages/LoginPage";
 import { MorePage } from "../pages/MorePage";
@@ -39,9 +21,15 @@ function handleSessionExpiry(error: unknown, queryKey?: readonly unknown[]) {
   }
 }
 
+// How long fetched data counts as fresh. Opening a page again inside this time shows what is already there instead of asking the
+// server again (the big pages are slow to build). Every change (record a payment, approve, ...) refreshes what it affects at once,
+// and the dashboard, bell and menu badges still refresh on their own timers. This is screen tuning, not a business rule.
+const DATA_FRESH_MS = 30_000;
+
 const queryClient: QueryClient = new QueryClient({
   defaultOptions: {
     queries: {
+      staleTime: DATA_FRESH_MS,
       retry: (failureCount, error) => !(error instanceof ApiError && error.status === 401) && failureCount < 1,
       refetchOnWindowFocus: false,
     },
@@ -60,10 +48,30 @@ import { SetPasswordPage } from "../modules/set-password/SetPasswordPage";
 // The clients' online application form: its own bundle, outside the staff app (no sign-in, no menus)
 import { FormSkeletonPage } from "../modules/online-application/FormSkeleton";
 
-const OnlineApplicationPage = lazy(() => import("../modules/online-application/OnlineApplicationPage").then((module) => ({ default: module.OnlineApplicationPage })));
+// Each screen is its own file that loads when it is first opened, so signing in does not download every screen
+const screen = <Name extends string, Props extends object>(load: () => Promise<Record<Name, ComponentType<Props>>>, name: Name) =>
+  lazy(() => load().then((module) => ({ default: module[name] })));
 
-// TEMPORARY demo controls; not part of production builds (__MOCK_API_ENABLED__ in vite.config.ts)
-const DemoControls = __MOCK_API_ENABLED__ ? lazy(() => import("../demo/DemoControls").then((module) => ({ default: module.DemoControls }))) : null;
+const ApplicationReviewPage = screen(() => import("../modules/applications/ApplicationReviewPage"), "ApplicationReviewPage");
+const ContinueApplicationPage = screen(() => import("../modules/applications/ContinueApplicationPage"), "ContinueApplicationPage");
+const ApplicationsPage = screen(() => import("../modules/applications/ApplicationsPage"), "ApplicationsPage");
+const NewApplicationPage = screen(() => import("../modules/applications/NewApplicationPage"), "NewApplicationPage");
+const LoanDetailsPage = screen(() => import("../modules/loans/LoanDetailsPage"), "LoanDetailsPage");
+const PaymentsPage = screen(() => import("../modules/payments/PaymentsPage"), "PaymentsPage");
+const SettingsPage = screen(() => import("../modules/settings/SettingsPage"), "SettingsPage");
+const AuditLogPage = screen(() => import("../modules/audit/AuditLogPage"), "AuditLogPage");
+const AccountingPage = screen(() => import("../modules/accounting/AccountingPage"), "AccountingPage");
+const ArrearsPage = screen(() => import("../modules/arrears/ArrearsPage"), "ArrearsPage");
+const ReportsPage = screen(() => import("../modules/reports/ReportsPage"), "ReportsPage");
+const AccountSettingsPage = screen(() => import("../modules/account/AccountSettingsPage"), "AccountSettingsPage");
+const HelpPage = screen(() => import("../modules/account/HelpPage"), "HelpPage");
+const NotificationsPage = screen(() => import("../modules/account/NotificationsPage"), "NotificationsPage");
+const ProfilePage = screen(() => import("../modules/account/ProfilePage"), "ProfilePage");
+const LoansPage = screen(() => import("../modules/loans/LoansPage"), "LoansPage");
+const BorrowerProfilePage = screen(() => import("../modules/borrowers/BorrowerProfilePage"), "BorrowerProfilePage");
+const BorrowersPage = screen(() => import("../modules/borrowers/BorrowersPage"), "BorrowersPage");
+
+const OnlineApplicationPage = lazy(() => import("../modules/online-application/OnlineApplicationPage").then((module) => ({ default: module.OnlineApplicationPage })));
 
 /** Menu pages that have been built; the others show a placeholder. */
 const BUILT_PAGES: Record<string, ReactNode> = {
@@ -82,17 +90,12 @@ const BUILT_PAGES: Record<string, ReactNode> = {
   "/accounting": <AccountingPage />,
 };
 
-/** Everything a signed-in user sees: the app shell, the inactivity timeout and (in demos) the demo controls. */
+/** Everything a signed-in user sees: the app shell and the inactivity timeout. */
 function SignedInApp() {
   return (
     <RequireSignIn>
       <AppShell />
       <IdleSessionGuard />
-      {DemoControls && (
-        <Suspense fallback={null}>
-          <DemoControls />
-        </Suspense>
-      )}
     </RequireSignIn>
   );
 }

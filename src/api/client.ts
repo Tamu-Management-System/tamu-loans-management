@@ -1,8 +1,11 @@
 // The only place the app talks to the backend. Screens call these helpers
-// (usually through TanStack Query), never fetch() directly, so switching from
-// the mock API to the real one is a config change: set VITE_API_URL.
+// (usually through TanStack Query), never fetch() directly. Every call is turned into the backend's own
+// route by backendRoutes.ts first, so no screen knows the backend's paths.
 import { backendPath, type BackendEnvelope, type BackendModel, type BackendPageEnvelope, type BackendQuery, type BackendReadAction } from "./backend";
+import { REFRESH_PATH, SIGN_IN_PATH, SIGN_OUT_PATH, toBackend } from "./backendRoutes";
 
+// The address of the backend API: a full address (https://api.example.com/api) or "/api" when the hosting passes /api on to the backend.
+// Required for a build; `npm run dev` falls back to /api (see API_PROXY_TARGET in vite.config.ts).
 const BASE_URL = import.meta.env.VITE_API_URL ?? "/api";
 
 // The real backend signs people in with a token (the login answer's idToken) sent as `Authorization: Bearer`.
@@ -62,26 +65,72 @@ export function newIdempotencyKey() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
 }
 
-/** Sends a request and returns the response, or throws an ApiError with the server's message. */
-async function send(method: string, path: string, body?: unknown, options: RequestOptions = {}): Promise<Response> {
-  const isUpload = body instanceof FormData;
+interface Prepared {
+  method: string;
+  path: string;
+  body?: unknown;
+}
+
+const tokenOf = (data: unknown): string | null => {
+  const idToken = (data as { content?: { idToken?: unknown } } | undefined)?.content?.idToken;
+  return typeof idToken === "string" && idToken ? idToken : null;
+};
+
+/** One network call, with the token and the money-request key. Returns the response whatever its status. */
+function transmit(call: Prepared, options: RequestOptions): Promise<Response> {
+  const isUpload = call.body instanceof FormData;
   const headers: Record<string, string> = {};
   // Money requests carry a key so a retry (a double click, a dropped connection) can't be recorded twice
   if (options.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
   // Uploads: the browser sets the multipart Content-Type (with its boundary) itself
-  if (body !== undefined && !isUpload) headers["Content-Type"] = "application/json";
+  if (call.body !== undefined && !isUpload) headers["Content-Type"] = "application/json";
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-  const csrfToken = SAFE_METHODS.includes(method) ? null : readCookie(CSRF_COOKIE);
+  const csrfToken = SAFE_METHODS.includes(call.method) ? null : readCookie(CSRF_COOKIE);
   if (csrfToken) headers[CSRF_HEADER] = csrfToken;
 
-  const response = await fetch(`${BASE_URL}${path}`, {
-    method,
+  return fetch(`${BASE_URL}${call.path}`, {
+    method: call.method,
     headers,
-    body: body === undefined ? undefined : isUpload ? body : JSON.stringify(body),
+    body: call.body === undefined ? undefined : isUpload ? (call.body as FormData) : JSON.stringify(call.body),
     // Send the session cookie; never keep financial data in the browser's HTTP cache
     credentials: "include",
     cache: "no-store",
   });
+}
+
+// The token lives in memory only, so a reload starts without one. The backend keeps a refresh cookie (HTTP-only, so the page
+// can't read it) that buys a new token. All callers share one renewal at a time.
+let renewal: Promise<boolean> | null = null;
+
+function renewSession(): Promise<boolean> {
+  renewal ??= (async () => {
+    try {
+      const response = await fetch(`${BASE_URL}${REFRESH_PATH}`, { method: "POST", credentials: "include", cache: "no-store" });
+      accessToken = response.ok ? tokenOf(parseJson(await response.text())) : null;
+      return accessToken !== null;
+    } catch {
+      return false;
+    } finally {
+      renewal = null;
+    }
+  })();
+  return renewal;
+}
+
+/** Sends a request and returns the response, or throws an ApiError with the server's message. */
+async function send(method: string, path: string, body?: unknown, options: RequestOptions = {}): Promise<Response> {
+  const call: Prepared = toBackend(method, path, body);
+  const needsSession = call.path.startsWith("/private/");
+  let justRenewed = false;
+  if (needsSession && !accessToken) {
+    // No token (a reload, or signed out): try to renew it first. If that fails there is no session, so don't send a call that can only get a 401
+    if (!(await renewSession())) throw new ApiError(401, fallbackMessage(401));
+    justRenewed = true;
+  }
+
+  let response = await transmit(call, options);
+  // The token ended while the page was open: renew it once and repeat the call (not again if it was renewed a moment ago)
+  if (response.status === 401 && needsSession && !justRenewed && call.path !== SIGN_OUT_PATH && (await renewSession())) response = await transmit(call, options);
 
   if (!response.ok) {
     const data = parseJson(await response.text());
@@ -91,6 +140,8 @@ async function send(method: string, path: string, body?: unknown, options: Reque
         : fallbackMessage(response.status);
     throw new ApiError(response.status, message, data);
   }
+  if (call.path === SIGN_IN_PATH) accessToken = tokenOf(parseJson(await response.clone().text()));
+  if (call.path === SIGN_OUT_PATH) accessToken = null;
   return response;
 }
 

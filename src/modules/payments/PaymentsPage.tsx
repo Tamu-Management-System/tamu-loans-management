@@ -155,7 +155,7 @@ export function PaymentsPage() {
             {METHODS.map((method) => (
               <div key={method}>
                 <dt>{method}</dt>
-                <dd>{formatUGX(totals.byMethod[method])}</dd>
+                <dd>{formatUGX(totals.byMethod[method] ?? 0)}</dd>
               </div>
             ))}
           </dl>

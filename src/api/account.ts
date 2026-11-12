@@ -18,23 +18,6 @@ export function useUpdateMyPhone() {
   return useMutation({ mutationFn: (phone: string) => api.patch<void>("/me/profile", { phone }), onSuccess: refresh });
 }
 
-export function useUploadMyPhoto() {
-  const refresh = useRefreshMe();
-  return useMutation({
-    mutationFn: (photo: File) => {
-      const form = new FormData();
-      form.append("photo", photo);
-      return api.upload<void>("/me/photo", form);
-    },
-    onSuccess: refresh,
-  });
-}
-
-export function useRemoveMyPhoto() {
-  const refresh = useRefreshMe();
-  return useMutation({ mutationFn: () => api.delete<void>("/me/photo"), onSuccess: refresh });
-}
-
 export function useChangePassword() {
   const queryClient = useQueryClient();
   return useMutation({

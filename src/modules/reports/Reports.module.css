@@ -24,10 +24,50 @@
   transform: rotate(180deg);
 }
 
-.downloads {
+.headerActions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px 14px;
+}
+
+.menuAnchor {
+  position: relative;
+}
+
+.downloadMenu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 25;
+  display: flex;
+  min-width: 160px;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--color-surface);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
+}
+
+.downloadMenu button {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.downloadMenu button:hover,
+.downloadMenu button:focus-visible {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
 }
 
 /* ---------- Tabs and dates ---------- */
@@ -88,37 +128,8 @@
   gap: 10px;
 }
 
-.ranges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 12px;
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
-}
-
-.ranges button {
-  min-height: 34px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 9px;
-  background: none;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-
-.ranges button:hover {
-  color: var(--color-text);
-}
-
-.ranges button[aria-pressed="true"] {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-  font-weight: 600;
+.rangeSelect {
+  width: 160px;
 }
 
 .custom {
@@ -155,12 +166,15 @@
 
 .figures {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* One column per card (up to four), so three cards fill the row as well as four */
+  grid-template-columns: repeat(var(--figure-count, 4), minmax(0, 1fr));
   gap: 16px;
   margin: 0;
 }
 
 .figure {
+  /* Tall enough for a figure with a note, so every report's cards match even when none has one */
+  min-height: 127px;
   padding: 18px 20px;
   border: 1px solid var(--color-border);
   border-radius: 18px;
@@ -674,13 +688,9 @@
     font-size: 23px;
   }
 
-  .downloads {
+  .headerActions {
     width: 100%;
-  }
-
-  .downloads > button {
-    flex: 1;
-    justify-content: center;
+    justify-content: flex-start;
   }
 
   .tabs {

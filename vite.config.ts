@@ -1,4 +1,3 @@
-import { rm } from "node:fs/promises";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -10,9 +9,8 @@ import react from "@vitejs/plugin-react";
  * listed in docs/security.md.
  */
 function contentSecurityPolicy(env: Record<string, string>): Plugin {
-  const apiOrigin = env.VITE_API_URL ? new URL(env.VITE_API_URL).origin : "";
-  // Demo builds show sample photos from these hosts; real photos come from the API
-  const demoImageHosts = env.VITE_USE_MOCKS === "true" ? "https://images.unsplash.com https://ca.slack-edge.com" : "";
+  // A relative address (/api) is served from this site, so it needs nothing extra; only a full address adds a source
+  const apiOrigin = /^https?:\/\//.test(env.VITE_API_URL ?? "") ? new URL(env.VITE_API_URL).origin : "";
   const policy = [
     "default-src 'self'",
     "script-src 'self'",
@@ -20,7 +18,7 @@ function contentSecurityPolicy(env: Record<string, string>): Plugin {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     // blob: = documents the app has fetched with the session and previews in place (see DocumentPreviewDialog)
-    `img-src 'self' data: blob: ${apiOrigin} ${demoImageHosts}`,
+    `img-src 'self' data: blob: ${apiOrigin}`,
     "frame-src blob:",
     `connect-src 'self' ${apiOrigin}`,
     "worker-src 'self'",
@@ -38,29 +36,17 @@ function contentSecurityPolicy(env: Record<string, string>): Plugin {
   };
 }
 
-/**
- * Production builds without the mock API must not publish the mock worker file
- * (public/ is always copied into the build).
- */
-function removeMockWorker(mockApiEnabled: boolean): Plugin {
-  return {
-    name: "remove-mock-worker",
-    apply: "build",
-    async closeBundle() {
-      if (!mockApiEnabled) await rm("dist/mockServiceWorker.js", { force: true });
-    },
-  };
-}
-
 // https://vite.dev/config/
-export default defineConfig(({ mode, command }) => {
+export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), "VITE_");
-  // Mock API on in development (unless VITE_USE_MOCKS=false); off in builds unless VITE_USE_MOCKS=true.
-  // A fixed true/false at build time, so a normal production build drops all mock and demo code.
-  const mockApiEnabled = command === "serve" ? env.VITE_USE_MOCKS !== "false" : env.VITE_USE_MOCKS === "true";
+  // A build with no API address would call its own host for the API and fail in confusing ways, so refuse it
+  if (command === "build" && !env.VITE_API_URL) throw new Error("Set VITE_API_URL to the backend's API address (for example https://api.tamu.example/api) before building.");
+  // `npm run dev` can serve the backend under this site's own /api (VITE_API_URL=/api). Then the browser sees one site, so the
+  // backend's HTTP-only sign-in cookie is kept and a page reload doesn't sign people out. (Not VITE_-prefixed: the browser never gets it.)
+  const apiTarget = loadEnv(mode, process.cwd(), "").API_PROXY_TARGET;
   return {
-    define: { __MOCK_API_ENABLED__: JSON.stringify(mockApiEnabled) },
-    plugins: [react(), contentSecurityPolicy(env), removeMockWorker(mockApiEnabled)],
+    server: apiTarget ? { proxy: { "/api": { target: apiTarget, changeOrigin: true, secure: true } } } : undefined,
+    plugins: [react(), contentSecurityPolicy(env)],
     build: {
       // No source maps in production: they would publish the readable source code
       sourcemap: false,
