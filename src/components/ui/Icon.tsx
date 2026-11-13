@@ -1,3 +1,5 @@
+import logoUrl from "../../images/tamu-loan-logo.svg";
+
 // Line icons used across the app (24×24, stroke = currentColor).
 const ICON_PATHS = {
   dashboard: (
@@ -66,6 +68,12 @@ const ICON_PATHS = {
   search: <path d="M11 4a7 7 0 100 14 7 7 0 000-14zM20 20l-4-4" />,
   chevronDown: <path d="M6 9l6 6 6-6" />,
   menu: <path d="M4 6h16M4 12h16M4 18h16" />,
+  panelLeft: (
+    <>
+      <rect width="18" height="18" x="3" y="3" rx="2.5" />
+      <path d="M9 3v18" />
+    </>
+  ),
   close: <path d="M18 6 6 18M6 6l12 12" />,
   help: (
     <>
@@ -177,13 +185,19 @@ export function Icon({ name, size = 20, strokeWidth = 1.75, className }: { name:
   );
 }
 
-/** Tamu mark: a sprout whose two leaves form the bar of a "T". */
+/** The Tamu logo (src/images/tamu-loan-logo.svg): the blue square with the white "T" and leaf. The caller's box rounds the corners. */
 export function TamuLogoMark({ size = 22 }: { size?: number }) {
+  return <img src={logoUrl} width={size} height={size} alt="" draggable={false} />;
+}
+
+/** The same logo without its blue square, in the text colour, for sitting on a tinted or glass background. */
+export function TamuLogoGlyph({ size = 26 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 21v-10" />
-      <path d="M12 11C12 7 9.2 4.6 4.5 4.6c0 4.2 2.9 6.4 7.5 6.4z" fill="currentColor" />
-      <path d="M12 11c0-4 2.8-6.4 7.5-6.4 0 4.2-2.9 6.4-7.5 6.4z" fill="currentColor" fillOpacity={0.55} />
+    <svg width={size} height={size} viewBox="53 59 392 392" fill="currentColor" aria-hidden="true">
+      <path d="M75 138C87 98 117 74 161 74H381C373 117 345 145 301 145H75V138Z" />
+      <path d="M166 160H269L227 393C222 419 204 436 179 436H150C121 436 105 413 111 384L142 197C146 174 153 160 166 160Z" />
+      <path d="M419.425 310.758C417.267 309.942 414.817 310.467 413.184 312.042C412.775 312.45 402.334 322.367 384.95 313.617C372.992 307.608 352.284 304.05 333.15 313.617C308.3 326.1 299.492 357.192 312.675 384.783C316.292 374.633 321.484 366.058 328.309 359.233C344.7 342.9 364.475 342.9 365 342.725V344.708C355.546 347.312 346.925 352.315 339.975 359.233C325.625 373.583 318.334 395.458 318.334 424.333H330C330 417.625 330.409 411.617 331.225 406.133C335.075 408.525 339.334 410.333 343.884 411.383C347.734 412.317 351.584 412.667 355.375 412.667C369.55 412.667 382.442 407.067 388.742 402.342C399.359 394.35 408.109 386.767 416.742 367.983C424.909 350.075 423.275 317.233 423.159 315.833C423.095 314.717 422.708 313.643 422.045 312.742C421.382 311.841 420.472 311.152 419.425 310.758Z" />
+      <path d="M277 224C300 229 313 245 309 272L292 363C288 384 299 404 321 419L352 436H240L277 224Z" />
     </svg>
   );
 }

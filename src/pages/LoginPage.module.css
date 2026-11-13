@@ -21,11 +21,55 @@
   min-height: 0;
   width: 100%;
   margin: 36px 0 32px;
-  object-fit: cover;
-  object-position: 38% center;
+  position: relative;
+  overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 20px;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+}
+
+.slide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 52% center;
+  opacity: 0;
+  transition: opacity 1s ease;
+}
+
+.slideShown {
+  opacity: 1;
+}
+
+.slideDots {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  display: flex;
+  gap: 6px;
+  transform: translateX(-50%);
+}
+
+.slideDots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  transition: width 0.3s ease, background 0.3s ease;
+}
+
+.slideDots .slideDotOn {
+  width: 18px;
+  border-radius: 3px;
+  background: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slide {
+    transition: none;
+  }
 }
 
 .brandName {
@@ -42,6 +86,7 @@
   width: 44px;
   height: 44px;
   border-radius: 14px;
+  color: #fff;
   background: rgba(255, 255, 255, 0.16);
   border: 1px solid rgba(255, 255, 255, 0.25);
 }

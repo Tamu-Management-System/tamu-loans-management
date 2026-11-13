@@ -9,17 +9,19 @@ import { Avatar } from "../ui/Avatar";
 import { Icon, TamuLogoMark } from "../ui/Icon";
 import styles from "./AppShell.module.css";
 
-export function Topbar() {
+export function Topbar({ sidebarCollapsed, onToggleSidebar }: { sidebarCollapsed: boolean; onToggleSidebar: () => void }) {
   const { can } = useAuth();
   return (
     <header className={styles.topbar}>
-      <Link to="/" className={styles.brand}>
-        <span className={styles.brandMark}>
-          <TamuLogoMark />
-        </span>
-        Tamu Loans
-      </Link>
-      <GlobalSearch />
+      <div className={styles.brandRow}>
+        <Link to="/" className={styles.brand}>
+          <span className={styles.brandMark}>
+            <TamuLogoMark size={38} />
+          </span>
+          <span className={styles.brandName}>Tamu Loans</span>
+        </Link>
+      </div>
+      <GlobalSearch sidebarCollapsed={sidebarCollapsed} onToggleSidebar={onToggleSidebar} />
       <div className={styles.topbarActions}>
         <ProfileMenu />
         <span className={styles.topbarDivider} aria-hidden="true" />
@@ -41,7 +43,7 @@ export function Topbar() {
 const SEARCH_DEBOUNCE_MS = 200;
 
 /** Finds clients, loans and applications by name, ID or phone. Results respect the user's scope. */
-function GlobalSearch() {
+function GlobalSearch({ sidebarCollapsed, onToggleSidebar }: { sidebarCollapsed: boolean; onToggleSidebar: () => void }) {
   const navigate = useNavigate();
   const [input, setInput] = useState("");
   const [query, setQuery] = useState("");
@@ -78,6 +80,17 @@ function GlobalSearch() {
         if (results[activeIndex]) openResult(results[activeIndex].href);
       }}
     >
+      {/* The menu toggle sits inside the search bar, on its left; it stays out of the label so a click on it doesn't focus the search */}
+      <button
+        type="button"
+        className={styles.sidebarToggle}
+        aria-expanded={!sidebarCollapsed}
+        aria-label={sidebarCollapsed ? "Expand menu" : "Collapse menu"}
+        title={sidebarCollapsed ? "Expand menu" : "Collapse menu"}
+        onClick={onToggleSidebar}
+      >
+        <Icon name="panelLeft" size={20} />
+      </button>
       <label className={styles.searchField}>
         <Icon name="search" size={17} strokeWidth={1.8} />
         <input
