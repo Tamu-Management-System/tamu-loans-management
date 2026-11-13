@@ -168,14 +168,28 @@ a.tile {
   }
 }
 
-/* Phones: two compact boxes per row, icons hidden to save space */
+/* Phones: one box per row, full width, and the hint starts from the left */
 @media (max-width: 760px) {
+  .sectionHeader {
+    justify-content: flex-start;
+  }
+
+  /* Tapping a box is obvious on a phone, so the hint goes */
+  .sectionNote {
+    display: none;
+  }
+
+  .sectionHeader {
+    margin: 0;
+  }
+
   .tiles {
+    grid-template-columns: minmax(0, 1fr);
     gap: 10px;
   }
 
   .tile {
-    padding: 14px;
+    padding: 16px;
     border-radius: 16px;
   }
 
@@ -186,9 +200,5 @@ a.tile {
   .tileValue {
     margin: 2px 0 0;
     font-size: 24px;
-  }
-
-  .tileIcon {
-    display: none;
   }
 }

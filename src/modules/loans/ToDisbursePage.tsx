@@ -6,6 +6,7 @@ import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../../components/ui/Button";
 import { formatRelativeDay, formatUGX } from "../../lib/format";
 import { DisburseDialog } from "./DisburseDialog";
+import { LoansMenu } from "./LoansMenu";
 import styles from "./ToDisbursePage.module.css";
 
 /**
@@ -23,10 +24,13 @@ export function ToDisbursePage() {
   return (
     <>
       <div className={styles.header}>
-        <h1>To disburse</h1>
-        <p className={styles.subtitle}>
-          {data && data.length > 0 ? `${data.length} approved ${data.length === 1 ? "loan" : "loans"} · ${formatUGX(total)} to pay out` : "Approved loans waiting to be paid out"}
-        </p>
+        <div>
+          <h1>To disburse</h1>
+          <p className={styles.subtitle}>
+            {data && data.length > 0 ? `${data.length} approved ${data.length === 1 ? "loan" : "loans"} · ${formatUGX(total)} to pay out` : "Approved loans waiting to be paid out"}
+          </p>
+        </div>
+        <LoansMenu current="To disburse" />
       </div>
 
       <div className={styles.card}>

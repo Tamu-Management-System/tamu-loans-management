@@ -24,12 +24,14 @@ export function Topbar({ sidebarCollapsed, onToggleSidebar }: { sidebarCollapsed
       <GlobalSearch sidebarCollapsed={sidebarCollapsed} onToggleSidebar={onToggleSidebar} />
       <div className={styles.topbarActions}>
         <ProfileMenu />
-        <span className={styles.topbarDivider} aria-hidden="true" />
-        <Notifications />
+        <span className={`${styles.topbarDivider} ${styles.wideOnly}`} aria-hidden="true" />
+        <div className={styles.wideOnly}>
+          <Notifications />
+        </div>
         {/* Everyone gets the gear (as in the design): system settings for admins, personal settings for others */}
         <Link
           to={can(ANY_SETTINGS_PERMISSION) ? "/settings" : "/account/settings"}
-          className={styles.iconButton}
+          className={`${styles.iconButton} ${styles.wideOnly}`}
           aria-label="Settings"
           title="Settings"
         >
@@ -41,6 +43,7 @@ export function Topbar({ sidebarCollapsed, onToggleSidebar }: { sidebarCollapsed
 }
 
 const SEARCH_DEBOUNCE_MS = 200;
+
 
 /** Finds clients, loans and applications by name, ID or phone. Results respect the user's scope. */
 function GlobalSearch({ sidebarCollapsed, onToggleSidebar }: { sidebarCollapsed: boolean; onToggleSidebar: () => void }) {
@@ -147,6 +150,7 @@ function GlobalSearch({ sidebarCollapsed, onToggleSidebar }: { sidebarCollapsed:
 function ProfileMenu() {
   const { user } = useAuth();
   const { signOut, isSigningOut } = useSignOut();
+  const { can } = useAuth();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(false), []);
@@ -158,7 +162,10 @@ function ProfileMenu() {
   return (
     <div className={styles.menuAnchor} ref={ref}>
       <button className={styles.profileButton} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <Avatar name={user.name} src={user.photoUrl} size={40} />
+        <span className={styles.avatarWrap}>
+          <Avatar name={user.name} src={user.photoUrl} size={40} />
+          {unread > 0 && <span className={styles.avatarDot} aria-label={`${unread} new notifications`} />}
+        </span>
         <span className={styles.profileText}>
           <b>{user.name}</b>
           <span className={styles.mutedText}>{roleLine}</span>
@@ -183,6 +190,12 @@ function ProfileMenu() {
             <Icon name="settings" size={17} strokeWidth={1.8} />
             Account settings
           </Link>
+          {can(ANY_SETTINGS_PERMISSION) && (
+            <Link role="menuitem" to="/settings" onClick={close}>
+              <Icon name="settings" size={17} strokeWidth={1.8} />
+              System settings
+            </Link>
+          )}
           <Link role="menuitem" to="/help" onClick={close}>
             <Icon name="help" size={17} strokeWidth={1.8} />
             Help &amp; support

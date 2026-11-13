@@ -117,7 +117,7 @@ export function PaymentsPage() {
               type="search"
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
-              placeholder="Search client, loan ID, phone or transaction ID"
+              placeholder="Search client, loan or transaction ID"
               aria-label="Search payments by client, loan ID, phone or transaction ID"
               autoComplete="off"
             />

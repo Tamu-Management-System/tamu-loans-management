@@ -74,7 +74,7 @@ export function LoanProductsSection() {
           <p className={styles.message}>{showArchived ? "Every product is on offer." : "No products on offer. Officers can't start applications until there's one."}</p>
         </div>
       ) : (
-        <div className={styles.card}>
+        <div className={`${styles.card} ${styles.productsCard}`}>
           <table className={styles.productTable}>
             <thead>
               <tr>

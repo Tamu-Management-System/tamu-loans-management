@@ -79,7 +79,7 @@ export function ArrearsPage() {
             <p className={styles.empty}>No late loans. Everyone is up to date.</p>
           ) : (
             <>
-              <table className={loanStyles.table}>
+              <table className={`${loanStyles.table} ${styles.lateTable}`}>
                 <thead>
                   <tr>
                     <th>LOAN</th>
@@ -94,19 +94,19 @@ export function ArrearsPage() {
                 <tbody>
                   {loans.data.items.map((loan) => (
                     <tr key={loan.id}>
-                      <td className={loanStyles.loan}>
+                      <td className={`${loanStyles.loan} ${styles.cLoan}`}>
                         <Link to={`/loans/${loan.id}`} className={loanStyles.strongLink}>
                           {loan.id}
                         </Link>
                         {loan.recovery && <span className={loanStyles.secondary}>With recovery</span>}
                       </td>
-                      <td>
+                      <td className={styles.cClient}>
                         <span className={loanStyles.borrowerName}>{loan.borrower.name}</span>
                         <span className={loanStyles.secondary}>{loan.phone}</span>
                       </td>
-                      <td className={loanStyles.numeric}>{dayCount(loan.daysPastDue)}</td>
-                      <td className={loanStyles.numeric}>{formatUGX(loan.arrearsAmount)}</td>
-                      <td className={loanStyles.numeric}>{formatUGX(loan.balance)}</td>
+                      <td className={`${loanStyles.numeric} ${styles.cDays}`}>{dayCount(loan.daysPastDue)}</td>
+                      <td className={`${loanStyles.numeric} ${styles.cOverdue}`}>{formatUGX(loan.arrearsAmount)}</td>
+                      <td className={`${loanStyles.numeric} ${styles.cBalance}`}>{formatUGX(loan.balance)}</td>
                       {seesBranch && <td className={loanStyles.officer}>{loan.officer.name}</td>}
                       {canText && (
                         <td className={styles.actions}>
@@ -134,7 +134,7 @@ export function ArrearsPage() {
           <p className={styles.empty}>No texts sent yet.</p>
         ) : (
           <>
-            <table className={loanStyles.table}>
+            <table className={`${loanStyles.table} ${styles.textsTable}`}>
               <thead>
                 <tr>
                   <th>SENT</th>
@@ -146,11 +146,11 @@ export function ArrearsPage() {
               <tbody>
                 {texts.data.items.map((text) => (
                   <tr key={text.id}>
-                    <td className={loanStyles.loan}>
+                    <td className={`${loanStyles.loan} ${styles.tWhen}`}>
                       {formatShortDate(text.at)}
                       <span className={loanStyles.secondary}>{formatTime(text.at)}</span>
                     </td>
-                    <td>
+                    <td className={styles.tClient}>
                       <Link to={`/loans/${text.loanId}`} className={loanStyles.strongLink}>
                         {text.borrower.name}
                       </Link>
@@ -158,12 +158,12 @@ export function ArrearsPage() {
                         {text.loanId} · {text.phone}
                       </span>
                     </td>
-                    <td className={styles.textMessage}>
+                    <td className={`${styles.textMessage} ${styles.tMessage}`}>
                       {text.message}
                       {text.delivery === "failed" && <span className={`${loanStyles.secondary} ${styles.failed}`}>Didn't reach the phone</span>}
                       {text.delivery === "pending" && <span className={loanStyles.secondary}>Sending…</span>}
                     </td>
-                    <td className={loanStyles.officer}>{text.sentBy}</td>
+                    <td className={`${loanStyles.officer} ${styles.tBy}`}>{text.sentBy}</td>
                   </tr>
                 ))}
               </tbody>

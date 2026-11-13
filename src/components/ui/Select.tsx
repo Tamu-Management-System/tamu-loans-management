@@ -62,6 +62,7 @@ export function Select<T extends string>({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -94,6 +95,18 @@ export function Select<T extends string>({
       window.removeEventListener("scroll", place, true);
     };
   }, [open, place]);
+
+  // A list wider than its button (long names) must not run off the screen: line its right edge up with the button's instead
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    const button = buttonRef.current;
+    if (!open || !position || !panel || !button) return;
+    const edge = 8;
+    const width = panel.getBoundingClientRect().width;
+    if (position.left + width > window.innerWidth - edge) {
+      panel.style.left = `${Math.max(edge, Math.min(button.getBoundingClientRect().right - width, window.innerWidth - edge - width))}px`;
+    }
+  }, [open, position]);
 
   // Searchable: typing goes straight into the search box (once the panel is placed and rendered)
   const placed = position !== null;
@@ -206,7 +219,7 @@ export function Select<T extends string>({
         <Icon name="chevronDown" size={16} strokeWidth={2} className={`${styles.chevron} ${open ? styles.chevronOpen : ""}`} />
       </button>
       {open && position && (
-        <div className={`${styles.panel} ${position.up ? styles.panelUp : ""}`} style={{ top: position.top, left: position.left, minWidth: position.width, maxHeight: position.maxHeight }}>
+        <div ref={panelRef} className={`${styles.panel} ${position.up ? styles.panelUp : ""}`} style={{ top: position.top, left: position.left, minWidth: position.width, maxHeight: position.maxHeight }}>
           {searchable && (
             <div className={styles.search}>
               <Icon name="search" size={15} strokeWidth={1.9} />

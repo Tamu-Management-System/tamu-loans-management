@@ -297,6 +297,11 @@
 
 /* Phones: each loan becomes a card */
 @media (max-width: 760px) {
+  /* The download moves into the menu button */
+  .exportButton {
+    display: none;
+  }
+
   .header h1 {
     font-size: 23px;
   }
@@ -305,9 +310,9 @@
     padding: 16px;
   }
 
+  /* The search bar at the top of every screen already finds loans by ID, client or phone */
   .search {
-    min-width: 0;
-    flex-basis: 100%;
+    display: none;
   }
 
   .select,
@@ -315,33 +320,86 @@
     flex: 1;
   }
 
+  /* One figure per row: the label on the left, the amount on the right */
   .totals {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px 0;
-  }
-
-  .totals > div:nth-child(3) {
-    border-left: 0;
+    display: block;
+    padding: 4px 16px;
   }
 
   .totals > div {
-    padding: 0 16px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 0;
+    border-left: 0;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .totals > div:first-child {
+    border-top: 0;
+  }
+
+  .totals dt {
+    white-space: nowrap;
+  }
+
+  .totals dd {
+    margin: 0;
+    font-size: 16px;
+  }
+
+  /* No white box around the whole list on phones; each loan is its own card */
+  .card {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .search,
+  .toggle {
+    background: var(--color-surface);
+  }
+
+  .totals {
+    border: 1px solid var(--color-border);
+    border-radius: 18px;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-card);
+  }
+
+  .table,
+  .table tbody {
+    display: block;
   }
 
   .table thead {
     display: none;
   }
 
+  /* Client and balance on top, the loan line under the client, a repaid bar, borrowed / repaid side by side,
+     then the status and the officer */
   .table tr {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 6px 12px;
-    padding: 14px 4px;
-    border-top: 1px solid var(--color-border);
+    margin-bottom: 10px;
+    padding: 16px;
+    border: 1px solid var(--color-border);
+    border-radius: 18px;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-card);
+  }
+
+  .row:hover {
+    background: var(--color-surface);
   }
 
   .table td,
+  .table td.borrowed,
+  .table td.repaid,
   .table .status {
     display: block;
     padding: 0;
@@ -349,11 +407,95 @@
     text-align: left;
   }
 
+  .table td:nth-child(2) {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .borrowerName {
+    font-size: 16px;
+  }
+
+  .table td.loan {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    white-space: normal;
+  }
+
+  .strongLink {
+    font-size: 13px;
+  }
+
+  .table td.loan .secondary {
+    display: inline;
+    margin: 0;
+  }
+
+  .table td.loan .secondary::before {
+    content: " · ";
+  }
+
+  .table td:nth-child(2) .secondary {
+    display: none;
+  }
+
   .table td.balance {
     grid-column: 2;
-    grid-row: 1 / span 2;
-    align-self: center;
+    grid-row: 1;
+    align-self: start;
+    font-size: 18px;
+    font-weight: 700;
     text-align: right;
+  }
+
+  .table td.balance::before {
+    content: "Balance";
+    display: block;
+    margin-bottom: 1px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+
+  /* How much of the borrowed amount is repaid */
+  .table tr::after {
+    content: "";
+    grid-column: 1 / -1;
+    grid-row: 3;
+    height: 6px;
+    margin: 8px 0 4px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--color-primary) var(--repaid), var(--color-neutral-soft) var(--repaid));
+  }
+
+  /* Borrowed and the disbursement date are on the loan page; the card keeps balance, repaid and the bar */
+  .table td.borrowed,
+  .fromDate {
+    display: none;
+  }
+
+  .table td.repaid {
+    grid-column: 1 / -1;
+    grid-row: 4;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: left;
+  }
+
+  .table td.repaid::before {
+    display: block;
+    margin-bottom: 1px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+
+  .table td.repaid::before {
+    content: "Repaid";
   }
 
   .table td.status,
@@ -361,9 +503,43 @@
     grid-column: 1 / -1;
   }
 
+  .table td.status {
+    grid-row: 5;
+    margin-top: 6px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--color-border-strong);
+  }
+
+  /* Next payment: the amount on the left, its due date on the right end of the same line */
+  .table td.status:has(.nextAmount) {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .table td.status .nextAmount {
+    font-size: 15px;
+  }
+
+  .table td.status:has(.nextAmount) .secondary {
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  /* A little space under the chips, before the amount line */
+  .table td.status .chip {
+    margin-bottom: 8px;
+  }
+
   .table td.officer {
+    grid-row: 6;
     font-size: 12.5px;
     color: var(--color-text-muted);
+  }
+
+  .table td.officer::before {
+    content: "Officer: ";
   }
 }
 

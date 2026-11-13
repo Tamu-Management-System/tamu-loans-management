@@ -239,10 +239,17 @@
   .page {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
+    background: var(--color-text);
   }
 
-  .brand {
-    padding: 20px 16px;
+  /* Big greeting header: blue running into deep navy, the sign-in sheet overlaps its bottom edge */
+  .page .brand {
+    padding: 28px 24px 64px;
+    background: linear-gradient(105deg, #2185f6 0%, var(--color-primary-strong) 42%, #0f2a52 100%);
+  }
+
+  .page .brand::before {
+    display: none;
   }
 
   /* Hidden on phones so the sign-in form stays near the top of the screen */
@@ -251,22 +258,108 @@
   }
 
   .tagline {
-    margin-top: 10px;
-    font-size: 15px;
-    font-weight: 500;
-    opacity: 0.9;
+    max-width: 300px;
+    margin-top: 28px;
+    font-size: 27px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0;
   }
 
   .brandFooter {
     display: none;
   }
 
+  /* The sheet: rounded top corners over the header, filling the rest of the screen */
   .formPanel {
+    position: relative;
     place-items: start center;
-    padding: 28px 16px 40px;
+    margin-top: -32px;
+    padding: 36px 24px 40px;
+    border-radius: 32px 32px 0 0;
+    background: var(--color-page);
+    box-shadow: 0 -10px 30px rgba(15, 42, 82, 0.18);
   }
 
   .form h1 {
     font-size: 24px;
+  }
+
+  /* The headline above the sheet already greets; the page keeps its heading for screen readers */
+  .form h1:has(+ .subtitle) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .subtitle {
+    margin-top: 0;
+    margin-bottom: 26px;
+  }
+
+  /* Underlined fields with a blue label */
+  .field {
+    margin-bottom: 22px;
+  }
+
+  .field label {
+    margin-bottom: 0;
+    color: var(--color-primary-strong);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .field input {
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    border-bottom: 1.5px solid var(--color-border-strong);
+    border-radius: 0;
+    background: transparent;
+    font-size: 16px;
+  }
+
+  .field input:focus {
+    outline: none;
+    border-bottom-color: var(--color-primary);
+  }
+
+  .field input[aria-invalid="true"] {
+    border-bottom-color: var(--color-danger);
+  }
+
+  /* Keep the browser's autofill from painting the field blue */
+  .field input:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 40px var(--color-page) inset;
+    -webkit-text-fill-color: var(--color-text);
+  }
+
+  .passwordInput input {
+    padding-right: 44px;
+  }
+
+  .revealButton {
+    right: 0;
+  }
+
+  .forgotLink {
+    display: block;
+    margin: 0 0 0 auto;
+    font-size: 14px;
+  }
+
+  .form .submit,
+  .form .submit:hover:not(:disabled) {
+    min-height: 54px;
+    margin-top: 32px;
+    border-radius: 999px;
+    background: linear-gradient(100deg, #2185f6 0%, var(--color-primary-strong) 55%, #0f2a52 100%);
+    box-shadow: 0 10px 22px rgba(22, 106, 203, 0.32);
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
   }
 }

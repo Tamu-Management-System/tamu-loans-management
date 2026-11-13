@@ -4,7 +4,7 @@ import type { WorklistAction, WorklistTask } from "../../api/types";
 import { useSystemSettings } from "../../api/settings";
 import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../../components/ui/Button";
-import { Icon } from "../../components/ui/Icon";
+import { Icon, type IconName } from "../../components/ui/Icon";
 import { formatUGX } from "../../lib/format";
 import { amountLabel, describeStatus, describeSubject } from "./taskDescriptions";
 import { PRIORITY_LABEL, taskAmount } from "./worklistConfig";
@@ -18,6 +18,19 @@ export interface WorklistRowHandlers {
   onSendSms: (task: WorklistTask) => void;
   onAction: (task: WorklistTask, action: WorklistAction) => void;
 }
+
+/** What kind of work the task is, drawn inside the priority ring */
+const TASK_ICON: Record<WorklistTask["type"], IconName> = {
+  "instalment-due": "coins",
+  "promise-due": "clock",
+  overdue: "warning",
+  "application-incomplete": "document",
+  "payment-unmatched": "link",
+  "reversal-request": "undo",
+  "awaiting-approval": "applications",
+  "awaiting-disbursement": "send",
+  "access-request": "user",
+};
 
 function RowActions({ task, handlers }: { task: WorklistTask; handlers: WorklistRowHandlers }) {
   const { can } = useAuth();
@@ -113,8 +126,15 @@ export function WorklistRow({ task, handlers }: { task: WorklistTask; handlers: 
   const warning = "warning" in task ? task.warning : undefined;
 
   return (
-    <div className={`${styles.row} ${styles[`priority-${task.priority}`]}`} id={`task-${task.id}`}>
-      <div>
+    <div className={styles.row} id={`task-${task.id}`}>
+      <div className={styles.subject}>
+        {/* The icon says what kind of work it is; the ring says how urgent: red and pulsing for "do first", amber for "do today", grey for the rest */}
+        <span className={`${styles.badge} ${styles[`badge-${task.priority}`]}`} aria-hidden="true">
+          <span className={styles.badgeIcon}>
+            <Icon name={TASK_ICON[task.type]} size={18} strokeWidth={1.8} />
+          </span>
+        </span>
+        <div className={styles.subjectText}>
         <span className="sr-only">{PRIORITY_LABEL[task.priority]}. </span>
         <div className={styles.subjectName}>
           {subject.name} <span className={styles.reference}>{subject.reference}</span>
@@ -133,6 +153,7 @@ export function WorklistRow({ task, handlers }: { task: WorklistTask; handlers: 
             ))}
           </div>
         )}
+        </div>
       </div>
       <div>
         <span className={`${styles.chip} ${styles[`chip-${status.tone}`]}`}>{status.label}</span>

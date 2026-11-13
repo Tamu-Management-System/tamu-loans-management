@@ -10,7 +10,6 @@ import { AppShell } from "../components/layout/AppShell";
 import { ToastProvider } from "../components/ui/Toast";
 import { DashboardPage } from "../pages/DashboardPage";
 import { LoginPage } from "../pages/LoginPage";
-import { MorePage } from "../pages/MorePage";
 import { NotFoundPage, PlaceholderPage } from "../pages/PlaceholderPage";
 import { ROUTABLE_NAV_ITEMS } from "./navigation";
 
@@ -171,7 +170,6 @@ function StaffApp() {
             <Route path="account/profile" element={<ProfilePage />} />
             <Route path="account/settings" element={<AccountSettingsPage />} />
             <Route path="help" element={<HelpPage />} />
-            <Route path="more" element={<MorePage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         

@@ -307,43 +307,116 @@
     width: 100%;
   }
 
+  /* No white box around the whole list on phones; each payment is its own card */
   .card {
-    padding: 16px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* The four date choices become one segmented control across the screen */
+  .toolbar {
+    margin-bottom: 12px;
+  }
+
+  .ranges {
+    flex: 1;
+    flex-wrap: nowrap;
+    gap: 2px;
+    padding: 4px;
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-card);
+  }
+
+  .ranges button {
+    flex: 1;
+    min-width: 0;
+    padding: 0 4px;
+    border-radius: 10px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .custom {
+    width: 100%;
   }
 
   .search {
     min-width: 0;
     flex-basis: 100%;
+    background: var(--color-surface);
   }
 
+  /* Officer and method side by side */
   .select {
     flex: 1;
+    min-width: 0;
   }
 
+  /* One figure per row; Collected is the headline above them */
   .totals {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px 0;
+    display: block;
+    padding: 16px 0 6px;
+    border: 1px solid var(--color-border);
+    border-radius: 18px;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-card);
   }
 
   .totals > div {
-    padding: 0 16px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    border-left: 0;
+    border-top: 1px solid var(--color-border);
   }
 
-  .totals > div:nth-child(odd) {
-    border-left: 0;
+  .totals > div dd {
+    margin: 0;
+  }
+
+  .totals > div:first-child {
+    display: block;
+    padding: 0 16px 14px;
+    border-top: 0;
+    border-bottom: 1px dashed var(--color-border-strong);
+  }
+
+  .totals > div:nth-child(2) {
+    border-top: 0;
+  }
+
+  .totals > div:first-child dd {
+    font-size: 24px;
+    font-weight: 700;
+  }
+
+  .table,
+  .table tbody {
+    display: block;
   }
 
   .table thead {
     display: none;
   }
 
+  /* Client and amount on top, when under the client, then how it was paid */
   .table tr {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 6px 12px;
-    padding: 14px 4px;
-    border-top: 1px solid var(--color-border);
+    margin-bottom: 10px;
+    padding: 16px;
+    border: 1px solid var(--color-border);
+    border-radius: 18px;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-card);
   }
 
   .table td,
@@ -353,16 +426,69 @@
     padding: 0;
     border: 0;
     text-align: left;
+    white-space: normal;
+  }
+
+  .table td:nth-child(2) {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .strongLink {
+    font-size: 16px;
   }
 
   .table td.amount {
     grid-column: 2;
     grid-row: 1;
+    align-self: start;
+    font-size: 17px;
+    font-weight: 700;
     text-align: right;
+    white-space: nowrap;
   }
 
+  .table td.when {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    font-size: 13px;
+    color: var(--color-text-muted);
+  }
+
+  .table td.when .secondary {
+    display: inline;
+    margin: 0;
+  }
+
+  .table td.when .secondary::before {
+    content: " · ";
+  }
+
+  /* How it was paid: the method on the left, its reference on the right */
   .table td.method {
     grid-column: 1 / -1;
+    grid-row: 3;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 4px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--color-border-strong);
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .table td.method .secondary {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 400;
+  }
+
+  .table td.changeCell {
+    grid-column: 1 / -1;
+    grid-row: 4;
+    text-align: right;
   }
 }
 

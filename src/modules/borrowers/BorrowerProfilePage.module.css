@@ -102,6 +102,11 @@
   background: var(--color-surface-subtle);
 }
 
+.secondaryAction:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .primaryAction {
   min-height: 44px;
 }
@@ -590,17 +595,41 @@
 }
 
 @media (max-width: 760px) {
-  .loanFigures {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    row-gap: 16px;
+  /* Key figures one per row: label on the left, value on the right */
+  .loanFigures,
+  .facts {
+    display: flex;
+    flex-direction: column;
+    padding: 4px 16px;
   }
 
-  .loanFigures .fact {
-    padding: 0 16px;
-  }
-
-  .loanFigures .fact:nth-child(3) {
+  .loanFigures .fact,
+  .facts > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 0;
     border-left: 0;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .loanFigures .fact:first-child,
+  .facts > div:first-child {
+    border-top: 0;
+  }
+
+  .loanFigures .fact dt,
+  .facts dt {
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .loanFigures .fact dd,
+  .facts dd {
+    margin: 0;
+    font-size: 15px;
+    text-align: right;
   }
 
   .card {
@@ -611,8 +640,23 @@
     align-items: flex-start;
   }
 
+  /* No picture on phones: the name starts at the card's edge */
+  .identity [class*="avatar"] {
+    display: none;
+  }
+
   .nameRow h1 {
-    font-size: 22px;
+    font-size: 24px;
+  }
+
+  /* The area on one line, "Client since" on its own line under it */
+  .metaDot {
+    display: none;
+  }
+
+  .metaSince {
+    display: block;
+    margin-top: 1px;
   }
 
   /* All four tabs fit on a phone */
@@ -621,17 +665,31 @@
     padding: 10px 4px 12px;
   }
 
+  /* Call, SMS and Edit share one row; the main action runs full width under them */
+  .actions {
+    gap: 8px;
+  }
+
   .actions > * {
     flex: 1;
     justify-content: center;
+    padding: 0 8px;
+    gap: 6px;
+    font-size: 13.5px;
+    white-space: nowrap;
   }
 
   .primaryAction {
     flex-basis: 100%;
+    min-height: 50px;
+    border-radius: 14px;
+    font-size: 15px;
   }
 
   .facts {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-top: 0;
+    border-radius: 14px;
+    background: var(--color-surface-subtle);
   }
 
   .detail {

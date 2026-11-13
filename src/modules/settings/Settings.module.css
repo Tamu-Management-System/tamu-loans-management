@@ -811,13 +811,54 @@ section > .pills {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* Inside a section the section has its own title and a link back, so the page's "Settings" heading goes */
+  .pageHeaderInSection {
+    display: none;
+  }
+
   .layout:not(.atMenu) .menu,
   .atMenu .content {
     display: none;
   }
 
+  /* No white box around the whole menu: each section is its own card under its group's title */
   .menu {
     position: static;
+    gap: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .menu .menuGroup + .menuGroup {
+    margin-top: 20px;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .menu .menuGroupTitle {
+    margin: 0 4px 8px;
+  }
+
+  .menuItem {
+    min-height: 0;
+    margin: 0 0 8px;
+    padding: 14px 16px;
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-card);
+    color: var(--color-text);
+  }
+
+  .menuItem:hover {
+    background: var(--color-surface);
+  }
+
+  .menuItem > span {
+    font-size: 15px;
   }
 
   .menu .menuChevron {
@@ -899,6 +940,111 @@ section > .pills {
 
   .table td.actions .secondary {
     padding-left: 10px;
+  }
+
+  /* Users: no white box around the list; each person is a card, with the role as a chip and big buttons along the bottom */
+  .usersCard {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .usersCard .search {
+    background: var(--color-surface);
+  }
+
+  .usersTable,
+  .usersTable tbody {
+    display: block;
+  }
+
+  .usersTable tbody tr {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 12px;
+    margin-bottom: 10px;
+    padding: 16px;
+    border: 1px solid var(--color-border);
+    border-radius: 18px;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-card);
+  }
+
+  /* No picture on phones: the name and email get the width */
+  .usersTable [class*="avatar"] {
+    display: none;
+  }
+
+  .usersTable tbody td:first-child {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .usersTable .personText b {
+    font-size: 16px;
+  }
+
+  .usersTable tbody td.role {
+    display: contents;
+  }
+
+  .usersTable .roleName {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--color-primary-soft);
+    color: var(--color-primary);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  /* Branch and phone sit right under the email, on the left like it */
+  .usersTable tbody td.role .secondary {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    margin: -4px 0 0;
+    font-size: 12.5px;
+    text-align: left;
+  }
+
+  .usersTable tbody td.when {
+    grid-row: 3;
+    padding-left: 0 !important;
+  }
+
+  .usersTable tbody td.actions {
+    grid-column: 1 / -1;
+    grid-row: 4;
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+    padding: 12px 0 0 !important;
+    border-top: 1px dashed var(--color-border-strong);
+  }
+
+  .usersTable tbody td.actions:empty {
+    display: none;
+  }
+
+  .usersTable td.actions .textButton {
+    flex: 1;
+    min-height: 44px;
+    border: 1px solid var(--color-border-strong);
+    border-radius: 12px;
+    font-size: 14px;
+  }
+
+  .usersTable td.actions .textButtonDanger {
+    border-color: var(--color-danger-soft);
+    background: var(--color-danger-soft);
+  }
+
+  .usersTable td.actions .secondary {
+    padding-left: 0;
+    text-align: left;
   }
 
   .formRow {
@@ -2172,8 +2318,58 @@ section > .pills {
   }
 
 
-  .productTable tr {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* Loan products: no white box around the list; each product is a card with its facts one per row */
+  .productsCard {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .productTable tbody tr {
+    display: block;
+    margin-bottom: 10px;
+    padding: 16px;
+    border: 1px solid var(--color-border);
+    border-radius: 18px;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-card);
+  }
+
+  /* A touch has no hover: don't leave a grey patch behind after a tap */
+  .productTable tbody tr:hover td {
+    background: none;
+  }
+
+  .productName {
+    font-size: 17px;
+  }
+
+  /* Each fact is a block: its label on top, the value under it */
+  .productTable td[data-label] {
+    display: block;
+    padding: 10px 0 !important;
+    font-size: 15px;
+  }
+
+  .productTable td[data-label]::before {
+    display: block;
+    margin: 0 0 3px;
+  }
+
+  .productTable td[data-label] .secondary {
+    margin-top: 2px;
+  }
+
+  .productTable td[data-label] + td[data-label] {
+    border-top: 1px solid var(--color-border);
+  }
+
+  .productTable td[data-label="Interest"] {
+    margin-top: 10px;
+    padding-top: 14px !important;
+    border-top: 1px dashed var(--color-border-strong);
   }
 }
 

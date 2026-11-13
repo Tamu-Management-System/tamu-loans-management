@@ -23,7 +23,12 @@
 /* Phones: the button goes full width under the greeting */
 @media (max-width: 760px) {
   .header h1 {
+    padding-left: 2px;
     font-size: 23px;
+  }
+
+  .subtitle {
+    padding-left: 2px;
   }
 
   .recordPayment {

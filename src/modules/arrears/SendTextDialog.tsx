@@ -17,6 +17,8 @@ export interface TextTarget {
   daysLate: number;
   /** UGX due now */
   amount: number;
+  /** Starting text instead of the late-payment reminder (e.g. from a client's profile, where nothing may be due) */
+  initialMessage?: string;
 }
 
 export function SendTextDialog({ target, onClose }: { target: TextTarget; onClose: () => void }) {
@@ -24,7 +26,7 @@ export function SendTextDialog({ target, onClose }: { target: TextTarget; onClos
   const showToast = useToast();
   const send = useSendText(target.loanId);
   const brand = useSystemSettings().data?.business.shortName ?? "";
-  const [message, setMessage] = useState(() => overdueText(brand, target.clientName, target.loanId, target.daysLate, target.amount));
+  const [message, setMessage] = useState(() => target.initialMessage ?? overdueText(brand, target.clientName, target.loanId, target.daysLate, target.amount));
   const text = message.trim();
 
   const submit = () => {

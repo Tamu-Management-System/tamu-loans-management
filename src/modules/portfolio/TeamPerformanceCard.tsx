@@ -49,7 +49,7 @@ export function TeamPerformanceCard({ officers, targetPercent }: { officers: Off
         </tbody>
       </table>
       {officers.length >= MAX_OFFICERS && (
-        <Link to="/reports" className={shared.showAll}>
+        <Link to="/reports?report=officers" className={shared.showAll}>
           Show all {officers.length} officers in Reports →
         </Link>
       )}

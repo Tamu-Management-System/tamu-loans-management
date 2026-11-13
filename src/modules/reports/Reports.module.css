@@ -684,33 +684,102 @@
 }
 
 @media (max-width: 760px) {
+  /* Title on the left, Download on the right of the same row; the date choice runs full width under them */
+  .header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
   .header h1 {
     font-size: 23px;
   }
 
   .headerActions {
-    width: 100%;
-    justify-content: flex-start;
+    display: contents;
   }
 
+  .menuAnchor {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .dateControls {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .rangeSelect {
+    width: 100%;
+  }
+
+  .dateControls:has(.custom) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* Report tabs as pills on one row that slides sideways, running to the screen's edges */
   .tabs {
     flex-wrap: nowrap;
+    width: calc(100% + 24px);
+    margin: 0 -12px 14px;
+    padding: 0 12px;
+    gap: 6px;
     overflow-x: auto;
+    border-bottom: 0;
+    scrollbar-width: none;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
   }
 
   .tabs button {
-    flex-shrink: 0;
+    flex: none;
+    margin-bottom: 0;
+    padding: 0 14px;
+    min-height: 38px;
+    border: 0;
+    border-radius: 10px;
+    font-size: 13.5px;
+    white-space: nowrap;
+  }
+
+  .tabs button[aria-selected="true"] {
+    background: var(--color-primary-soft);
+  }
+
+  .toolbar {
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .asOf {
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    font-size: 12.5px;
+  }
+
+  /* One figure per row, full width */
+  .figures {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .figure {
+    min-height: 0;
+    padding: 16px 18px;
+  }
+
+  .figure dd {
+    font-size: 24px;
   }
 
   .card {
     padding: 16px;
-  }
-
-  .figure {
-    padding: 14px 16px;
-  }
-
-  .figure dd {
-    font-size: 19px;
   }
 }

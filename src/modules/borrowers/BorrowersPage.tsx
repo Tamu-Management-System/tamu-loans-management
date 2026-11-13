@@ -61,6 +61,19 @@ export function BorrowersPage() {
     update({ sort: column, order: params.sort === column && params.order === "asc" ? "desc" : column === "balance" ? "desc" : "asc" });
   const ariaSort = (column: BorrowerSort) => (params.sort === column ? (params.order === "asc" ? "ascending" : "descending") : undefined);
 
+  // On wide screens the officer filter sits beside the search; on phones it moves up to the end of the title row
+  const officerSelect = (className: string) => (
+    <Select
+      className={className}
+      value={params.officerId ?? ""}
+      onChange={(officerId) => update({ officerId: officerId || null })}
+      options={[{ value: "", label: "All officers" }, ...officers.map((officer) => ({ value: officer.id, label: officer.name }))]}
+      searchable={officers.length > SEARCH_FROM}
+      searchPlaceholder="Search officers"
+      aria-label="Loan officer"
+    />
+  );
+
   return (
     <>
       <div className={styles.header}>
@@ -68,6 +81,7 @@ export function BorrowersPage() {
           <h1>Clients</h1>
           <p className={styles.subtitle}>{seesBranch ? "Every client in the market" : "Clients in your portfolio"}</p>
         </div>
+        {seesBranch && officerSelect(styles.officerInHeader)}
         {can("applications.create") && (
           <Link to="/applications/new" className={styles.newApplication}>
             New application
@@ -89,17 +103,7 @@ export function BorrowersPage() {
               autoComplete="off"
             />
           </label>
-          {seesBranch && (
-            <Select
-              className={styles.officerFilter}
-              value={params.officerId ?? ""}
-              onChange={(officerId) => update({ officerId: officerId || null })}
-              options={[{ value: "", label: "All officers" }, ...officers.map((officer) => ({ value: officer.id, label: officer.name }))]}
-              searchable={officers.length > SEARCH_FROM}
-              searchPlaceholder="Search officers"
-              aria-label="Loan officer"
-            />
-          )}
+          {seesBranch && officerSelect(styles.officerFilter)}
         </div>
 
         <div className={styles.tabs} role="tablist" aria-label="Client status">

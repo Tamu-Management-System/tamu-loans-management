@@ -103,7 +103,11 @@ export function LoanDetailsPage() {
             <StatusChip loan={loan} seriouslyLate={seriouslyLate} />
           </div>
           <p className={styles.meta}>
-            <Link to={`/borrowers/${loan.borrower.id}`}>{loan.borrower.name}</Link> · {loan.product} · {loan.officer.name}
+            <Link to={`/borrowers/${loan.borrower.id}`}>{loan.borrower.name}</Link>
+            <span className={styles.metaRest}>
+              <span className={styles.metaDot}> · </span>
+              {loan.product} · {loan.officer.name}
+            </span>
           </p>
         </div>
         <div className={styles.actions}>

@@ -170,10 +170,10 @@
 
 .legend i {
   display: inline-block;
-  width: 4px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   margin-right: 8px;
-  border-radius: 2px;
+  border-radius: 50%;
   vertical-align: -1px;
 }
 
@@ -186,7 +186,7 @@
 }
 
 .legendRoutine {
-  background: var(--color-border);
+  background: var(--color-border-strong);
 }
 
 /* ---------- Groups ("All" overview) ---------- */
@@ -286,28 +286,77 @@
   grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 150px 290px;
   align-items: center;
   gap: 20px;
-  padding: 18px 4px 18px 20px;
+  padding: 18px 4px 18px 8px;
   border-top: 1px solid var(--color-border);
 }
 
-/* Priority bar on the left */
-.row::before {
+/* Priority ring around the task-type icon: a gradient ring in the urgency colour; "do first" also gives off a slow pulse */
+.subject {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.subjectText {
+  min-width: 0;
+}
+
+.badge {
+  --ring: var(--color-text-muted);
+  position: relative;
+  flex: none;
+  display: grid;
+  padding: 2px;
+  border-radius: 50%;
+  background: conic-gradient(from 210deg, var(--ring), color-mix(in srgb, var(--ring) 35%, white), var(--ring));
+}
+
+.badgeIcon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 2px solid var(--color-surface);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ring) 12%, var(--color-surface));
+  color: var(--ring);
+}
+
+.badge-do-first {
+  --ring: var(--color-danger);
+}
+
+.badge-do-today {
+  --ring: #d9a23b;
+}
+
+.badge-do-first::after {
   content: "";
   position: absolute;
-  top: 18px;
-  bottom: 18px;
-  left: 0;
-  width: 4px;
-  border-radius: 4px;
-  background: var(--color-border);
+  inset: -2px;
+  border: 2px solid var(--ring);
+  border-radius: 50%;
+  opacity: 0;
+  animation: ringPulse 2.6s ease-out infinite;
 }
 
-.priority-do-first::before {
-  background: var(--color-danger);
+@keyframes ringPulse {
+  0% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.35);
+  }
 }
 
-.priority-do-today::before {
-  background: #d9a23b;
+@media (prefers-reduced-motion: reduce) {
+  .badge-do-first::after {
+    animation: none;
+  }
 }
 
 .subjectName {
@@ -495,8 +544,13 @@
 }
 
 @media (max-width: 760px) {
+  /* No white box around the whole worklist on phones: the task cards stand on their own */
   .card {
-    padding: 18px 16px;
+    padding: 6px 0 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
 
   .progress {
@@ -506,6 +560,135 @@
 
   .group {
     --row-indent: 8px;
+  }
+
+  .toolbar {
+    gap: 10px;
+    padding-bottom: 14px;
+  }
+
+  /* Tabs stay on one row and slide sideways, running to the card's edges, instead of wrapping onto a second line */
+  .tabs {
+    flex-wrap: nowrap;
+    width: calc(100% + 24px);
+    margin: 0 -12px;
+    padding: 0 12px;
+    overflow-x: auto;
+    scroll-padding: 0 12px;
+    scrollbar-width: none;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tabs button {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  /* The key explains the priority colours, which phone cards don't show */
+  .legend {
+    display: none;
+  }
+
+  /* Each task becomes its own card: priority stripe down the left, name and amount on top, status under them,
+     and big thumb-sized buttons along the bottom */
+  .group {
+    margin-top: 22px;
+  }
+
+  .groupHeader {
+    margin-bottom: 10px;
+    padding: 16px 18px;
+    border: 1px solid var(--color-border);
+    border-radius: 18px;
+    background: linear-gradient(135deg, var(--color-primary-soft) 0%, var(--color-surface-subtle) 70%);
+  }
+
+  .groupHeader h4 {
+    font-size: 16px;
+  }
+
+  .group .row,
+  .groupHeader + .row,
+  .flatList > .row,
+  .flatList > .row:first-child {
+    margin: 0 0 10px;
+    padding: 16px;
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: 18px;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-card);
+  }
+
+  .group .showAll {
+    margin-left: 0;
+    width: 100%;
+    border-top: 0;
+    text-align: center;
+  }
+
+  .row {
+    row-gap: 12px;
+  }
+
+  .subjectName {
+    font-size: 16px;
+  }
+
+  .reference {
+    display: block;
+    margin-top: 1px;
+  }
+
+  .badge {
+    display: none;
+  }
+
+  /* The name gets the full card width (it wrapped when the amount sat beside it); status and amount share the next line */
+  .row > div:nth-child(1) {
+    grid-column: 1 / -1;
+  }
+
+  .row > div:nth-child(2) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .row > div:nth-child(3) {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .row > div:nth-child(2) .secondaryText {
+    margin-top: 0;
+  }
+
+  .amount {
+    font-size: 17px;
+  }
+
+  .actions {
+    gap: 8px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--color-border-strong);
+    flex-wrap: nowrap;
+  }
+
+  .actions button {
+    min-height: 44px;
+    border-radius: 12px;
+    font-size: 14px;
+  }
+
+  .actions button:first-child {
+    flex: 1;
   }
 }
 

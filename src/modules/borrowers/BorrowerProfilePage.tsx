@@ -9,7 +9,8 @@ import { Avatar } from "../../components/ui/Avatar";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { useToast } from "../../components/ui/Toast";
-import { formatDate, formatMonthYear, formatRelativeDay, formatUGX, dayCount } from "../../lib/format";
+import { dayCount, firstName, formatDate, formatMonthYear, formatRelativeDay, formatUGX } from "../../lib/format";
+import { SendTextDialog } from "../arrears/SendTextDialog";
 import { useAnnounce } from "../dashboard/useAnnounce";
 import { RecordPaymentDialog } from "../payments/RecordPaymentDialog";
 import { BorrowerActivityTab } from "./BorrowerActivityTab";
@@ -31,7 +32,7 @@ type TabId = (typeof TABS)[number]["id"];
 
 const REPAYMENT_SCHEDULE = { daily: "Daily", weekly: "Weekly", monthly: "Monthly" } as const;
 
-/** "0772 418 230" -> "0772418230", for tel: and sms: links */
+/** "0772 418 230" -> "0772418230", for the tel: link */
 const dialable = (phone: string) => phone.replace(/[^\d+]/g, "");
 
 /** Client profile (user flow, phase 8): who they are, their current loan and, in the tabs, their history. */
@@ -130,7 +131,10 @@ function ProfileSummary({ borrower }: { borrower: BorrowerProfile }) {
   const showToast = useToast();
   const [recordingPayment, setRecordingPayment] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [texting, setTexting] = useState(false);
   const loan = borrower.currentLoan;
+  const canText = can("sms.send") && !!loan;
+  const brand = useSystemSettings().data?.business.shortName ?? "";
   const oneLoanAtATime = useSystemSettings().data?.loanRules.oneOpenLoanPerBorrower ?? true;
   const canStartNewLoan = can("applications.create") && (!loan || !oneLoanAtATime) && (!borrower.application || borrower.application.status === "rejected");
 
@@ -144,7 +148,11 @@ function ProfileSummary({ borrower }: { borrower: BorrowerProfile }) {
             <BorrowerStatusChip status={borrower.status} daysPastDue={loan?.daysPastDue} applicationStatus={borrower.application?.status} />
           </div>
           <p className={styles.meta}>
-            {[borrower.id, borrower.area, `Client since ${formatMonthYear(borrower.registeredOn)}`].filter(Boolean).join(" · ")}
+            {[borrower.id, borrower.area].filter(Boolean).join(" · ")}
+            <span className={styles.metaSince}>
+              <span className={styles.metaDot}> · </span>
+              Client since {formatMonthYear(borrower.registeredOn)}
+            </span>
           </p>
         </div>
       </div>
@@ -154,10 +162,17 @@ function ProfileSummary({ borrower }: { borrower: BorrowerProfile }) {
           <Icon name="phone" size={16} strokeWidth={1.9} />
           Call
         </a>
-        <a className={styles.secondaryAction} href={`sms:${dialable(borrower.phone)}`}>
+        {/* Texts go out from here, through the system, and are recorded on the loan; no messaging app opens */}
+        <button
+          type="button"
+          className={styles.secondaryAction}
+          onClick={() => setTexting(true)}
+          disabled={!canText}
+          title={!can("sms.send") ? "You can't send texts" : !loan ? "Texts are sent about a loan, and this client has no open loan" : "Send a text"}
+        >
           <Icon name="message" size={16} strokeWidth={1.9} />
           SMS
-        </a>
+        </button>
         {can("borrowers.edit") && (
           <button type="button" className={styles.secondaryAction} onClick={() => setEditing(true)}>
             <Icon name="person" size={16} strokeWidth={1.9} />
@@ -197,6 +212,20 @@ function ProfileSummary({ borrower }: { borrower: BorrowerProfile }) {
         <Fact label="Loan officer">{borrower.officer.name}</Fact>
       </dl>
 
+      {texting && loan && (
+        <SendTextDialog
+          target={{
+            loanId: loan.id,
+            clientName: borrower.name,
+            phone: borrower.phone,
+            daysLate: loan.daysPastDue,
+            amount: loan.nextPayment?.amount ?? 0,
+            // Only a late loan gets the reminder wording; otherwise the person writes their own
+            initialMessage: loan.daysPastDue > 0 ? undefined : `${brand} Loans: Hello ${firstName(borrower.name)}, `,
+          }}
+          onClose={() => setTexting(false)}
+        />
+      )}
       {recordingPayment && loan && <RecordPaymentDialog loanId={loan.id} onClose={() => setRecordingPayment(false)} onRecorded={announce} />}
       {editing && <EditBorrowerDialog borrower={borrower} onClose={() => setEditing(false)} onSaved={(message) => showToast({ message })} />}
     </section>

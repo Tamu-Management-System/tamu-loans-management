@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, type CSSProperties } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useOfficers } from "../../api/borrowers";
 import { ApiError } from "../../api/client";
@@ -8,6 +8,7 @@ import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import { Pagination } from "../../components/ui/Pagination";
+import { LoansMenu } from "./LoansMenu";
 import { useToast } from "../../components/ui/Toast";
 import { SEARCH_FROM, Select } from "../../components/ui/Select";
 import { formatDate, formatShortDate, formatUGX, dayCount } from "../../lib/format";
@@ -101,11 +102,12 @@ function LoanListPage({ tab }: { tab: LoanListTab }) {
           <p className={styles.subtitle}>{tab === "recovery" ? "Loans handed to the recovery team" : branchWide ? "Every loan in the market" : "Loans in your portfolio"}</p>
         </div>
         {can("loans.export") && (
-          <Button variant="secondary" onClick={download} disabled={exportLoans.isPending || !data}>
+          <Button variant="secondary" className={styles.exportButton} onClick={download} disabled={exportLoans.isPending || !data}>
             <Icon name="upload" size={16} strokeWidth={1.8} className={styles.exportIcon} />
             Download CSV
           </Button>
         )}
+        <LoansMenu current={TITLES[tab]} onDownload={can("loans.export") ? download : undefined} downloadDisabled={exportLoans.isPending || !data} />
       </div>
 
       <div className={styles.card}>
@@ -196,23 +198,30 @@ function LoanListPage({ tab }: { tab: LoanListTab }) {
               </thead>
               <tbody>
                 {data.items.map((loan) => (
-                  <tr key={loan.id} className={styles.row} onClick={() => navigate(`/loans/${loan.id}`)}>
+                  <tr
+                    key={loan.id}
+                    className={styles.row}
+                    style={{ "--repaid": `${loan.principal > 0 ? Math.min(100, Math.round((loan.repaid / loan.principal) * 100)) : 0}%` } as CSSProperties}
+                    onClick={() => navigate(`/loans/${loan.id}`)}
+                  >
                     <td className={styles.loan}>
                       {/* The link gives keyboard and screen-reader access; the whole row is also clickable */}
                       <Link to={`/loans/${loan.id}`} className={styles.strongLink} onClick={(event) => event.stopPropagation()}>
                         {loan.id}
                       </Link>
                       <span className={styles.secondary}>
-                        {loan.repaymentSchedule ? `${FREQUENCY[loan.repaymentSchedule]} · ` : ""}
-                        from {formatShortDate(loan.disbursedOn)}
+                        {loan.repaymentSchedule ? FREQUENCY[loan.repaymentSchedule] : ""}
+                        <span className={styles.fromDate}>
+                          {loan.repaymentSchedule ? " · " : ""}from {formatShortDate(loan.disbursedOn)}
+                        </span>
                       </span>
                     </td>
                     <td>
                       <span className={styles.borrowerName}>{loan.borrower.name}</span>
                       <span className={styles.secondary}>{loan.borrower.id}</span>
                     </td>
-                    <td className={styles.numeric}>{formatUGX(loan.principal)}</td>
-                    <td className={styles.numeric}>{formatUGX(loan.repaid)}</td>
+                    <td className={`${styles.numeric} ${styles.borrowed}`}>{formatUGX(loan.principal)}</td>
+                    <td className={`${styles.numeric} ${styles.repaid}`}>{formatUGX(loan.repaid)}</td>
                     <td className={`${styles.numeric} ${styles.balance}`}>
                       {loan.status === "cleared" ? <span className={styles.secondary}>Repaid</span> : formatUGX(loan.balance)}
                     </td>

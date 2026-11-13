@@ -458,25 +458,80 @@ td.muted {
     justify-content: center;
   }
 
+  .actions button {
+    min-height: 48px;
+    border-radius: 14px;
+  }
+
+  /* The client first and bold, then the product and officer under it */
+  .meta {
+    margin-top: 6px;
+  }
+
+  .meta a {
+    display: block;
+    font-size: 17px;
+  }
+
+  .metaDot {
+    display: none;
+  }
+
+  .metaRest {
+    display: block;
+    margin-top: 2px;
+  }
+
   .card {
     padding: 18px 16px;
   }
 
+  /* The balance is the headline; the other figures follow one per row, label left and amount right */
   .figures {
-    grid-auto-flow: row;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    background: none;
   }
 
   .figures > div {
-    padding: 0 14px;
-  }
-
-  .figures > div:nth-child(odd) {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 0;
     border-left: 0;
+    border-top: 1px solid var(--color-border);
   }
 
-  .figures > div:nth-child(4) {
-    border-left: 1px solid var(--color-border);
+  .figures > div:first-child {
+    border-top: 0;
+  }
+
+  .figures dd {
+    margin: 0;
+    font-size: 16px;
+    text-align: right;
+  }
+
+  .figures > div.figureStrong {
+    order: -1;
+    display: block;
+    padding: 0 0 14px;
+    border-top: 0;
+    border-bottom: 1px dashed var(--color-border-strong);
+  }
+
+  .figures > div.figureStrong dd {
+    margin-top: 4px;
+    font-size: 28px;
+    font-weight: 700;
+    text-align: left;
+  }
+
+  .figures > div:first-child:not(.figureStrong) {
+    margin-top: 2px;
+    border-top: 0;
   }
 
   /* Phones: due date, amount and status (what's paid is in the amounts above) */

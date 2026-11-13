@@ -111,6 +111,11 @@
     text-align: left;
   }
 
+  /* Already shown under the officer's name; the rule above would otherwise bring this cell back */
+  .table td.portfolioColumn {
+    display: none;
+  }
+
   .table td.parCell {
     grid-column: 2;
     grid-row: 1;

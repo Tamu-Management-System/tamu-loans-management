@@ -59,7 +59,7 @@ export function UsersSection() {
 
       {staff && <TwoPersonWarnings staff={staff} roles={roles} />}
 
-      <div className={styles.card}>
+      <div className={`${styles.card} ${styles.usersCard}`}>
         <div className={styles.toolbar}>
           <div className={styles.pills} role="group" aria-label="Status">
             {STATUS_TABS.map((tab) => (
@@ -87,7 +87,7 @@ export function UsersSection() {
         ) : shown.length === 0 ? (
           <p className={styles.message}>{needle ? "No one matches that search." : status === "invited" ? "No open invites." : status === "deactivated" ? "No switched-off accounts." : "No users yet."}</p>
         ) : (
-          <table className={styles.table}>
+          <table className={`${styles.table} ${styles.usersTable}`}>
             <thead>
               <tr>
                 <th>NAME</th>
@@ -116,7 +116,7 @@ export function UsersSection() {
                       </span>
                     </td>
                     <td className={styles.role}>
-                      {member.role.name}
+                      <span className={styles.roleName}>{member.role.name}</span>
                       <span className={styles.secondary}>
                         {member.branch} · {member.phone}
                       </span>

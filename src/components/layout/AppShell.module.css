@@ -208,6 +208,24 @@
   flex-direction: column;
 }
 
+.avatarWrap {
+  position: relative;
+  display: grid;
+}
+
+/* Phones only: the bell is in the avatar's menu, so a new notification shows as a dot on the avatar */
+.avatarDot {
+  display: none;
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid var(--color-page);
+  background: var(--color-primary);
+}
+
 .dropdown {
   position: absolute;
   top: calc(100% + 8px);
@@ -654,8 +672,17 @@
   }
 
   .sidebar,
-  .profileText {
+  .profileText,
+  .wideOnly {
     display: none;
+  }
+
+  .avatarDot {
+    display: block;
+  }
+
+  .profileButton {
+    padding: 4px;
   }
 
   .brandRow {
@@ -676,10 +703,14 @@
     max-width: none;
   }
 
+  /* No white panel on phones: the page content sits straight on the page background, full width */
   .content {
+    min-width: 0;
     overflow: visible;
-    padding: 18px 16px;
-    border-radius: 20px;
+    padding: 12px 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
 
   .tabBar {
@@ -694,7 +725,8 @@
     background: var(--color-surface);
   }
 
-  .tabBar a {
+  .tabBar a,
+  .tabBar button {
     flex: 1;
     min-height: 52px;
     display: flex;
@@ -707,7 +739,8 @@
     text-decoration: none;
   }
 
-  .tabBar a.tabActive {
+  .tabBar a.tabActive,
+  .tabBar button.tabActive {
     color: var(--color-primary);
     font-weight: 600;
   }

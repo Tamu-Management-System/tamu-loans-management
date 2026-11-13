@@ -45,7 +45,7 @@ export function SettingsPage() {
 
   return (
     <>
-      <div className={styles.pageHeader}>
+      <div className={`${styles.pageHeader} ${atMenu ? "" : styles.pageHeaderInSection}`}>
         <h1>Settings</h1>
         <p className={styles.subtitle}>How Tamu Loans works for your team: people, lending, money and security</p>
       </div>
