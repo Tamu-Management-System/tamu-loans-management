@@ -34,7 +34,8 @@ export function SendTextDialog({ target, onClose }: { target: TextTarget; onClos
     send
       .mutateAsync({ message: text })
       .then(() => {
-        showToast({ message: `Text sent to ${firstName(target.clientName)}` });
+        // The text is queued and goes out a moment later, so say it is on its way, not that it arrived
+        showToast({ message: `Text on its way to ${firstName(target.clientName)}` });
         onClose();
       })
       .catch(() => undefined /* shown in the dialog */);

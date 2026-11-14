@@ -1043,7 +1043,9 @@ for all). Pass `nextBefore` from the previous page as `before` for older events.
 
 ### `POST /loans/{id}/sms` (requires `sms.send`)
 
-`{ "message": "…" }` → `201` with the text sent: `{ id, at, loanId, borrower, phone, message, sentBy, delivery: sent|failed }`.
+`{ "message": "…" }` → `201` with the text: `{ id, at, loanId, borrower, phone, message, sentBy, delivery: sent|failed|pending }`.
+The text is queued and a background job hands it to the SMS provider a moment later, so `delivery` is `pending` until then (the screens say "on its way" and "Sending…"), `sent` once the provider accepted it and `failed` if it
+never will. The same three values come back in `/sms/history/query` and in the loan's `clientMessages` (which also has `scheduled`).
 Sent to the client's mobile money number. 1 to 480 characters (three SMS segments of 160); the server rejects longer or empty text with `422`. Officers can only text
 clients on their own loans. Recorded on the client's timeline and in the audit log. The screen suggests wording for a late loan and the person can change it.
 
